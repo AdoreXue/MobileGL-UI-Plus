@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import ui.mobilegl.plugin.NativeEnv
-import ui.mobilegl.plugin.PostActivity
+import top.mobilegl.plugin.PostActivity
 import ui.mobilegl.plugin.config.PluginConfig
 import java.io.File
 
