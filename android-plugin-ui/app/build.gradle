@@ -126,8 +126,6 @@ def mobileGlForkBuildRevision = {
             if (proc.exitValue() == 0 && v) n = Math.max(n, v.toInteger())
         }
         return n > 0 ? n : 1
-        proc.waitFor()
-        def n = proc.in.text.trim()
     } catch (Exception ignored) { 1 }
 }()
 def mobileGlGitShortHash = {
