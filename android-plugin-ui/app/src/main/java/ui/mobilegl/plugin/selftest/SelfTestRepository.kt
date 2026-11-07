@@ -97,6 +97,34 @@ class SelfTestRepository(private val context: Context) {
 
     fun rawShareText(): String = cached()?.rawJson ?: ""
 
+    /** 人类可读的自检报告，用于分享。 */
+    fun readableReport(): String = readableReportOf(cached())
+
+    companion object {
+        fun readableReportOf(result: SelfTestResult?): String {
+            if (result == null) return ""
+            val sb = StringBuilder()
+            sb.appendLine("MobileGL_UI_Plus 自检报告")
+            sb.appendLine("时间: " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(result.finishedAt)))
+            if (result.error != null) {
+                sb.appendLine("结果: 失败 — " + result.error)
+                return sb.toString().trim()
+            }
+            result.backends.forEach { b ->
+                sb.appendLine()
+                sb.appendLine("[" + b.backend + "] " + b.verdict)
+                if (b.renderer.isNotBlank()) sb.appendLine("渲染器: " + b.renderer)
+                b.checks.filter { it.status.equals("fail", true) }.forEach {
+                    sb.appendLine("  ✗ " + it.name + ": " + it.detail)
+                }
+                b.knownDriverBugs.forEach { bug ->
+                    sb.appendLine("  · 已知驱动问题: " + bug.name + " — " + bug.verdict)
+                }
+            }
+            return sb.toString().trim()
+        }
+    }
+
     private fun loadLast(): SelfTestResult? {
         if (!lastReport.isFile) return null
         return runCatching { parse(lastReport.readText()).copy(finishedAt = lastReport.lastModified()) }.getOrNull()
