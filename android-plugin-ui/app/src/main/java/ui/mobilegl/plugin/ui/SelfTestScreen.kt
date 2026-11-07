@@ -51,9 +51,12 @@ import ui.mobilegl.plugin.selftest.FormatRow
 import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
 
-private val CAPABILITY_FULL = Color(0xFF2E7D32)
-private val CAPABILITY_CAVEAT = Color(0xFFFBC02D)
-private val CAPABILITY_NONE = Color(0xFFC62828)
+@Composable
+private fun capabilityColor(level: String) = when {
+    level.contains("full", true) -> MaterialTheme.colorScheme.primary
+    level.contains("caveat", true) -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.error
+}
 
 @Composable
 fun SelfTestScreen(
@@ -297,9 +300,14 @@ private fun FormatTable(capabilities: FormatCapabilities, rows: List<FormatRow>)
                     val bit = if (index < 64) 1L shl index else 0L
                     val full = bit != 0L && (row.fullMask and bit) != 0L
                     val caveat = !full && bit != 0L && (row.caveatMask and bit) != 0L
-                    val color = if (full) CAPABILITY_FULL else if (caveat) CAPABILITY_CAVEAT else CAPABILITY_NONE
                     val text = if (full) "Full" else if (caveat) "Caveat" else "None"
-                    TableCell(text, 104.dp, color, if (caveat) Color.Black else Color.White, true)
+                    val bg = when {
+                        full -> MaterialTheme.colorScheme.primary
+                        caveat -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.error
+                    }
+                    val fg = if (caveat) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onPrimary
+                    TableCell(text, 104.dp, bg, fg, true)
                 }
             }
         }
