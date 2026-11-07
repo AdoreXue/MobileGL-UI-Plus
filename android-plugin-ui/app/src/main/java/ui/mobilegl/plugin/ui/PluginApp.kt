@@ -82,7 +82,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.isSystemInDarkTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -123,11 +122,6 @@ import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
 import java.util.Locale
 
-private val MaterialTheme.colorScheme.primary = Color(0xFF2F6BFF)
-private val PASS = Color(0xFF1A9C57)
-private val WARN = Color(0xFFB26A00)
-private val MaterialTheme.colorScheme.error = Color(0xFFD1343C)
-private val MaterialTheme.colorScheme.secondaryContainer = Color(0xFFEEF2FF)
 
 /** 一次性装载二级页与首页所需的磁盘数据，避免多次跨线程往返。 */
 private data class DriversData(
@@ -1110,10 +1104,9 @@ fun StatusPill(text: String, color: Color) {
 
 @Composable
 fun verdictColor(verdict: String): Color = when (verdict.uppercase()) {
-    "OK", "PASS" -> PASS
-    "DEGRADED", "WARN" -> WARN
-    "UNSUPPORTED", "MaterialTheme.colorScheme.error" -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+    "OK", "PASS" -> MaterialTheme.colorScheme.primary
+    "DEGRADED", "WARN" -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.error
 }
 
 private fun hasAllFilesAccess(): Boolean =
