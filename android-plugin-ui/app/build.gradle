@@ -107,8 +107,8 @@ def mobileGlVersionMinor = (findProperty('mobilegl.versionMonth') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[1].toInteger() : 11)).toInteger()
 // 当月第几次发布：同一月内多次发版时手动 +1，保证 versionCode 递增
 def mobileGlVersionRevision = (findProperty('mobilegl.versionRevision') ?: 1).toInteger()
-// 本 fork（UI 版）的修订号：UI/打包逻辑有实质改动时 +1
-def mobileGlForkUiRevision = 1
+// 本 fork 的构建修订号：打包逻辑有实质改动时 +1
+def mobileGlForkBuildRevision = 1
 def mobileGlGitShortHash = {
     try {
         def proc = ['git', 'rev-parse', '--short=7', 'HEAD'].execute(null, rootDir)
@@ -122,7 +122,7 @@ def mobileGlGitShortHash = {
 // CI 构建时附加短 commit hash，便于定位源码；本地默认不加
 def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false').toString().toBoolean()
 def mobileGlForkVersionName = {
-    def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-ui${mobileGlForkUiRevision}"
+    def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-build${mobileGlForkBuildRevision}"
     mobileGlAppendGitHash ? base + "-${mobileGlGitShortHash}" : base
 }()
 // Monthly revision: commits reachable from HEAD since the start of the
