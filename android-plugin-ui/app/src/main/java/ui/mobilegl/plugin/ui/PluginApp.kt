@@ -573,17 +573,12 @@ private fun HomeTab(
             visible = !probing,
             enter = fadeIn(tween(150)) + slideInVertically(tween(150)) { it / 6 },
         ) {
-            // A: 图标化设备信息双列卡片（必须包 Column，否则两行互相重叠）
-            Column {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    InfoCardCell(Icons.Filled.Memory, "GPU", if (probing) "检测中…" else info.gpu, Modifier.weight(1.4f))
-                    InfoCardCell(Icons.Filled.Storage, "内存", info.memory, Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    InfoCardCell(Icons.Filled.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.weight(1.4f))
-                    InfoCardCell(Icons.Filled.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.weight(1f))
-                }
+            // A: 设备信息竖排单列（每项一行，占满宽度，信息不截断）
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                InfoCardCell(Icons.Filled.Memory, "GPU", if (probing) "检测中…" else info.gpu, Modifier.fillMaxWidth())
+                InfoCardCell(Icons.Filled.Storage, "内存", info.memory, Modifier.fillMaxWidth())
+                InfoCardCell(Icons.Filled.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.fillMaxWidth())
+                InfoCardCell(Icons.Filled.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.fillMaxWidth())
             }
         }
 
@@ -725,21 +720,23 @@ private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifi
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
-            )
         }
     }
 }
