@@ -420,14 +420,16 @@ fun MobileGlPluginApp() {
 }
 
 private fun shareReport(context: Context, repository: SelfTestRepository) {
-    val text = repository.rawShareText()
-    if (text.isNotBlank()) {
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-        context.startActivity(Intent.createChooser(intent, "分享自检报告"))
+    val text = repository.readableReport()
+    if (text.isBlank()) {
+        Toast.makeText(context, "还没有自检结果，请先运行自检", Toast.LENGTH_SHORT).show()
+        return
     }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, "分享自检报告"))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -938,9 +940,9 @@ private fun InfoTab(
             shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             onClick = {
-                val text = "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n" + (lastReport?.let { r ->
-                    r.backends.joinToString("\n") { b -> b.backend + ": " + b.verdict }
-                } ?: "（无自检数据）")
+                val text = SelfTestRepository.readableReportOf(lastReport).ifBlank {
+                    "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n（无自检数据）"
+                }
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, text)
