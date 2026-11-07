@@ -602,6 +602,7 @@ private fun InfoTab(
         SectionLabel("应用")
         InfoCard {
             InfoRow("版本", BuildConfig.VERSION_NAME)
+            InfoRow("构建", BuildConfig.GIT_HASH + " · " + BuildConfig.BUILD_TYPE)
             LinkRow("GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
             }
