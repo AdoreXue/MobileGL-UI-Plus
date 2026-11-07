@@ -119,8 +119,12 @@ def mobileGlVersionRevision = {
         (proc.exitValue() == 0 && n) ? Math.max(1, n.toInteger()) : 1
     } catch (Exception ignored) { 1 }
 }()
-// 本 fork 的构建修订号：打包逻辑有实质改动时 +1
-def mobileGlForkBuildRevision = 1
+// 本 fork 的构建标记：默认跟随当月修订号（全自动）；
+// UI/打包逻辑大改想单独区分时用 -Pmobilegl.buildRevision=N 覆盖
+def mobileGlForkBuildRevision = {
+    def over = findProperty('mobilegl.buildRevision')
+    (over ?: mobileGlVersionRevision.toString()).toInteger()
+}()
 def mobileGlGitShortHash = {
     try {
         def proc = ['git', 'rev-parse', '--short=7', 'HEAD'].execute(null, rootDir)
