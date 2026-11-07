@@ -204,7 +204,7 @@ android {
             resValue 'string', 'mobilegl_default_backend', 'DirectGLES'
             resValue 'string', 'config', mobileGlRendererConfig('DirectGLES')
             manifestPlaceholders = [
-                    appLabel: 'MobileGL_UI',
+                    appLabel: 'MobileGL_UI_Plus',
                     des     : '来自 MobileGL_UI',
                     renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectGLES') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectGLES') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectGLES') + ':libMobileGL.so:/libMobileGL.so'),
                     minMCVer: mobileGlMinMCVer ?: '',
@@ -221,7 +221,7 @@ android {
             resValue 'string', 'mobilegl_default_backend', 'DirectVulkan'
             resValue 'string', 'config', mobileGlRendererConfig('DirectVulkan')
             manifestPlaceholders = [
-                    appLabel: 'MobileGL_UI',
+                    appLabel: 'MobileGL_UI_Plus',
                     des     : '来自 MobileGL_UI',
                     renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectVulkan') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectVulkan') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectVulkan') + ':libMobileGL.so:/libMobileGL.so'),
                     minMCVer: mobileGlMinMCVer ?: '',
