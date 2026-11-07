@@ -592,7 +592,7 @@ private fun HomeTab(
         // ③ 渲染器卡片 + 状态徽标
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
             onClick = onOpenSettings,
         ) {
@@ -650,7 +650,7 @@ private fun HomeTab(
 private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         onClick = onClick,
     ) {
@@ -674,7 +674,7 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
     val ok = report != null && report.backends.all { it.checks.none { c -> c.status.equals("fail", true) } }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = when {
                 report == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -719,7 +719,7 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
 private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.height(IntrinsicSize.Min),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
@@ -761,7 +761,7 @@ private fun StatusBadge(text: String) {
 private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         onClick = onClick,
     ) {
@@ -844,7 +844,7 @@ private fun InfoTab(
         // A: 版本 Hero 卡（点按复制版本号）
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
             onClick = { copy("版本号", BuildConfig.VERSION_NAME) },
         ) {
@@ -875,7 +875,7 @@ private fun InfoTab(
         val backends = lastReport?.backends.orEmpty()
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
             onClick = onOpenSelfTest,
         ) {
@@ -935,7 +935,7 @@ private fun InfoTab(
         // E: 分享按钮升级（分享内容带版本号）
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             onClick = {
                 val text = "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n" + (lastReport?.let { r ->
@@ -966,7 +966,7 @@ private fun BottomBackCard(onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             onClick = onClick,
         ) {
@@ -1008,7 +1008,7 @@ fun SectionLabel(text: String) {
 fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { content() }
@@ -1019,7 +1019,7 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
 private fun ActionRow(title: String, subtitle: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         onClick = onClick,
     ) {
@@ -1051,7 +1051,7 @@ fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
 fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(20.dp)) {
