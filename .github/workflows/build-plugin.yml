@@ -20,19 +20,27 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build plugin APK
+      - name: Build plugin APK (release, signed with debug key)
         working-directory: android-plugin-ui
         env:
           ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir: ${{ github.workspace }}/android-plugin-ui/prebuilt
           ORG_GRADLE_PROJECT_mobilegl.sfpew: 'true'
-        run: gradle --no-daemon -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginDebug
+          SIGNING_STORE_PASSWORD: android
+          SIGNING_KEY_ALIAS: mobilegl
+          SIGNING_KEY_PASSWORD: android
+        run: |
+          cp debug.keystore keystore.jks
+          gradle --no-daemon \
+            -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" \
+            -Pmobilegl.sfpew=true \
+            :app:assembleMagmaPluginRelease
 
       - name: Collect artifact
         run: |
-          cp android-plugin-ui/app/build/outputs/apk/magmaPlugin/debug/MobileGL-MagmaPlugin-debug.apk \
-             MobileGL-SFPEW-MagmaPlugin-debug.apk
+          cp android-plugin-ui/app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk \
+             MobileGL-SFPEW-MagmaPlugin-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MobileGL-SFPEW-MagmaPlugin-debug
-          path: MobileGL-SFPEW-MagmaPlugin-debug.apk
+          name: MobileGL-SFPEW-MagmaPlugin-release
+          path: MobileGL-SFPEW-MagmaPlugin-release.apk
