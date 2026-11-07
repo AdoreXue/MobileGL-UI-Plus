@@ -109,6 +109,14 @@ private val WARN = Color(0xFFB26A00)
 private val FAIL = Color(0xFFD1343C)
 private val LIGHT_BLUE_CARD = Color(0xFFEEF2FF)
 
+/** 一次性装载二级页与首页所需的磁盘数据，避免多次跨线程往返。 */
+private data class DriversData(
+    val drivers: List<DriverPack>,
+    val libraries: List<ExternalLibrary>,
+    val status: RuntimeConfigWriter.Status,
+    val report: SelfTestResult?,
+)
+
 private sealed interface Dest {
     data object Home : Dest
     data object Settings : Dest
@@ -168,15 +176,38 @@ fun MobileGlPluginApp() {
         val runtimeWriter = remember { RuntimeConfigWriter(context) }
         val scope = rememberCoroutineScope()
 
+        // 冷启动 IO 全部移出主线程：先给轻量占位，LaunchedEffect 内后台加载。
+        // 注意 ConfigStore.load() 只是读小的 json，可在首帧前同步完成，避免 UI 空窗；
+        // drivers/externalLibraries/runtimeStatus 涉及目录扫描、SHA-256 与 /sdcard FUSE 写，必须异步。
         var config by remember { mutableStateOf(store.load()) }
-        var drivers by remember { mutableStateOf(driverRepository.list()) }
-        var externalLibraries by remember { mutableStateOf(externalRepository.list()) }
-        var runtimeStatus by remember { mutableStateOf(runtimeWriter.write(config)) }
+        var drivers by remember { mutableStateOf<List<DriverPack>>(emptyList()) }
+        var externalLibraries by remember { mutableStateOf<List<ExternalLibrary>>(emptyList()) }
+        var runtimeStatus by remember { mutableStateOf(runtimeWriter.initialStatus()) }
         var dest by remember { mutableStateOf<Dest>(Dest.Home) }
         var lastTab by remember { mutableIntStateOf(0) }
-        var report by remember { mutableStateOf(selfTestRepository.cached()) }
-        var probing by remember { mutableStateOf(report == null) }
+        var report by remember { mutableStateOf<SelfTestResult?>(null) }
+        var probing by remember { mutableStateOf(true) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
+
+        LaunchedEffect(Unit) {
+            val loaded = withContext(Dispatchers.IO) {
+                store.load()
+            }
+            config = loaded
+            val io = withContext(Dispatchers.IO) {
+                DriversData(
+                    drivers = driverRepository.list(),
+                    libraries = externalRepository.list(),
+                    status = runtimeWriter.write(loaded),
+                    report = selfTestRepository.cached(),
+                )
+            }
+            drivers = io.drivers
+            externalLibraries = io.libraries
+            runtimeStatus = io.status
+            report = io.report
+            probing = io.report == null
+        }
 
         LaunchedEffect(Unit) {
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
