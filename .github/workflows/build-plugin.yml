@@ -27,12 +27,15 @@ jobs:
           ORG_GRADLE_PROJECT_mobilegl.sfpew: 'true'
         run: gradle --no-daemon -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true -Pmobilegl.versionGitHash=true :app:assembleMagmaPluginDebug
 
-      - name: Collect artifact
+      - name: Collect artifact (rename with version)
+        working-directory: android-plugin-ui
         run: |
-          cp android-plugin-ui/app/build/outputs/apk/magmaPlugin/debug/MobileGL-MagmaPlugin-debug.apk \
-             MobileGL-SFPEW-MagmaPlugin-debug.apk
+          VERSION=$(gradle --no-daemon -q :app:printVersionName | tail -1)
+          echo "versionName=$VERSION"
+          cp app/build/outputs/apk/magmaPlugin/debug/MobileGL-MagmaPlugin-debug.apk \
+             "../MobileGL-${VERSION}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MobileGL-SFPEW-MagmaPlugin-debug
-          path: MobileGL-SFPEW-MagmaPlugin-debug.apk
+          name: MobileGL-plugin-apk
+          path: MobileGL-*.apk
