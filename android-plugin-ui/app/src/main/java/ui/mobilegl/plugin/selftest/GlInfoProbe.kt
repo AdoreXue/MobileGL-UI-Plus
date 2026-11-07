@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.selftest
+package ui.mobilegl.plugin.selftest
 
 import android.opengl.EGL14
 import android.opengl.EGLConfig

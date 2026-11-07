@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.driver
+package ui.mobilegl.plugin.driver
 
 import android.content.Context
 import android.net.Uri

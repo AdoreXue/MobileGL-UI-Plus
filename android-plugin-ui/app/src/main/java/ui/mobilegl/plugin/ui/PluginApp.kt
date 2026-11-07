@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.ui
+package ui.mobilegl.plugin.ui
 
 import android.app.ActivityManager
 import android.content.Context
@@ -87,19 +87,19 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.mobilegl.plugin.BuildConfig
-import top.mobilegl.plugin.config.ConfigStore
-import top.mobilegl.plugin.config.PluginConfig
-import top.mobilegl.plugin.config.RuntimeConfigWriter
-import top.mobilegl.plugin.driver.DriverPack
-import top.mobilegl.plugin.driver.DriverRepository
-import top.mobilegl.plugin.driver.ExternalLibrary
-import top.mobilegl.plugin.driver.ExternalLibraryRepository
-import top.mobilegl.plugin.driver.scanMobileGlVersion
-import top.mobilegl.plugin.selftest.BackendReport
-import top.mobilegl.plugin.selftest.GlInfoProbe
-import top.mobilegl.plugin.selftest.SelfTestRepository
-import top.mobilegl.plugin.selftest.SelfTestResult
+import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.config.ConfigStore
+import ui.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.config.RuntimeConfigWriter
+import ui.mobilegl.plugin.driver.DriverPack
+import ui.mobilegl.plugin.driver.DriverRepository
+import ui.mobilegl.plugin.driver.ExternalLibrary
+import ui.mobilegl.plugin.driver.ExternalLibraryRepository
+import ui.mobilegl.plugin.driver.scanMobileGlVersion
+import ui.mobilegl.plugin.selftest.BackendReport
+import ui.mobilegl.plugin.selftest.GlInfoProbe
+import ui.mobilegl.plugin.selftest.SelfTestRepository
+import ui.mobilegl.plugin.selftest.SelfTestResult
 import java.util.Locale
 
 private val BLUE = Color(0xFF2F6BFF)
@@ -220,7 +220,7 @@ fun MobileGlPluginApp() {
 
         fun persist(updated: PluginConfig) {
             config = updated
-            top.mobilegl.plugin.NativeEnv.apply(updated)
+            ui.mobilegl.plugin.NativeEnv.apply(updated)
             scope.launch {
                 val status = withContext(Dispatchers.IO) {
                     store.save(updated)

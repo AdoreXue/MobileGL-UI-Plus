@@ -147,7 +147,7 @@ def mobileGlForkVersionName = {
 }()
 
 android {
-    namespace 'top.mobilegl.plugin'
+    namespace 'ui.mobilegl.plugin'
     compileSdk 34
     ndkVersion '27.3.13750724'
 
@@ -200,7 +200,7 @@ android {
     productFlavors {
         espryt {
             dimension 'backend'
-            applicationId 'top.mobilegl.plugin.espryt'
+            applicationId 'ui.mobilegl.plugin.espryt'
             def env = mobileGlEnvString('DirectGLES')
             resValue 'string', 'mobilegl_default_backend', 'DirectGLES'
             resValue 'string', 'config', mobileGlRendererConfig('DirectGLES')
@@ -217,7 +217,7 @@ android {
         magma {
             dimension 'backend'
             // .plus 后缀：与上游/官方插件共存（同一设备可并存安装），呼应仓库名 MobileGL-UI-Plus
-            applicationId 'top.mobilegl.plugin.magma.plus'
+            applicationId 'ui.mobilegl.plugin.plus'
             def env = mobileGlEnvString('DirectVulkan')
             resValue 'string', 'mobilegl_default_backend', 'DirectVulkan'
             resValue 'string', 'config', mobileGlRendererConfig('DirectVulkan')

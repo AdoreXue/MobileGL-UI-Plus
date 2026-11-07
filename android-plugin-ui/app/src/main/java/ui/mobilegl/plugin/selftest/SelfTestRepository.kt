@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.selftest
+package ui.mobilegl.plugin.selftest
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import top.mobilegl.plugin.NativeEnv
-import top.mobilegl.plugin.PostActivity
-import top.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.NativeEnv
+import ui.mobilegl.plugin.PostActivity
+import ui.mobilegl.plugin.config.PluginConfig
 import java.io.File
 
 data class CheckItem(

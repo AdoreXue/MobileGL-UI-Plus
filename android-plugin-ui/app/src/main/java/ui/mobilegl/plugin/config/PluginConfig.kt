@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.config
+package ui.mobilegl.plugin.config
 
 import org.json.JSONObject
 

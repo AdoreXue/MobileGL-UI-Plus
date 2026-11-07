@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.ui
+package ui.mobilegl.plugin.ui
 
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -42,14 +42,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import top.mobilegl.plugin.config.PluginConfig
-import top.mobilegl.plugin.selftest.BackendReport
-import top.mobilegl.plugin.selftest.CheckItem
-import top.mobilegl.plugin.selftest.DriverBug
-import top.mobilegl.plugin.selftest.FormatCapabilities
-import top.mobilegl.plugin.selftest.FormatRow
-import top.mobilegl.plugin.selftest.SelfTestRepository
-import top.mobilegl.plugin.selftest.SelfTestResult
+import ui.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.selftest.BackendReport
+import ui.mobilegl.plugin.selftest.CheckItem
+import ui.mobilegl.plugin.selftest.DriverBug
+import ui.mobilegl.plugin.selftest.FormatCapabilities
+import ui.mobilegl.plugin.selftest.FormatRow
+import ui.mobilegl.plugin.selftest.SelfTestRepository
+import ui.mobilegl.plugin.selftest.SelfTestResult
 
 private val CAPABILITY_FULL = Color(0xFF2E7D32)
 private val CAPABILITY_CAVEAT = Color(0xFFFBC02D)

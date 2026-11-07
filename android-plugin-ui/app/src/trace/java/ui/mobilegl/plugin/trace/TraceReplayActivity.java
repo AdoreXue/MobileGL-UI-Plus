@@ -1,4 +1,4 @@
-package top.mobilegl.plugin.trace;
+package ui.mobilegl.plugin.trace;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -16,7 +16,7 @@ import android.widget.TextView;
 import java.io.File;
 
 public final class TraceReplayActivity extends Activity {
-    public static final String ACTION_TRACE_REPLAY = "top.mobilegl.plugin.TRACE_REPLAY";
+    public static final String ACTION_TRACE_REPLAY = "ui.mobilegl.plugin.TRACE_REPLAY";
 
     private static final String TAG = "MobileGLTraceRunner";
     static {
@@ -45,7 +45,7 @@ public final class TraceReplayActivity extends Activity {
                 intent,
                 getFilesDir(),
                 getApplicationInfo().nativeLibraryDir,
-                getString(top.mobilegl.plugin.R.string.mobilegl_default_backend)
+                getString(ui.mobilegl.plugin.R.string.mobilegl_default_backend)
         );
         statusView = new TextView(this);
         statusView.setText("Waiting for render surface\n" + request.outputDir);

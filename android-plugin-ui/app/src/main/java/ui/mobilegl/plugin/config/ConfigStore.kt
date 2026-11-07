@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.config
+package ui.mobilegl.plugin.config
 
 import android.content.Context
 import org.json.JSONObject
-import top.mobilegl.plugin.R
+import ui.mobilegl.plugin.R
 import java.io.File
 
 /** JSON persistence for [PluginConfig]. Writes atomically and keeps a backup of the last good file. */

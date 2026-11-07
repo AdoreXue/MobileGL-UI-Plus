@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.ui
+package ui.mobilegl.plugin.ui
 
 import android.graphics.Color
 import android.os.Build
@@ -11,9 +11,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import top.mobilegl.plugin.BuildConfig
-import top.mobilegl.plugin.NativeEnv
-import top.mobilegl.plugin.config.ConfigStore
+import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.NativeEnv
+import ui.mobilegl.plugin.config.ConfigStore
 
 /**
  * Configuration UI of the MobileGL renderer plugin. The renderer itself is loaded by the

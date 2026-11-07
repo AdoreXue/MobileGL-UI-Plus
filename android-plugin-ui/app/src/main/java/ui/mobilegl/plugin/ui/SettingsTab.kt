@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.ui
+package ui.mobilegl.plugin.ui
 
 import android.content.Context
 import android.content.Intent
@@ -32,11 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import top.mobilegl.plugin.BuildConfig
-import top.mobilegl.plugin.config.PluginConfig
-import top.mobilegl.plugin.config.RuntimeConfigWriter
-import top.mobilegl.plugin.driver.DriverPack
-import top.mobilegl.plugin.driver.ExternalLibrary
+import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.config.RuntimeConfigWriter
+import ui.mobilegl.plugin.driver.DriverPack
+import ui.mobilegl.plugin.driver.ExternalLibrary
 
 @Composable
 fun SettingsTab(

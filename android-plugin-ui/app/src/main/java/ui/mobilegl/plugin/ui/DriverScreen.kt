@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.ui
+package ui.mobilegl.plugin.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,11 +34,11 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.mobilegl.plugin.config.PluginConfig
-import top.mobilegl.plugin.driver.DriverPack
-import top.mobilegl.plugin.driver.DriverRepository
-import top.mobilegl.plugin.driver.ExternalLibrary
-import top.mobilegl.plugin.driver.ExternalLibraryRepository
+import ui.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.driver.DriverPack
+import ui.mobilegl.plugin.driver.DriverRepository
+import ui.mobilegl.plugin.driver.ExternalLibrary
+import ui.mobilegl.plugin.driver.ExternalLibraryRepository
 import java.io.File
 
 @Composable

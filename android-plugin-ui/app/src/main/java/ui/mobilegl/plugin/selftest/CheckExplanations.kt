@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin.selftest
+package ui.mobilegl.plugin.selftest
 
 /**
  * Human-readable meaning of the Driver POST checks, for the self-test screen.

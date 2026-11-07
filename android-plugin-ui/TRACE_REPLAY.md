@@ -16,8 +16,8 @@ Useful debug builds:
 The trace profile keeps the existing plugin manifest metadata and adds:
 
 ```text
-action: top.mobilegl.plugin.TRACE_REPLAY
-activity: top.mobilegl.plugin.trace.TraceReplayActivity
+action: ui.mobilegl.plugin.TRACE_REPLAY
+activity: ui.mobilegl.plugin.trace.TraceReplayActivity
 ```
 
 Intent extras:
@@ -57,17 +57,17 @@ Example core-profile trace smoke command for a debug trace APK:
 ```sh
 adb push app.trace /data/local/tmp/mobilegl_app.trace
 adb push app.golden.png /data/local/tmp/mobilegl_app_ref.png
-adb shell run-as top.mobilegl.plugin.espryt.trace mkdir -p files/trace-replay/input files/trace-replay/output
-adb shell run-as top.mobilegl.plugin.espryt.trace cp /data/local/tmp/mobilegl_app.trace files/trace-replay/input/app.trace
-adb shell run-as top.mobilegl.plugin.espryt.trace cp /data/local/tmp/mobilegl_app_ref.png files/trace-replay/input/app.golden.png
-adb shell am start -a top.mobilegl.plugin.TRACE_REPLAY \
-  -n top.mobilegl.plugin.espryt.trace/top.mobilegl.plugin.trace.TraceReplayActivity \
-  --es trace_path /data/user/0/top.mobilegl.plugin.espryt.trace/files/trace-replay/input/app.trace \
-  --es golden_path /data/user/0/top.mobilegl.plugin.espryt.trace/files/trace-replay/input/app.golden.png \
-  --es output_dir /data/user/0/top.mobilegl.plugin.espryt.trace/files/trace-replay/output \
-  --es diff_path /data/user/0/top.mobilegl.plugin.espryt.trace/files/trace-replay/output/app-diff.png \
+adb shell run-as ui.mobilegl.plugin.espryt.trace mkdir -p files/trace-replay/input files/trace-replay/output
+adb shell run-as ui.mobilegl.plugin.espryt.trace cp /data/local/tmp/mobilegl_app.trace files/trace-replay/input/app.trace
+adb shell run-as ui.mobilegl.plugin.espryt.trace cp /data/local/tmp/mobilegl_app_ref.png files/trace-replay/input/app.golden.png
+adb shell am start -a ui.mobilegl.plugin.TRACE_REPLAY \
+  -n ui.mobilegl.plugin.espryt.trace/ui.mobilegl.plugin.trace.TraceReplayActivity \
+  --es trace_path /data/user/0/ui.mobilegl.plugin.espryt.trace/files/trace-replay/input/app.trace \
+  --es golden_path /data/user/0/ui.mobilegl.plugin.espryt.trace/files/trace-replay/input/app.golden.png \
+  --es output_dir /data/user/0/ui.mobilegl.plugin.espryt.trace/files/trace-replay/output \
+  --es diff_path /data/user/0/ui.mobilegl.plugin.espryt.trace/files/trace-replay/output/app-diff.png \
   --es backend DirectGLES \
   --el target_call 31249 \
   --es ssim_threshold 0.99
-adb shell run-as top.mobilegl.plugin.espryt.trace cat files/trace-replay/output/result.json
+adb shell run-as ui.mobilegl.plugin.espryt.trace cat files/trace-replay/output/result.json
 ```

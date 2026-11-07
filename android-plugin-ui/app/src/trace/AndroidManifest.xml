@@ -7,7 +7,7 @@
             android:exported="true"
             android:theme="@style/Theme.MobileGLPlugin">
             <intent-filter>
-                <action android:name="top.mobilegl.plugin.TRACE_REPLAY" />
+                <action android:name="ui.mobilegl.plugin.TRACE_REPLAY" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

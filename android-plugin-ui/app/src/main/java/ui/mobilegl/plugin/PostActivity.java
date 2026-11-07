@@ -1,4 +1,4 @@
-package top.mobilegl.plugin;
+package ui.mobilegl.plugin;
 
 import android.app.Activity;
 import android.graphics.Typeface;
@@ -428,7 +428,7 @@ public final class PostActivity extends Activity {
     /**
      * Synchronous entry point for the Compose UI. Loads libMobileGL if needed and
      * returns the raw POST report JSON. Callers must run this off the UI thread and
-     * must call {@link top.mobilegl.plugin.NativeEnv#apply} first so the probe sees
+     * must call {@link ui.mobilegl.plugin.NativeEnv#apply} first so the probe sees
      * the configured environment.
      */
     public static String runDriverPostJson() {

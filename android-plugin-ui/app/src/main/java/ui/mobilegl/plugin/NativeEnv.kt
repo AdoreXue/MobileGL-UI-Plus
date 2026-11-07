@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-package top.mobilegl.plugin
+package ui.mobilegl.plugin
 
 import android.system.Os
-import top.mobilegl.plugin.config.PluginConfig
+import ui.mobilegl.plugin.config.PluginConfig
 
 /**
  * Applies the user's configuration to the current process environment.

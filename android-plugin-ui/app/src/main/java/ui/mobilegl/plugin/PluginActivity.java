@@ -1,4 +1,4 @@
-package top.mobilegl.plugin;
+package ui.mobilegl.plugin;
 
 import android.app.Activity;
 import android.os.Bundle;
