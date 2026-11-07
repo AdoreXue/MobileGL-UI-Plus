@@ -113,7 +113,11 @@ def mobileGlVersionRevision = {
     try {
         if (mobileGlHeadDate == null) return 1
         def since = String.format('20%02d-%02d-01T00:00:00', mobileGlVersionMajor, mobileGlVersionMinor)
-        def proc = ['git', 'rev-list', '--count', "--since=" + since, 'HEAD'].execute(null, rootDir)
+        // 只数本仓库作者当月提交，上游历史不计入
+        def author = ['git', 'config', 'user.email'].execute(null, rootDir)
+        author.waitFor()
+        def email = author.in.text.trim() ?: 'xuhexue@users.noreply.github.com'
+        def proc = ['git', 'rev-list', '--count', '--author=' + email, "--since=" + since, 'HEAD'].execute(null, rootDir)
         proc.waitFor()
         def n = proc.in.text.trim()
         (proc.exitValue() == 0 && n) ? Math.max(1, n.toInteger()) : 1
