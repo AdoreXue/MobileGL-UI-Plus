@@ -105,8 +105,20 @@ def mobileGlVersionMajor = (findProperty('mobilegl.versionYear') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[0].toInteger() % 100 : 26)).toInteger()
 def mobileGlVersionMinor = (findProperty('mobilegl.versionMonth') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[1].toInteger() : 11)).toInteger()
-// 当月第几次发布：同一月内多次发版时手动 +1，保证 versionCode 递增
-def mobileGlVersionRevision = (findProperty('mobilegl.versionRevision') ?: 1).toInteger()
+// 当月第几次发布：默认 = HEAD 日期当月内的提交数（自动单调递增）；
+// 同月重发且无新提交时用 -Pmobilegl.versionRevision=N 覆盖
+def mobileGlVersionRevision = {
+    def over = findProperty('mobilegl.versionRevision')
+    if (over != null) return over.toInteger()
+    try {
+        if (mobileGlHeadDate == null) return 1
+        def since = String.format('20%02d-%02d-01T00:00:00', mobileGlVersionMajor, mobileGlVersionMinor)
+        def proc = ['git', 'rev-list', '--count', "--since=" + since, 'HEAD'].execute(null, rootDir)
+        proc.waitFor()
+        def n = proc.in.text.trim()
+        (proc.exitValue() == 0 && n) ? Math.max(1, n.toInteger()) : 1
+    } catch (Exception ignored) { 1 }
+}()
 // 本 fork 的构建修订号：打包逻辑有实质改动时 +1
 def mobileGlForkBuildRevision = 1
 def mobileGlGitShortHash = {
@@ -124,21 +136,6 @@ def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false')
 def mobileGlForkVersionName = {
     def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-build${mobileGlForkBuildRevision}"
     mobileGlAppendGitHash ? base + "-${mobileGlGitShortHash}" : base
-}()
-// Monthly revision: commits reachable from HEAD since the start of the
-// version's month. Multiple releases in one month (calendar versioning ships
-// several per month) each get a strictly larger versionCode; a new month
-// bumps the minor and dwarfs any reset via the *10000 weight.
-def mobileGlMonthlyRevision = {
-    try {
-        def since = String.format('%d-%02d-01T00:00:00', 2000 + mobileGlVersionMajor, mobileGlVersionMinor)
-        def proc = ['git', 'rev-list', '--count', "--since=${since}", 'HEAD'].execute(null, rootDir)
-        proc.waitFor()
-        def n = proc.in.text.trim()
-        (proc.exitValue() == 0 && n) ? n.toInteger() : 0
-    } catch (Exception ignored) {
-        0
-    }
 }()
 
 android {
