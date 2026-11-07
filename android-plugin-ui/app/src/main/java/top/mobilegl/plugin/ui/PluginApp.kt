@@ -518,7 +518,8 @@ private fun HomeTab(
             Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
         }
         Text(
-            "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: ""),
+            "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
+                " · " + BuildConfig.GIT_HASH + "-" + BuildConfig.BUILD_TYPE,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
