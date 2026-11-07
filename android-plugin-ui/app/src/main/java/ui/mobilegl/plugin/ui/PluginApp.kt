@@ -665,7 +665,7 @@ private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit, m
 
 @Composable
 private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
-    val ok = report != null && report.backends.all { it.checks.none { c -> c.level == "fail" } }
+    val ok = report != null && report.backends.all { it.checks.none { c -> c.status.equals("fail", true) } }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
