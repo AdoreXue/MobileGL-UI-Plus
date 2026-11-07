@@ -116,12 +116,18 @@ def mobileGlForkBuildRevision = {
     try {
         if (mobileGlHeadDate == null) return 1
         def since = String.format('20%02d-%02d-01T00:00:00', mobileGlVersionMajor, mobileGlVersionMinor)
-        // 只数本仓库作者当月提交，上游历史不计入
-        def email = 'xuhexue@users.noreply.github.com'
-        def proc = ['git', 'rev-list', '--count', '--author=' + email, "--since=" + since, 'HEAD'].execute(null, rootDir)
+        // 只数本仓库作者当月提交，上游历史不计入。
+        // 作者邮箱有两个：GitHub noreply（git push 时用）和账号邮箱（网页/Contents API 提交用）
+        def n = 0
+        ['xuhexue@users.noreply.github.com', 'xiaoxuelive@outlook.com'].each { email ->
+            def proc = ['git', 'rev-list', '--count', '--author=' + email, "--since=" + since, 'HEAD'].execute(null, rootDir)
+            proc.waitFor()
+            def v = proc.in.text.trim()
+            if (proc.exitValue() == 0 && v) n = Math.max(n, v.toInteger())
+        }
+        return n > 0 ? n : 1
         proc.waitFor()
         def n = proc.in.text.trim()
-        (proc.exitValue() == 0 && n) ? Math.max(1, n.toInteger()) : 1
     } catch (Exception ignored) { 1 }
 }()
 def mobileGlGitShortHash = {
