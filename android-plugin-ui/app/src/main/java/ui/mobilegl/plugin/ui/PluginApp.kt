@@ -548,8 +548,7 @@ private fun HomeTab(
                 Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             Text(
-                "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
-                    " · " + BuildConfig.GIT_HASH + "-" + BuildConfig.BUILD_TYPE,
+                "v" + BuildConfig.VERSION_NAME,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -608,6 +607,14 @@ private fun HomeTab(
                     )
                     Spacer(Modifier.width(8.dp))
                     StatusBadge(if (config.backend == "DirectVulkan") "Vulkan" else "GLES")
+                }
+                if (info.coreVersion != BuildConfig.VERSION_NAME) {
+                    Text(
+                        "核心库：v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
                 val active = config.activeDriverId
                 if (!active.isNullOrBlank()) {
