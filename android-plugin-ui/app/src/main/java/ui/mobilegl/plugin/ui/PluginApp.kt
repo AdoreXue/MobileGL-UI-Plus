@@ -46,8 +46,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -76,6 +83,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -341,6 +349,8 @@ fun MobileGlPluginApp() {
                             externalCount = externalLibraries.size,
                             onOpenSettings = { lastTab = 1; dest = Dest.Settings },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
+                            onOpenConfig = { lastTab = 1; dest = Dest.ConfigFile },
+                            onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
                             glInfo = glInfo,
                         )
                         Dest.Settings -> SettingsTab(
@@ -492,6 +502,8 @@ private fun HomeTab(
     externalCount: Int,
     onOpenSettings: () -> Unit,
     onOpenDrivers: () -> Unit,
+    onOpenConfig: () -> Unit,
+    onOpenSelfTest: () -> Unit,
     glInfo: GlInfoProbe.Info?,
 ) {
     val context = LocalContext.current
@@ -515,40 +527,73 @@ private fun HomeTab(
             .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(44.dp))
-        Row {
-            Text("Mobile", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
-        }
-        Text(
-            "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
-                " · " + BuildConfig.GIT_HASH + "-" + BuildConfig.BUILD_TYPE,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Spacer(Modifier.height(16.dp))
-        PermissionPill(authorized) {
-            val packageUri = Uri.parse("package:" + context.packageName)
-            runCatching {
-                context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
-            }.onFailure {
-                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+        Spacer(Modifier.height(0.dp))
+        // B: 渐变 Hero 区（含 Logo、版本、授权胶囊）
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(ORANGE.copy(alpha = 0.16f), Color.Transparent),
+                    ),
+                )
+                .padding(top = 40.dp, bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row {
+                Text("Mobile", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
+            }
+            Text(
+                "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
+                    " · " + BuildConfig.GIT_HASH + "-" + BuildConfig.BUILD_TYPE,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            PermissionPill(authorized) {
+                val packageUri = Uri.parse("package:" + context.packageName)
+                runCatching {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
+                }.onFailure {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                }
             }
         }
-        Spacer(Modifier.height(20.dp))
-
-        // ① 设备信息双列卡片
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            InfoCardCell("GPU", if (probing) "检测中…" else info.gpu, Modifier.weight(1f))
-            InfoCardCell("内存", info.memory, Modifier.weight(1f))
-        }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            InfoCardCell("OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.weight(1f))
-            InfoCardCell("Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.weight(1f))
+
+        // E: 快捷入口整行动效容器（对子项做进场动画）
+        // E: 进场动效容器——包住信息卡
+        AnimatedVisibility(
+            visible = !probing,
+            enter = fadeIn(tween(150)) + slideInVertically(tween(150)) { it / 6 },
+        ) {
+            // A: 图标化设备信息双列卡片
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                InfoCardCell(Icons.Filled.Memory, "GPU", if (probing) "检测中…" else info.gpu, Modifier.weight(1f))
+                InfoCardCell(Icons.Filled.Storage, "内存", info.memory, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                InfoCardCell(Icons.Filled.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.weight(1f))
+                InfoCardCell(Icons.Filled.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.weight(1f))
+            }
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(14.dp))
+
+        // C: 快捷操作行
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            QuickAction(Icons.Filled.Build, "驱动", onOpenDrivers, Modifier.weight(1f))
+            QuickAction(Icons.Filled.Settings, "设置", onOpenSettings, Modifier.weight(1f))
+            QuickAction(Icons.Filled.Description, "配置", onOpenConfig, Modifier.weight(1f))
+            QuickAction(Icons.Filled.PlayArrow, "自检", onOpenSelfTest, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // D: 驱动健康状态卡
+        HealthCard(report, onOpenSelfTest)
+        Spacer(Modifier.height(14.dp))
 
         // ③ 渲染器卡片 + 状态徽标
         Card(
@@ -600,14 +645,77 @@ private fun HomeTab(
 }
 
 @Composable
-private fun InfoCardCell(label: String, value: String, modifier: Modifier = Modifier) {
+private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        onClick = onClick,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(icon, contentDescription = label, tint = BLUE, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
+    val ok = report != null && report.backends.all { it.checks.none { c -> c.level == "fail" } }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                report == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ok -> Color(0xFFE8F5E9)
+                else -> Color(0xFFFFF8E1)
+            }
+        ),
+        onClick = onOpenSelfTest,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(10.dp).clip(RoundedCornerShape(50))
+                    .background(when { report == null -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.4f); ok -> Color(0xFF2E7D32); else -> Color(0xFFF9A825) })
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    when { report == null -> "驱动自检：未运行"; ok -> "驱动健康：通过"; else -> "驱动健康：有问题" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    if (report == null) "点按运行完整自检" else "点按查看报告 / 重测",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = label, tint = BLUE, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
                 value,
                 style = MaterialTheme.typography.titleSmall,
