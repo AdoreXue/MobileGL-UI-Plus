@@ -111,7 +111,9 @@ fun SelfTestScreen(
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_TEXT, text)
                                 }
-                                context.startActivity(Intent.createChooser(intent, "分享自检报告"))
+                                context.startActivity(Intent.createChooser(intent, "分享原始报告"))
+                            } else {
+                                android.widget.Toast.makeText(context, "还没有自检结果，请先运行自检", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         },
                     ) { Text("分享原始报告") }
