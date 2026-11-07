@@ -585,16 +585,6 @@ private fun HomeTab(
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-
-        // C: 快捷操作行
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            QuickAction(Icons.Filled.Build, "驱动", onOpenDrivers, Modifier.weight(1f))
-            QuickAction(Icons.Filled.Settings, "设置", onOpenSettings, Modifier.weight(1f))
-            QuickAction(Icons.Filled.Description, "配置", onOpenConfig, Modifier.weight(1f))
-            QuickAction(Icons.Filled.PlayArrow, "自检", onOpenSelfTest, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(14.dp))
 
         // D: 驱动健康状态卡
         HealthCard(report, onOpenSelfTest)
@@ -668,25 +658,6 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
                 Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        onClick = onClick,
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.height(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium)
         }
     }
 }
