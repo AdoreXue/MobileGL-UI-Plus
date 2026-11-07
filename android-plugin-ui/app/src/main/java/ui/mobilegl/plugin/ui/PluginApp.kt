@@ -577,17 +577,17 @@ private fun HomeTab(
             enter = fadeIn(tween(150)) + slideInVertically(tween(150)) { it / 6 },
         ) {
             // A: 图标化设备信息双列卡片
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                 InfoCardCell(Icons.Filled.Memory, "GPU", if (probing) "检测中…" else info.gpu, Modifier.weight(1f))
                 InfoCardCell(Icons.Filled.Storage, "内存", info.memory, Modifier.weight(1f))
             }
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                 InfoCardCell(Icons.Filled.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.weight(1f))
                 InfoCardCell(Icons.Filled.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.weight(1f))
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
 
         // C: 快捷操作行
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -736,9 +736,10 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
 @Composable
 private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier,
+        modifier = modifier.height(IntrinsicSize.Min),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
