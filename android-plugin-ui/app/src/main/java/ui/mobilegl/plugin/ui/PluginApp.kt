@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -339,6 +340,7 @@ fun MobileGlPluginApp() {
                             drivers = drivers,
                             externalCount = externalLibraries.size,
                             onOpenSettings = { lastTab = 1; dest = Dest.Settings },
+                            onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
                             glInfo = glInfo,
                         )
                         Dest.Settings -> SettingsTab(
@@ -489,6 +491,7 @@ private fun HomeTab(
     drivers: List<DriverPack>,
     externalCount: Int,
     onOpenSettings: () -> Unit,
+    onOpenDrivers: () -> Unit,
     glInfo: GlInfoProbe.Info?,
 ) {
     val context = LocalContext.current
@@ -533,14 +536,21 @@ private fun HomeTab(
                 context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
             }
         }
-        Spacer(Modifier.height(28.dp))
-
-        DeviceRow("GPU", if (probing) "检测中…" else info.gpu)
-        DeviceRow("OpenGL ES", if (probing) "检测中…" else info.gles)
-        DeviceRow("Vulkan", if (probing) "检测中…" else info.vulkan)
-        DeviceRow("内存", info.memory)
-
         Spacer(Modifier.height(20.dp))
+
+        // ① 设备信息双列卡片
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            InfoCardCell("GPU", if (probing) "检测中…" else info.gpu, Modifier.weight(1f))
+            InfoCardCell("内存", info.memory, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            InfoCardCell("OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.weight(1f))
+            InfoCardCell("Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(20.dp))
+
+        // ③ 渲染器卡片 + 状态徽标
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -548,14 +558,26 @@ private fun HomeTab(
             onClick = onOpenSettings,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
             ) {
-                Text(
-                    if (probing) "正在检测驱动信息…" else summary,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (probing) "正在检测驱动信息…" else summary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    StatusBadge(if (config.backend == "DirectVulkan") "Vulkan" else "GLES")
+                }
+                val active = config.activeDriverId
+                if (!active.isNullOrBlank()) {
+                    Text(
+                        "驱动包：" + active,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
                 Text(
                     "点击调整渲染器设置",
                     style = MaterialTheme.typography.bodySmall,
@@ -565,14 +587,74 @@ private fun HomeTab(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        // ② 驱动包 / 外部库可点卡片
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionStatCard("驱动包", drivers.size.toString(), onOpenDrivers, Modifier.weight(1f))
+            ActionStatCard("外部库", externalCount.toString(), onOpenDrivers, Modifier.weight(1f))
+        }
+
         Spacer(Modifier.height(20.dp))
+    }
+}
+
+@Composable
+private fun InfoCardCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusBadge(text: String) {
+    Surface(
+        color = BLUE.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(50),
+    ) {
         Text(
-            "设备：" + Build.MODEL + " · Android " + Build.VERSION.RELEASE + " · 驱动包 " + drivers.size + " 个 · 外部库 " + externalCount + " 个",
+            text,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            color = BLUE,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
-        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        onClick = onClick,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(count, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = BLUE)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("点按管理", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
