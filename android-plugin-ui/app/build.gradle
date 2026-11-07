@@ -216,7 +216,8 @@ android {
         }
         magma {
             dimension 'backend'
-            applicationId 'top.mobilegl.plugin.magma'
+            // .plus 后缀：与上游/官方插件共存（同一设备可并存安装），呼应仓库名 MobileGL-UI-Plus
+            applicationId 'top.mobilegl.plugin.magma.plus'
             def env = mobileGlEnvString('DirectVulkan')
             resValue 'string', 'mobilegl_default_backend', 'DirectVulkan'
             resValue 'string', 'config', mobileGlRendererConfig('DirectVulkan')
