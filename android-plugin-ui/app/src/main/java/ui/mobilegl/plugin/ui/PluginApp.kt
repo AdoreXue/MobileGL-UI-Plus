@@ -3,8 +3,11 @@ package ui.mobilegl.plugin.ui
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
@@ -646,6 +649,29 @@ private fun HomeTab(
 }
 
 @Composable
+private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        onClick = onClick,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = title, tint = BLUE, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
@@ -815,6 +841,11 @@ private fun InfoTab(
     onShareReport: () -> Unit,
 ) {
     val context = LocalContext.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    fun copy(label: String, value: String) {
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+        Toast.makeText(context, "已复制" + label, Toast.LENGTH_SHORT).show()
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -822,28 +853,124 @@ private fun InfoTab(
             .padding(horizontal = 20.dp),
     ) {
         BigTitle("信息")
-        SectionLabel("应用")
-        InfoCard {
-            InfoRow("版本", BuildConfig.VERSION_NAME)
-            InfoRow("构建", BuildConfig.GIT_HASH + " · " + BuildConfig.BUILD_TYPE)
-            LinkRow("GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
+        Spacer(Modifier.height(4.dp))
+
+        // A: 版本 Hero 卡（点按复制版本号）
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = LIGHT_BLUE_CARD),
+            onClick = { copy("版本号", BuildConfig.VERSION_NAME) },
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Text(
+                    "MobileGL_UI_Plus",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BLUE,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    BuildConfig.VERSION_NAME,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    BuildConfig.GIT_HASH + " · " + BuildConfig.BUILD_TYPE,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
-            LinkRow("上游项目", "MobileGL / SimpleFPEWrapper") {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
-            }
-            LinkRow("驱动自检", "查看完整报告与说明", onOpenSelfTest)
-            val verdict = lastReport?.backends?.joinToString(" / ") { it.verdict }
-            InfoRow("最近自检", verdict?.ifBlank { "未运行" } ?: "未运行")
         }
+        Spacer(Modifier.height(14.dp))
+
+        // B: 自检状态可视化
+        val backends = lastReport?.backends.orEmpty()
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            onClick = onOpenSelfTest,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(10.dp).clip(RoundedCornerShape(50))
+                            .background(
+                                when {
+                                    backends.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    backends.all { it.available } -> Color(0xFF2E7D32)
+                                    else -> Color(0xFFF9A825)
+                                }
+                            ),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        when {
+                            backends.isEmpty() -> "自检：未运行"
+                            backends.all { it.available } -> "自检：全部通过"
+                            else -> "自检：有问题"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                if (backends.isNotEmpty()) {
+                    Text(
+                        backends.joinToString(" · ") { it.backend + " " + it.verdict },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // D: 链接卡片化
+        LinkCardRow(Icons.Filled.Code, "GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
+        }
+        LinkCardRow(Icons.Filled.Public, "上游项目", "MobileGL / SimpleFPEWrapper") {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
+        }
+        LinkCardRow(Icons.Filled.FactCheck, "驱动自检", "查看完整报告与说明", onOpenSelfTest)
+        Spacer(Modifier.height(14.dp))
+
         SectionLabel("关于")
         InfoCard {
             InfoRow("开发者", "MobileGL-Dev")
             InfoRow("开源许可证", "GNU LGPL-3.0")
             InfoRow("兼容启动器", "FCL · Zalith · Pojav")
         }
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onShareReport) { Text("分享自检报告") }
+        Spacer(Modifier.height(16.dp))
+
+        // E: 分享按钮升级（分享内容带版本号）
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = BLUE),
+            onClick = {
+                val text = "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n" + (lastReport?.let { r ->
+                    r.backends.joinToString("\n") { b -> b.backend + ": " + b.verdict }
+                } ?: "（无自检数据）")
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(send, "分享自检报告"))
+            },
+        ) {
+            Text(
+                "分享自检报告",
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                textAlign = TextAlign.Center,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
