@@ -715,7 +715,7 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
 @Composable
 private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier.height(IntrinsicSize.Min),
+        modifier = modifier,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -732,8 +732,6 @@ private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifi
                     value,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
