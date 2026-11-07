@@ -105,29 +105,24 @@ def mobileGlVersionMajor = (findProperty('mobilegl.versionYear') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[0].toInteger() % 100 : 26)).toInteger()
 def mobileGlVersionMinor = (findProperty('mobilegl.versionMonth') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[1].toInteger() : 11)).toInteger()
-// 当月第几次发布：默认 = HEAD 日期当月内的提交数（自动单调递增）；
-// 同月重发且无新提交时用 -Pmobilegl.versionRevision=N 覆盖
-def mobileGlVersionRevision = {
-    def over = findProperty('mobilegl.versionRevision')
+// 版本修订号（26.11.x 的 x）：固定常量，由维护者手动指定，不随提交数变化。
+// 需要更新时改这一个数字（或构建时 -Pmobilegl.versionRevision=N 临时覆盖）
+def mobileGlVersionRevision = (findProperty('mobilegl.versionRevision') ?: 5).toInteger()
+// 本 fork 的构建编号（buildN）：自动 = 当月作者提交数，每次构建随提交自然增长；
+// 需要锁定时用 -Pmobilegl.buildRevision=N 覆盖
+def mobileGlForkBuildRevision = {
+    def over = findProperty('mobilegl.buildRevision')
     if (over != null) return over.toInteger()
     try {
         if (mobileGlHeadDate == null) return 1
         def since = String.format('20%02d-%02d-01T00:00:00', mobileGlVersionMajor, mobileGlVersionMinor)
         // 只数本仓库作者当月提交，上游历史不计入
-        def author = ['git', 'config', 'user.email'].execute(null, rootDir)
-        author.waitFor()
-        def email = author.in.text.trim() ?: 'xuhexue@users.noreply.github.com'
+        def email = 'xuhexue@users.noreply.github.com'
         def proc = ['git', 'rev-list', '--count', '--author=' + email, "--since=" + since, 'HEAD'].execute(null, rootDir)
         proc.waitFor()
         def n = proc.in.text.trim()
         (proc.exitValue() == 0 && n) ? Math.max(1, n.toInteger()) : 1
     } catch (Exception ignored) { 1 }
-}()
-// 本 fork 的构建标记：默认跟随当月修订号（全自动）；
-// UI/打包逻辑大改想单独区分时用 -Pmobilegl.buildRevision=N 覆盖
-def mobileGlForkBuildRevision = {
-    def over = findProperty('mobilegl.buildRevision')
-    (over ?: mobileGlVersionRevision.toString()).toInteger()
 }()
 def mobileGlGitShortHash = {
     try {
