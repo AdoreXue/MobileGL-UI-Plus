@@ -88,10 +88,25 @@ def mobileGlRendererConfig = { String backendType ->
     groovy.json.JsonOutput.toJson(config).replace('"', '\\"')
 }
 
-// Calendar versioning: major = two-digit year, minor = month. The build
-// identifier is the short commit hash, giving version names like 26.07.4e558ee.
-def mobileGlVersionMajor = 26
-def mobileGlVersionMinor = 7
+// Calendar versioning: major = two-digit year, minor = month, taken from the
+// HEAD commit date (not the build machine clock) so the number is reproducible
+// and never goes stale. Override with -Pmobilegl.versionYear/-P...Month.
+def mobileGlHeadDate = {
+    try {
+        def proc = ['git', 'log', '-1', '--format=%cd', '--date=format:%Y-%m', 'HEAD'].execute(null, rootDir)
+        proc.waitFor()
+        def d = proc.in.text.trim()
+        (proc.exitValue() == 0 && d ==~ /\d{4}-\d{2}/) ? d : null
+    } catch (Exception ignored) {
+        null
+    }
+}()
+def mobileGlVersionMajor = (findProperty('mobilegl.versionYear') ?:
+        (mobileGlHeadDate ? mobileGlHeadDate.split('-')[0].toInteger() % 100 : 26)).toInteger()
+def mobileGlVersionMinor = (findProperty('mobilegl.versionMonth') ?:
+        (mobileGlHeadDate ? mobileGlHeadDate.split('-')[1].toInteger() : 11)).toInteger()
+// 当月第几次发布：同一月内多次发版时手动 +1，保证 versionCode 递增
+def mobileGlVersionRevision = (findProperty('mobilegl.versionRevision') ?: 1).toInteger()
 // 本 fork（UI 版）的修订号：UI/打包逻辑有实质改动时 +1
 def mobileGlForkUiRevision = 1
 def mobileGlGitShortHash = {
@@ -107,7 +122,7 @@ def mobileGlGitShortHash = {
 // CI 构建时附加短 commit hash，便于定位源码；本地默认不加
 def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false').toString().toBoolean()
 def mobileGlForkVersionName = {
-    def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.10-ui${mobileGlForkUiRevision}"
+    def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-ui${mobileGlForkUiRevision}"
     mobileGlAppendGitHash ? base + "-${mobileGlGitShortHash}" : base
 }()
 // Monthly revision: commits reachable from HEAD since the start of the
@@ -153,9 +168,8 @@ android {
         // strictly increasing across releases (monotonic within a month and
         // across month/year rollovers), so every build is an installable
         // upgrade. Max ~99_129999, well under Android's 2_100_000_000 ceiling.
-        // versionCode 保持既有公式（年*1e6 + 月*1e4 + 当月修订），单调递增；
-        // versionName 与之一致：26.7.10-ui1 = 年.月.修订 + fork 标记
-        versionCode 26070010
+        // 年*1e6 + 月*1e4 + 当月修订，随 HEAD 日期单调递增
+        versionCode mobileGlVersionMajor * 1000000 + mobileGlVersionMinor * 10000 + mobileGlVersionRevision
         versionName mobileGlForkVersionName
 
         ndk {
