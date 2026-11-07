@@ -27,6 +27,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,6 +79,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.isSystemInDarkTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,12 +123,11 @@ import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
 import java.util.Locale
 
-private val BLUE = Color(0xFF2F6BFF)
-private val ORANGE = Color(0xFFF57C00)
+private val MaterialTheme.colorScheme.primary = Color(0xFF2F6BFF)
 private val PASS = Color(0xFF1A9C57)
 private val WARN = Color(0xFFB26A00)
-private val FAIL = Color(0xFFD1343C)
-private val LIGHT_BLUE_CARD = Color(0xFFEEF2FF)
+private val MaterialTheme.colorScheme.error = Color(0xFFD1343C)
+private val MaterialTheme.colorScheme.secondaryContainer = Color(0xFFEEF2FF)
 
 /** 一次性装载二级页与首页所需的磁盘数据，避免多次跨线程往返。 */
 private data class DriversData(
@@ -324,9 +328,9 @@ fun MobileGlPluginApp() {
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label) },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = BLUE,
-                                    selectedTextColor = BLUE,
-                                    indicatorColor = BLUE.copy(alpha = 0.12f),
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 ),
                             )
                         }
@@ -443,19 +447,16 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
 
 @Composable
 private fun MobileGlTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = BLUE,
-            onPrimary = Color.White,
-            background = Color(0xFFF7F8FD),
-            surface = Color.White,
-            surfaceVariant = Color(0xFFF2F4FA),
-            onSurface = Color(0xFF191C24),
-            onSurfaceVariant = Color(0xFF6B7280),
-            outline = Color(0xFFE3E7F0),
-        ),
-        content = content,
-    )
+    // Material 3 标准：Android 12+ 动态取色，低版本回退到标准 light/dark 方案
+    val dark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val scheme = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> darkColorScheme()
+        else -> lightColorScheme()
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
 }
 
 private data class DeviceInfo(
@@ -541,7 +542,7 @@ private fun HomeTab(
                 .fillMaxWidth()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(ORANGE.copy(alpha = 0.16f), Color.Transparent),
+                        colors = listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), Color.Transparent),
                     ),
                 )
                 .padding(top = 40.dp, bottom = 8.dp),
@@ -550,7 +551,7 @@ private fun HomeTab(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = ORANGE)
+                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             Text(
                 "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
@@ -607,7 +608,7 @@ private fun HomeTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = LIGHT_BLUE_CARD),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
             onClick = onOpenSettings,
         ) {
             Column(
@@ -634,7 +635,7 @@ private fun HomeTab(
                 Text(
                     "点击调整渲染器设置",
                     style = MaterialTheme.typography.bodySmall,
-                    color = BLUE,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
@@ -664,7 +665,7 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = title, tint = BLUE, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
@@ -687,7 +688,7 @@ private fun QuickAction(icon: ImageVector, label: String, onClick: () -> Unit, m
             Modifier.fillMaxWidth().padding(vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(icon, contentDescription = label, tint = BLUE, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             Spacer(Modifier.height(6.dp))
             Text(label, style = MaterialTheme.typography.labelMedium)
         }
@@ -703,8 +704,8 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
         colors = CardDefaults.cardColors(
             containerColor = when {
                 report == null -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ok -> Color(0xFFE8F5E9)
-                else -> Color(0xFFFFF8E1)
+                ok -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.tertiaryContainer
             }
         ),
         onClick = onOpenSelfTest,
@@ -715,7 +716,13 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
         ) {
             Box(
                 Modifier.size(10.dp).clip(RoundedCornerShape(50))
-                    .background(when { report == null -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.4f); ok -> Color(0xFF2E7D32); else -> Color(0xFFF9A825) })
+                    .background(
+                    when {
+                        report == null -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        ok -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.error
+                    }
+                )
             )
             Spacer(Modifier.width(10.dp))
             Column {
@@ -744,7 +751,7 @@ private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifi
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = label, tint = BLUE, modifier = Modifier.size(14.dp))
+                Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -763,13 +770,13 @@ private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifi
 @Composable
 private fun StatusBadge(text: String) {
     Surface(
-        color = BLUE.copy(alpha = 0.12f),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
         shape = RoundedCornerShape(50),
     ) {
         Text(
             text,
             style = MaterialTheme.typography.labelSmall,
-            color = BLUE,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
@@ -788,7 +795,7 @@ private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, mo
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(count, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = BLUE)
+            Text(count, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
@@ -801,7 +808,7 @@ private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, mo
 @Composable
 private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
     Surface(
-        color = if (authorized) BLUE.copy(alpha = 0.12f) else Color(0xFFFFE9E9),
+        color = if (authorized) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer,
         shape = RoundedCornerShape(50),
         modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick),
     ) {
@@ -813,10 +820,10 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
                 Modifier
                     .size(8.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(if (authorized) BLUE else FAIL)
+                    .background(if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             )
             Spacer(Modifier.width(8.dp))
-            Text(if (authorized) "已授权" else "未授权 · 点击授权", color = if (authorized) BLUE else FAIL, fontWeight = FontWeight.Medium)
+            Text(if (authorized) "已授权" else "未授权 · 点击授权", color = if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -864,14 +871,14 @@ private fun InfoTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = LIGHT_BLUE_CARD),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
             onClick = { copy("版本号", BuildConfig.VERSION_NAME) },
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 Text(
                     "MobileGL_UI_Plus",
                     style = MaterialTheme.typography.labelMedium,
-                    color = BLUE,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
@@ -905,8 +912,8 @@ private fun InfoTab(
                             .background(
                                 when {
                                     backends.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    backends.all { it.available } -> Color(0xFF2E7D32)
-                                    else -> Color(0xFFF9A825)
+                                    backends.all { it.available } -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.error
                                 }
                             ),
                     )
@@ -955,7 +962,7 @@ private fun InfoTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = BLUE),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             onClick = {
                 val text = "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n" + (lastReport?.let { r ->
                     r.backends.joinToString("\n") { b -> b.backend + ": " + b.verdict }
@@ -986,7 +993,7 @@ private fun BottomBackCard(onClick: () -> Unit) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = BLUE),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
             onClick = onClick,
         ) {
             Text(
@@ -1018,7 +1025,7 @@ fun SectionLabel(text: String) {
         text,
         modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
         style = MaterialTheme.typography.labelLarge,
-        color = BLUE,
+        color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Medium,
     )
 }
@@ -1105,7 +1112,7 @@ fun StatusPill(text: String, color: Color) {
 fun verdictColor(verdict: String): Color = when (verdict.uppercase()) {
     "OK", "PASS" -> PASS
     "DEGRADED", "WARN" -> WARN
-    "UNSUPPORTED", "FAIL" -> FAIL
+    "UNSUPPORTED", "MaterialTheme.colorScheme.error" -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
