@@ -540,9 +540,10 @@ private fun HomeTab(
                 .padding(top = 40.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row {
-                Text("Mobile", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = ORANGE)
             }
             Text(
                 "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: "") +
