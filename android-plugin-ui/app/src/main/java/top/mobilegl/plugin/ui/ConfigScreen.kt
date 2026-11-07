@@ -27,10 +27,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,13 +61,32 @@ fun ConfigScreen(
     onStatusChanged: (RuntimeConfigWriter.Status) -> Unit,
 ) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf(writer.readShared() ?: DEFAULT_CONFIG) }
+    val scope = rememberCoroutineScope()
+    // /sdcard 是 FUSE IO，组合期间同步读会卡首帧：先显示默认模板，后台加载真实内容。
+    var text by remember { mutableStateOf(DEFAULT_CONFIG) }
     var message by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val shared = withContext(Dispatchers.IO) { writer.readShared() }
+        if (shared != null) text = shared
+    }
+    fun reload() {
+        busy = true
+        scope.launch {
+            val shared = withContext(Dispatchers.IO) { writer.readShared() }
+            text = shared ?: DEFAULT_CONFIG
+            busy = false
+        }
+    }
 
     fun save() {
-        val s = writer.writeRaw(text)
-        onStatusChanged(s)
-        message = if (s.sharedWritten) "已写入 " + s.sharedPath else "共享路径不可写：" + (s.reason ?: "")
+        busy = true
+        scope.launch {
+            val s = withContext(Dispatchers.IO) { writer.writeRaw(text) }
+            onStatusChanged(s)
+            message = if (s.sharedWritten) "已写入 " + s.sharedPath else "共享路径不可写：" + (s.reason ?: "")
+            busy = false
+        }
     }
 
     Column(
@@ -88,8 +112,9 @@ fun ConfigScreen(
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { save() }) { Text("保存配置") }
-                OutlinedButton(onClick = { text = writer.readShared() ?: DEFAULT_CONFIG }) { Text("重新读取") }
+                Button(enabled = !busy,
+                onClick = { save() }) { Text("保存配置") }
+                OutlinedButton(enabled = !busy, onClick = { reload() }) { Text("重新读取") }
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
