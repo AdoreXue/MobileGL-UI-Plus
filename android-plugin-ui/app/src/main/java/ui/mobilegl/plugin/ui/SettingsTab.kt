@@ -86,9 +86,11 @@ fun SettingsTab(
                 selected = backend,
                 onSelect = { setBackend(it) },
             )
-            DividerLine()
-            SwitchRow("使用 ANGLE", "Espryt 后端用 ANGLE 作为 GLES 实现", isOn(env("MOBILEGL_ESPRYT_USE_ANGLE"))) {
-                setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it))
+            if (backend == "DirectGLES") {
+                DividerLine()
+                SwitchRow("使用 ANGLE", "Espryt 后端用 ANGLE 作为 GLES 实现", isOn(env("MOBILEGL_ESPRYT_USE_ANGLE"))) {
+                    setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it))
+                }
             }
             DividerLine()
             if (BuildConfig.SFPEW_BUNDLED) {
@@ -120,6 +122,10 @@ fun SettingsTab(
                     subtitle = "当前安装包是直连版，不含 libSimpleFPEWrapper.so",
                     checked = false,
                 ) { }
+            }
+            DividerLine()
+            SwitchRow("启动时自动自检", "打开应用后自动运行一次驱动自检", config.autoSelfTest) {
+                onSave(config.copy(autoSelfTest = it))
             }
         }
 
