@@ -65,9 +65,9 @@ jobs:
         run: |
           VER_ARGS=""
           if [ "$RELEASE_BUILD" = "1" ]; then
-            VER_ARGS="-Pmobilegl.versionNameOverride='$DISPLAY_VERSION' -Pmobilegl.versionGitHash=false"
+            VER_ARGS="-Pmobilegl.versionNameOverride=$DISPLAY_VERSION -Pmobilegl.versionGitHash=false"
           else
-            VER_ARGS="-Pmobilegl.versionNameOverride='$DISPLAY_VERSION' -Pmobilegl.versionGitHash=true"
+            VER_ARGS="-Pmobilegl.versionNameOverride=$DISPLAY_VERSION -Pmobilegl.versionGitHash=true"
           fi
           gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginRelease
 
