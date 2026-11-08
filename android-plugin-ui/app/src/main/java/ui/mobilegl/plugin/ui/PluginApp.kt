@@ -39,7 +39,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
@@ -98,6 +100,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -339,7 +342,16 @@ fun MobileGlPluginApp() {
                 }
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            val layoutDir = LocalLayoutDirection.current
+            val outerPadding = if (dest == Dest.Home) {
+                PaddingValues(
+                    start = padding.calculateStartPadding(layoutDir),
+                    top = 0.dp,
+                    end = padding.calculateEndPadding(layoutDir),
+                    bottom = padding.calculateBottomPadding(),
+                )
+            } else padding
+            Box(Modifier.fillMaxSize().padding(outerPadding)) {
                 AnimatedContent(
                     targetState = dest,
                     transitionSpec = { pageTransition(initialState, targetState) },
@@ -539,7 +551,8 @@ private fun HomeTab(
                         colors = listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), Color.Transparent),
                     ),
                 )
-                .padding(top = 40.dp, bottom = 8.dp),
+                .statusBarsPadding()
+                .padding(top = 28.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
