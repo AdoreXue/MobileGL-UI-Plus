@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       versionName:
-        description: "APK 内部 versionName（如 26.11.1-rc.2）；留空则自动生成 buildN"
+        description: release build full versionName e.g. 26.11.1-rc.2; leave empty for dev build with -DevN suffix
         required: false
         type: string
 
@@ -35,6 +35,25 @@ jobs:
           echo "$SIGNING_STORE_FILE_BASE64" | base64 -d > keystore.jks
           ls -l keystore.jks
 
+      - name: Resolve display version (DevN for non-release builds)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n '${{ github.event.inputs.versionName }}' ]; then
+            echo "DISPLAY_VERSION=${{ github.event.inputs.versionName }}" >> "$GITHUB_ENV"
+            echo "RELEASE_BUILD=1" >> "$GITHUB_ENV"
+          else
+            BASE=$(gradle --no-daemon -q -p android-plugin-ui :app:printBaseVersion | tail -1)
+            echo "base version: $BASE"
+            DEVN=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+              --jq "[.[].tag_name | select(startswith(\"$BASE-Dev"))] | map(ltrimstr(\"$BASE-Dev\") | tonumber) | max // 0" \
+              | awk '{print $1+1}')
+            [ -z "$DEVN" ] && DEVN=1
+            echo "DevN: $DEVN"
+            echo "DISPLAY_VERSION=$BASE-Dev$DEVN" >> "$GITHUB_ENV"
+            echo "RELEASE_BUILD=0" >> "$GITHUB_ENV"
+          fi
+
       - name: Build plugin APK (release)
         working-directory: android-plugin-ui
         env:
@@ -45,17 +64,17 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           VER_ARGS=""
-          if [ -n '${{ github.event.inputs.versionName }}' ]; then
-            VER_ARGS="-Pmobilegl.versionNameOverride='${{ github.event.inputs.versionName }}' -Pmobilegl.versionGitHash=false"
+          if [ "$RELEASE_BUILD" = "1" ]; then
+            VER_ARGS="-Pmobilegl.versionNameOverride='$DISPLAY_VERSION' -Pmobilegl.versionGitHash=false"
           else
-            VER_ARGS="-Pmobilegl.versionGitHash=true"
+            VER_ARGS="-Pmobilegl.versionNameOverride='$DISPLAY_VERSION' -Pmobilegl.versionGitHash=true"
           fi
           gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginRelease
 
       - name: Collect artifact (rename with version)
         working-directory: android-plugin-ui
         run: |
-          VERSION=$(gradle --no-daemon -q :app:printVersionName ${{ github.event.inputs.versionName != '' && format('-Pmobilegl.versionNameOverride={0}', github.event.inputs.versionName) || '' }} | tail -1)
+          VERSION=$(gradle --no-daemon -q :app:printVersionName -Pmobilegl.versionNameOverride=$DISPLAY_VERSION | tail -1)
           echo "versionName=$VERSION"
           cp app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk \
              "../MobileGL-${VERSION}.apk"
