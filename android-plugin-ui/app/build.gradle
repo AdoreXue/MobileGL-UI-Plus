@@ -349,3 +349,10 @@ tasks.register('printVersionName') {
         println android.defaultConfig.versionName
     }
 }
+
+// CI 用：打印基版本（major.minor.revision，不含 build/Dev 后缀），供 DevN 计算
+tasks.register('printBaseVersion') {
+    doLast {
+        println "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}"
+    }
+}
