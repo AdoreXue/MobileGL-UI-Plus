@@ -34,6 +34,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -183,13 +184,14 @@ fun MobileGlPluginApp() {
     var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
     MobileGlTheme(themeMode) {
         Box(Modifier.fillMaxSize()) {
-        // 应用内首帧启动层：图标 + Hero 同款大字，短暂展示后淡出。
-        var splashVisible by remember { mutableStateOf(true) }
-        val splashAlpha = remember { Animatable(1f) }
+        // 应用内首帧启动层：图标 + Hero 同款大字；退出时背景/图标淡出，
+        // 标题原地飞向 Hero 区的位置，与首页大字无缝衔接。
+        var splashGone by remember { mutableStateOf(false) }
+        val splashProgress = remember { Animatable(0f) }
         LaunchedEffect(Unit) {
-            delay(420)
-            splashAlpha.animateTo(0f, tween(280, easing = LinearEasing))
-            splashVisible = false
+            delay(380)
+            splashProgress.animateTo(1f, tween(480, easing = FastOutSlowInEasing))
+            splashGone = true
         }
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
@@ -473,8 +475,8 @@ fun MobileGlPluginApp() {
                 }
             }
         }
-        if (splashVisible) {
-            SplashOverlay(alpha = splashAlpha.value)
+        if (!splashGone) {
+            SplashOverlay(progress = splashProgress.value)
         }
         }
     }
@@ -630,11 +632,7 @@ private fun HomeTab(
                 .padding(top = 28.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            }
+            HeroTitle(translationY = 0f)
             Text(
                 "v" + BuildConfig.VERSION_NAME,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1258,28 +1256,52 @@ internal fun openAllFilesAccessSettings(context: Context) {
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 @Composable
-private fun SplashOverlay(alpha: Float) {
-    if (alpha <= 0f) return
-    Box(
+private fun SplashOverlay(progress: Float) {
+    // 背景/图标随 progress 淡出；标题保持在 Hero 同款字号，从屏幕中心
+    // 平移到顶部 Hero 区的位置，松手后正好落在首页大字上。
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer(alpha = alpha)
-            .background(MaterialTheme.colorScheme.background),
+            .graphicsLayer(alpha = 1f),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(
-                painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
-                contentDescription = null,
-                modifier = Modifier.size(120.dp),
-                contentScale = ContentScale.Fit,
+        val h = constraints.maxHeight.toFloat()
+        val fade = (1f - progress).coerceIn(0f, 1f)
+        if (fade > 0.01f) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .graphicsLayer(alpha = fade),
             )
-            Spacer(Modifier.height(20.dp))
-            Row {
-                Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        if (progress < 1f) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                val iconAlpha = (1f - progress * 1.4f).coerceIn(0f, 1f)
+                Image(
+                    painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(120.dp)
+                        .graphicsLayer(alpha = iconAlpha),
+                    contentScale = ContentScale.Fit,
+                )
+                Spacer(Modifier.height(20.dp))
+                HeroTitle(translationY = -h * 0.30f * progress)
             }
         }
+    }
+}
+
+@Composable
+private fun HeroTitle(translationY: Float) {
+    Row(modifier = Modifier.graphicsLayer(translationY = translationY)) {
+        Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     }
 }
