@@ -5,7 +5,7 @@
              splash screen, so the icon layer is an empty drawable. -->
         <item name="android:windowBackground">@color/window_background</item>
         <item name="android:windowSplashScreenBackground">@color/window_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
     </style>
     <style name="Theme.MobileGLPlugin.NoDisplay" parent="@android:style/Theme.NoDisplay" />
 </resources>
