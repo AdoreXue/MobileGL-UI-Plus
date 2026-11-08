@@ -56,15 +56,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -680,10 +674,10 @@ private fun HomeTab(
         ) {
             // A: 设备信息竖排单列（每项一行，占满宽度，信息不截断）
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                InfoCardCell(Icons.Filled.Memory, "GPU", if (probing) "检测中…" else info.gpu, Modifier.fillMaxWidth())
-                InfoCardCell(Icons.Filled.Storage, "内存", info.memory, Modifier.fillMaxWidth())
-                InfoCardCell(Icons.Filled.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.fillMaxWidth())
-                InfoCardCell(Icons.Filled.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Gpu, "GPU", if (probing) "检测中…" else info.gpu, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Memory, "内存", info.memory, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.fillMaxWidth())
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -1050,10 +1044,10 @@ private fun InfoTab(
         Spacer(Modifier.height(14.dp))
 
         // D: 链接卡片化
-        LinkCardRow(Icons.Filled.Code, "GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
+        LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
         }
-        LinkCardRow(Icons.Filled.Public, "上游项目", "MobileGL / SimpleFPEWrapper") {
+        LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
         }
         Spacer(Modifier.height(14.dp))
