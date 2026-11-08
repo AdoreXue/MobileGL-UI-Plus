@@ -81,12 +81,17 @@ fun ConfigScreen(
     }
 
     fun save() {
+        val issues = validateConfig(text)
+        if (issues.isNotEmpty()) {
+            message = "发现 " + issues.size + " 个问题，已阻止保存：\n" + issues.joinToString("\n")
+            return
+        }
         busy = true
         // 解析成键值对交回 PluginApp：写入 config.json（唯一真源），再由它统一生成 runtime.conf，
         // 这样设置页开关与这里的编辑不会再互相覆盖。
         val kv = parseKeyValues(text)
         onMerge(kv)
-        message = "已保存 " + kv.size + " 项（已写入配置并重新生成 runtime.conf）"
+        message = "已保存 " + kv.size + " 项（校验通过）"
         busy = false
     }
 
@@ -119,11 +124,24 @@ fun ConfigScreen(
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val issues = validateConfig(text)
+                    message = if (issues.isEmpty()) "校验通过：所有键与取值都有效" else
+                        "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n")
+                }) { Text("校验配置") }
                 OutlinedButton(onClick = { text = DEFAULT_CONFIG }) { Text("恢复模板") }
                 if (!hasAllFilesAccess()) {
                     OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text("授予所有文件访问权限") }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    text = removeKeys(text, SUPPORTED_KEYS)
+                    message = "已移除全部配置项，保存后回到原生默认值"
+                },
+            ) { Text("全部恢复默认（移除所有配置项）") }
             message?.let {
                 Spacer(Modifier.height(6.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall)
@@ -368,6 +386,128 @@ private fun setKey(text: String, key: String, value: String): String {
 }
 
 private fun onOff(value: Boolean): String = if (value) "1" else "0"
+
+
+/** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
+private val SUPPORTED_KEYS: Set<String> = setOf(
+    "MOBILEGL_ADVERTISE_FP64", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS",
+    "MOBILEGL_ASYNC_SHADER_COMPILE", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS",
+    "MOBILEGL_BACKEND_TYPE", "MOBILEGL_COHERENT_AS_FLUSH",
+    "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", "MOBILEGL_DISABLE_SHADER_PREWARM",
+    "MOBILEGL_DISABLE_TEXTURE_VIEW", "MOBILEGL_DISABLE_TIMERQUERY",
+    "MOBILEGL_ENABLE_SPIRV_VALIDATION", "MOBILEGL_ES_CONTEXT_IDENTITY",
+    "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS",
+    "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS",
+    "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", "MOBILEGL_ESPRYT_DISABLE_UBO_RING",
+    "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING",
+    "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION",
+    "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER",
+    "MOBILEGL_ESPRYT_MULTIDRAW_MODE", "MOBILEGL_ESPRYT_RESET_NOTIFICATION",
+    "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", "MOBILEGL_ESPRYT_USE_ANGLE",
+    "MOBILEGL_ESPRYT_VAO_SHADOW", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE",
+    "MOBILEGL_ESPRYT_WINDOW_AGE", "MOBILEGL_FPS_LOG", "MOBILEGL_FRAMES_IN_FLIGHT",
+    "MOBILEGL_GPU_HANG_BUDGET_MS", "MOBILEGL_ITRP_FIX",
+    "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES",
+    "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS",
+    "MOBILEGL_MAGMA_E5_RAW_READS", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES",
+    "MOBILEGL_MAGMA_FRAMESINFLIGHT", "MOBILEGL_MAGMA_INPASS_CLEAR",
+    "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER",
+    "MOBILEGL_MAGMA_MULTIDRAW_MODE", "MOBILEGL_MAGMA_PASS_CACHE",
+    "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK",
+    "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES",
+    "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", "MOBILEGL_MAGMA_WRITE_RENAME",
+    "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO", "MOBILEGL_PIPE_INDEX_MIRROR_MB",
+    "MOBILEGL_PIPE_LEGACY_MEMOS", "MOBILEGL_PIPE_PERSISTENT_MPROTECT",
+    "MOBILEGL_PIPE_PUSH", "MOBILEGL_PIPE_STATS", "MOBILEGL_PIPE_STATS_PERIOD",
+    "MOBILEGL_PIPE_VERIFY", "MOBILEGL_PIPE_VERIFY_FATAL",
+    "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", "MOBILEGL_POINT_SIZE_DEMOTION",
+    "MOBILEGL_RELAXED_SEMANTICS", "MOBILEGL_SHADER_CACHE", "MOBILEGL_SUBGROUP_EMULATION",
+    "SFPEW_EGL", "SFPEW_MANUAL_MIPGEN", "SFPEW_NO_MULTIDRAWARRAYS", "SFPEW_RELAXED_CONTEXT",
+)
+
+/** 由插件自身写入、或启动器使用的键：存在但不由本页校验。 */
+private val ALLOWED_EXTRA_KEYS: Set<String> = setOf(
+    "RENDERER_MODE", "RENDERER_SO", "MOBILEGL_CONFIG_FILE",
+    "LIBGL_ES", "POJAV_RENDERER",
+)
+
+/** 只能是 0 / 1 的开关型键。 */
+private val BOOLEAN_KEYS: Set<String> = setOf(
+    "MOBILEGL_ADVERTISE_FP64", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS",
+    "MOBILEGL_ASYNC_SHADER_COMPILE", "MOBILEGL_COHERENT_AS_FLUSH",
+    "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", "MOBILEGL_DISABLE_SHADER_PREWARM",
+    "MOBILEGL_DISABLE_TEXTURE_VIEW", "MOBILEGL_DISABLE_TIMERQUERY",
+    "MOBILEGL_ENABLE_SPIRV_VALIDATION", "MOBILEGL_ES_CONTEXT_IDENTITY",
+    "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER",
+    "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH",
+    "MOBILEGL_ESPRYT_DISABLE_UBO_RING", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING",
+    "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW",
+    "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION",
+    "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", "MOBILEGL_ESPRYT_RESET_NOTIFICATION",
+    "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", "MOBILEGL_ESPRYT_USE_ANGLE",
+    "MOBILEGL_ESPRYT_VAO_SHADOW", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE",
+    "MOBILEGL_FPS_LOG", "MOBILEGL_ITRP_FIX", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV",
+    "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS",
+    "MOBILEGL_MAGMA_E5_RAW_READS", "MOBILEGL_MAGMA_PASS_CACHE",
+    "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK",
+    "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES",
+    "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", "MOBILEGL_MAGMA_WRITE_RENAME",
+    "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO", "MOBILEGL_PIPE_LEGACY_MEMOS",
+    "MOBILEGL_PIPE_PERSISTENT_MPROTECT", "MOBILEGL_PIPE_PUSH", "MOBILEGL_PIPE_STATS",
+    "MOBILEGL_PIPE_VERIFY", "MOBILEGL_PIPE_VERIFY_FATAL",
+    "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", "MOBILEGL_POINT_SIZE_DEMOTION",
+    "MOBILEGL_RELAXED_SEMANTICS", "MOBILEGL_SHADER_CACHE", "MOBILEGL_SUBGROUP_EMULATION",
+    "SFPEW_MANUAL_MIPGEN", "SFPEW_NO_MULTIDRAWARRAYS", "SFPEW_RELAXED_CONTEXT",
+)
+
+/** 整型键与合理范围。 */
+private val INT_RANGES: Map<String, IntRange> = mapOf(
+    "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS" to 1..16,
+    "MOBILEGL_FRAMES_IN_FLIGHT" to 1..6,
+    "MOBILEGL_GPU_HANG_BUDGET_MS" to 100..60000,
+    "MOBILEGL_PIPE_STATS_PERIOD" to 1..100000,
+    "MOBILEGL_PIPE_INDEX_MIRROR_MB" to 1..1024,
+    "MOBILEGL_MAGMA_FRAMESINFLIGHT" to 1..6,
+    "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES" to 0..10000,
+    "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER" to 1..1000000,
+    "MOBILEGL_ESPRYT_WINDOW_AGE" to 0..100000,
+)
+
+/** 后端枚举值。 */
+private val BACKEND_VALUES = setOf("DirectVulkan", "DirectGLES")
+private val SFPEW_EGL_VALUES = setOf("libMobileGL.so", "libEGL.so")
+
+/** 校验配置文本，返回问题列表（空表示通过）。 */
+private fun validateConfig(text: String): List<String> {
+    val issues = mutableListOf<String>()
+    parseKeyValues(text).forEach { (key, value) ->
+        when {
+            !SUPPORTED_KEYS.contains(key) && !ALLOWED_EXTRA_KEYS.contains(key) ->
+                issues.add("未知键：" + key + "（原生库不支持，会被忽略）")
+            key == "MOBILEGL_BACKEND_TYPE" && !BACKEND_VALUES.contains(value) ->
+                issues.add("渲染后端取值非法：" + value + "（应为 DirectVulkan / DirectGLES）")
+            key == "SFPEW_EGL" && !SFPEW_EGL_VALUES.contains(value) ->
+                issues.add("SFPEW 后端取值非法：" + value + "（应为 libMobileGL.so / libEGL.so）")
+            BOOLEAN_KEYS.contains(key) && value != "0" && value != "1" ->
+                issues.add(key + " 应为 0 或 1，当前是 " + value)
+            INT_RANGES.containsKey(key) -> {
+                val n = value.toIntOrNull()
+                val range = INT_RANGES.getValue(key)
+                if (n == null) issues.add(key + " 应为整数，当前是 " + value)
+                else if (n !in range) issues.add(key + " 超出范围 " + range.first + "~" + range.last + "，当前是 " + n)
+            }
+        }
+    }
+    return issues
+}
+
+/** 移除指定键（回到原生内置默认）。 */
+private fun removeKeys(text: String, keys: Set<String>): String =
+    text.lines().filterNot { line ->
+        val trimmed = line.trim()
+        trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.contains('=') &&
+            keys.contains(trimmed.substringBefore('=').trim())
+    }.joinToString("\n")
 
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
