@@ -623,7 +623,7 @@ private fun HomeTab(
         ) {
             HeroTitle()
             Text(
-                "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build").substringBefore("-rc").substringBefore("-beta").substringBefore("-debug"),
+                "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
