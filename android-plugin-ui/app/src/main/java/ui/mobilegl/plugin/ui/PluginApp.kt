@@ -95,6 +95,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -1257,18 +1258,18 @@ internal fun openAllFilesAccessSettings(context: Context) {
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 @Composable
-private fun BoxScope.SplashOverlay(alpha: Float) {
+private fun SplashOverlay(alpha: Float) {
     if (alpha <= 0f) return
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsAlpha(alpha)
+            .graphicsLayer(alpha = alpha)
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
-                painter = painterResource(R.drawable.splash_logo),
+                painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
                 contentDescription = null,
                 modifier = Modifier.size(120.dp),
                 contentScale = ContentScale.Fit,
