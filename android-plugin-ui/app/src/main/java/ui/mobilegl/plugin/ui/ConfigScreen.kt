@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +69,9 @@ fun ConfigScreen(
     var text by remember { mutableStateOf(DEFAULT_CONFIG) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var confirmResetAll by remember { mutableStateOf(false) }
+    var confirmTemplate by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val shared = withContext(Dispatchers.IO) { writer.readShared() }
         if (shared != null) text = shared
@@ -103,6 +108,39 @@ fun ConfigScreen(
     ) {
         BigTitle("启动配置")
 
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            label = { Text("搜索配置项") },
+            placeholder = { Text("中文名或英文键名，如 帧在途 / FRAMES_IN_FLIGHT") },
+            singleLine = true,
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    TextButton(onClick = { query = "" }) { Text("清除") }
+                }
+            },
+        )
+        val matches = if (query.isBlank()) emptyList() else OPTION_INDEX.filter {
+            it.label.contains(query, true) || it.key.contains(query, true) || it.desc.contains(query, true)
+        }
+        if (query.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            SectionLabel("搜索结果（" + matches.size + "）")
+            InfoCard {
+                if (matches.isEmpty()) {
+                    Text("没有匹配的配置项", style = MaterialTheme.typography.bodySmall)
+                }
+                matches.forEach { meta ->
+                    if (meta.isText) {
+                        OptionText(meta.label, meta.key, text, desc = meta.desc) { text = setKey(text, meta.key, it) }
+                    } else {
+                        OptionToggle(meta.label, meta.key, text, desc = meta.desc) { text = setKey(text, meta.key, onOff(it)) }
+                    }
+                }
+            }
+        }
+        if (query.isBlank()) {
         SectionLabel("文件")
         InfoCard {
             Text(status.sharedPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -129,7 +167,7 @@ fun ConfigScreen(
                     message = if (issues.isEmpty()) "校验通过：所有键与取值都有效" else
                         "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n")
                 }) { Text("校验配置") }
-                OutlinedButton(onClick = { text = DEFAULT_CONFIG }) { Text("恢复模板") }
+                OutlinedButton(onClick = { confirmTemplate = true }) { Text("恢复模板") }
                 if (!hasAllFilesAccess()) {
                     OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text("授予所有文件访问权限") }
                 }
@@ -137,10 +175,7 @@ fun ConfigScreen(
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    text = removeKeys(text, SUPPORTED_KEYS)
-                    message = "已移除全部配置项，保存后回到原生默认值"
-                },
+                onClick = { confirmResetAll = true },
             ) { Text("全部恢复默认（移除所有配置项）") }
             message?.let {
                 Spacer(Modifier.height(6.dp))
@@ -293,6 +328,38 @@ fun ConfigScreen(
             }
         }
         Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    if (confirmTemplate) {
+        AlertDialog(
+            onDismissRequest = { confirmTemplate = false },
+            title = { Text("恢复模板？") },
+            text = { Text("会用内置模板替换当前全部内容，未保存前不影响文件。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    text = DEFAULT_CONFIG
+                    confirmTemplate = false
+                    message = "已载入模板，记得点“保存配置”"
+                }) { Text("恢复") }
+            },
+            dismissButton = { TextButton(onClick = { confirmTemplate = false }) { Text("取消") } },
+        )
+    }
+    if (confirmResetAll) {
+        AlertDialog(
+            onDismissRequest = { confirmResetAll = false },
+            title = { Text("恢复全部默认值？") },
+            text = { Text("会移除当前所有配置项，保存后渲染器回到内置默认设置。此操作不可撤销。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    text = removeKeys(text, SUPPORTED_KEYS)
+                    confirmResetAll = false
+                    message = "已移除全部配置项，保存后回到原生默认值"
+                }) { Text("恢复默认") }
+            },
+            dismissButton = { TextButton(onClick = { confirmResetAll = false }) { Text("取消") } },
+        )
     }
 }
 
@@ -412,6 +479,86 @@ private fun setKey(text: String, key: String, value: String): String {
 
 private fun onOff(value: Boolean): String = if (value) "1" else "0"
 
+
+private data class OptionMeta(
+    val label: String,
+    val key: String,
+    val isText: Boolean,
+    val desc: String,
+)
+
+/** 供搜索使用的选项索引（与页面上的选项一一对应）。 */
+private val OPTION_INDEX: List<OptionMeta> = listOf(
+    OptionMeta("禁用 GPU 计时器查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "不再向游戏上报 GPU 计时器，部分驱动更稳"),
+    OptionMeta("模拟 subgroup", "MOBILEGL_SUBGROUP_EMULATION", false, "用软件模拟 Vulkan subgroup 指令，兼容老驱动"),
+    OptionMeta("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", false, "着色器读取前强制刷新，修复数据不同步"),
+    OptionMeta("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", false, "放宽内存屏障要求，提性能但可能出错"),
+    OptionMeta("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", false, "不向游戏暴露 texture view 扩展"),
+    OptionMeta("禁用大缓冲复用", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", false, "不复用大缓冲，省显存但多一次拷贝"),
+    OptionMeta("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", false, "后台线程编译着色器，减少进游戏卡顿"),
+    OptionMeta("异步编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", true, "异步编译使用的线程数"),
+    OptionMeta("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", true, "CPU 提前准备的帧数，越大越顺但更吃内存"),
+    OptionMeta("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", true, "等待 GPU 的最长时间（毫秒），超时判定挂起"),
+    OptionMeta("Shader cache", "MOBILEGL_SHADER_CACHE", false, "缓存编译好的着色器，二次启动更快"),
+    OptionMeta("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", false, "校验 SPIR-V 合法性，仅供排查问题"),
+    OptionMeta("管道统计", "MOBILEGL_PIPE_STATS", false, "记录渲染管线统计信息"),
+    OptionMeta("FPS 日志", "MOBILEGL_FPS_LOG", false, "输出帧率日志，用于排查性能"),
+    OptionMeta("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", true, "每隔多少帧输出一次统计"),
+    OptionMeta("广告 FP64 支持", "MOBILEGL_ADVERTISE_FP64", false, "向游戏声明支持双精度浮点"),
+    OptionMeta("关闭着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", false, "跳过启动时的着色器预热，启动更快"),
+    OptionMeta("异步着色器状态乐观上报", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", false, "异步编译时先返回成功状态，减少等待"),
+    OptionMeta("顶点尺寸降级", "MOBILEGL_POINT_SIZE_DEMOTION", false, "顶点尺寸降级处理，兼容异常驱动"),
+    OptionMeta("ITRP 修正", "MOBILEGL_ITRP_FIX", false, "修正插值精度问题"),
+    OptionMeta("ES 上下文标识", "MOBILEGL_ES_CONTEXT_IDENTITY", false, "保持 ES 上下文标识一致"),
+    OptionMeta("帧缓冲状态记忆", "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO", false, "记住帧缓冲状态，减少重复设置"),
+    OptionMeta("传统 memo 路径", "MOBILEGL_PIPE_LEGACY_MEMOS", false, "沿用旧版状态缓存路径"),
+    OptionMeta("持久 mprotect", "MOBILEGL_PIPE_PERSISTENT_MPROTECT", false, "长期保留内存保护，防止越界写崩游戏"),
+    OptionMeta("命令推送模式", "MOBILEGL_PIPE_PUSH", false, "改为推送式命令提交"),
+    OptionMeta("管线校验", "MOBILEGL_PIPE_VERIFY", false, "校验管线状态，排查渲染错误"),
+    OptionMeta("校验失败即中止", "MOBILEGL_PIPE_VERIFY_FATAL", false, "校验失败直接中止进程，便于定位问题"),
+    OptionMeta("顶点元素去重", "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", false, "合并重复的顶点属性设置"),
+    OptionMeta("R11G11B10F 回退格式", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", false, "驱动不支持该格式时改用回退格式"),
+    OptionMeta("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", false, "交换链多备几张图像，减少等待"),
+    OptionMeta("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", false, "分片拷贝，兼容性更好"),
+    OptionMeta("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", false, "缓存 RenderPass 对象，减少创建开销"),
+    OptionMeta("丢弃后重发状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", false, "内容丢弃后重新下发状态"),
+    OptionMeta("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", false, "关闭混合时的深度写入"),
+    OptionMeta("Magma 帧在途数", "MOBILEGL_MAGMA_FRAMESINFLIGHT", true, "Magma 同时提交的帧数"),
+    OptionMeta("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", false, "允许直接读取 E5B9G9R9 格式"),
+    OptionMeta("允许无效 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", false, "容忍不合规的 SPIR-V，跳过严格校验"),
+    OptionMeta("关闭 robust buffer access", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", false, "关闭越界访问保护，换性能"),
+    OptionMeta("primgen 查询改道", "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", false, "改写图元生成查询的路径"),
+    OptionMeta("顶点转换缓存", "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", false, "缓存顶点格式转换结果"),
+    OptionMeta("写入重命名", "MOBILEGL_MAGMA_WRITE_RENAME", false, "写入重命名，避免同步等待"),
+    OptionMeta("multidraw 模式", "MOBILEGL_MAGMA_MULTIDRAW_MODE", true, "multidraw 的实现方式"),
+    OptionMeta("描述符裁剪帧数", "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", true, "每隔多少帧回收一次描述符"),
+    OptionMeta("每条命令缓冲最大 draw", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", true, "单个命令缓冲的 draw 次数上限"),
+    OptionMeta("inpass clear", "MOBILEGL_MAGMA_INPASS_CLEAR", true, "渲染通道内清屏策略"),
+    OptionMeta("inpass clear 默认值", "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", true, "上面策略使用的默认取值"),
+    OptionMeta("启用 texture view", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", false, "启用 texture view 扩展"),
+    OptionMeta("使用 ANGLE", "MOBILEGL_ESPRYT_USE_ANGLE", false, "通过 ANGLE 实现 GLES，兼容性更好"),
+    OptionMeta("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", false, "关闭上传环缓冲，减少显存占用"),
+    OptionMeta("避免 sampler mipmap min filter", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", false, "规避 mipmap 过滤器的驱动问题"),
+    OptionMeta("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", false, "影子 VAO，兼容不规范的状态调用"),
+    OptionMeta("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", false, "延迟提交几何数据，减少状态切换"),
+    OptionMeta("上传环大小 (MiB)", "MOBILEGL_PIPE_INDEX_MIRROR_MB", true, "索引镜像缓冲大小（MiB）"),
+    OptionMeta("避免显式 LOD 偏移", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", false, "规避显式 LOD 偏移的精度问题"),
+    OptionMeta("关闭 invalidate flush", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", false, "关闭失效时的强制刷新"),
+    OptionMeta("关闭 UBO 环", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", false, "关闭 UBO 环缓冲"),
+    OptionMeta("关闭 unpack 环", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", false, "关闭像素上传环"),
+    OptionMeta("强制深度/模板回读模拟", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", false, "强制用模拟方式做深度/模板回读"),
+    OptionMeta("强制视口数组模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", false, "强制模拟视口数组扩展"),
+    OptionMeta("无效图像占位符", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", false, "无效图像用占位符代替，避免崩溃"),
+    OptionMeta("Reset 通知", "MOBILEGL_ESPRYT_RESET_NOTIFICATION", false, "开启上下文重置通知"),
+    OptionMeta("强制定位 IO 块", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", false, "强制启用定位后的 IO 块"),
+    OptionMeta("加宽 packed16 存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", false, "加宽 packed16 存储，提升精度"),
+    OptionMeta("multidraw 模式", "MOBILEGL_ESPRYT_MULTIDRAW_MODE", true, "multidraw 的实现方式"),
+    OptionMeta("窗口年龄", "MOBILEGL_ESPRYT_WINDOW_AGE", true, "窗口年龄追踪阈值"),
+    OptionMeta("atomic subgroup scratch", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", true, "atomic subgroup 暂存区大小"),
+    OptionMeta("SFPEW 宽松上下文", "SFPEW_RELAXED_CONTEXT", false, "放宽上下文校验，兼容旧版本游戏"),
+    OptionMeta("SFPEW 关闭 MultiDrawArrays", "SFPEW_NO_MULTIDRAWARRAYS", false, "关闭 MultiDrawArrays 加速路径"),
+    OptionMeta("SFPEW 手动 mip 生成", "SFPEW_MANUAL_MIPGEN", false, "手动生成 mipmap，兼容异常驱动"),
+)
 
 /** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
 private val SUPPORTED_KEYS: Set<String> = setOf(
