@@ -205,7 +205,7 @@ fun ConfigScreen(
             Spacer(Modifier.height(8.dp))
             OptionToggle("禁用 GPU 计时器查询", "MOBILEGL_DISABLE_TIMERQUERY", text, desc = "不再向游戏上报 GPU 计时器，部分驱动更稳") { text = setKey(text, "MOBILEGL_DISABLE_TIMERQUERY", onOff(it)) }
             OptionToggle("模拟 subgroup", "MOBILEGL_SUBGROUP_EMULATION", text, desc = "用软件模拟 Vulkan subgroup 指令，兼容老驱动") { text = setKey(text, "MOBILEGL_SUBGROUP_EMULATION", onOff(it)) }
-            OptionToggle("模拟裁剪距离", "MOBILEGL_CLIP_DISTANCE_EMULATION", text, desc = "驱动不支持 gl_ClipDistance 时用 varying + discard 模拟；auto=自动判断，开=强制开，关=禁用") { text = setKey(text, "MOBILEGL_CLIP_DISTANCE_EMULATION", it) }
+            OptionToggle("模拟裁剪距离", "MOBILEGL_CLIP_DISTANCE_EMULATION", text, desc = "驱动不支持 gl_ClipDistance 时用 varying + discard 模拟；auto=自动判断，开=强制开，关=禁用") { text = setKey(text, "MOBILEGL_CLIP_DISTANCE_EMULATION", onOff(it)) }
             OptionToggle("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", text, desc = "着色器读取前强制刷新，修复数据不同步") { text = setKey(text, "MOBILEGL_COHERENT_AS_FLUSH", onOff(it)) }
             OptionToggle("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", text, desc = "放宽内存屏障要求，提性能但可能出错") { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
             OptionToggle("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", text, desc = "不向游戏暴露 texture view 扩展") { text = setKey(text, "MOBILEGL_DISABLE_TEXTURE_VIEW", onOff(it)) }
@@ -515,6 +515,7 @@ private data class OptionMeta(
 private val OPTION_INDEX: List<OptionMeta> = listOf(
     OptionMeta("禁用 GPU 计时器查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "不再向游戏上报 GPU 计时器，部分驱动更稳"),
     OptionMeta("模拟 subgroup", "MOBILEGL_SUBGROUP_EMULATION", false, "用软件模拟 Vulkan subgroup 指令，兼容老驱动"),
+    OptionMeta("模拟裁剪距离", "MOBILEGL_CLIP_DISTANCE_EMULATION", false, "驱动不支持 gl_ClipDistance 时用 varying + discard 模拟"),
     OptionMeta("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", false, "着色器读取前强制刷新，修复数据不同步"),
     OptionMeta("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", false, "放宽内存屏障要求，提性能但可能出错"),
     OptionMeta("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", false, "不向游戏暴露 texture view 扩展"),
