@@ -496,15 +496,29 @@ private data class DeviceInfo(
     val coreCommit: String?,
 )
 
+/** 渲染器字符串里保留 "Adreno (TM) 740" 这类名字，只去掉末尾的后端/版本尾巴。 */
+private fun cleanRendererName(raw: String): String {
+    var s = raw.trim()
+    if (s.isEmpty()) return s
+    // 去掉末尾括号里的后端信息：(DirectVulkan 1.3.x) / (Vulkan …) / (GLES 3.2) / (OpenGL ES …)
+    s = s.replace(
+        Regex("\\s*\\((?:DirectVulkan|Vulkan|DirectGLES|GLES|OpenGL|OpenGL ES)[^)]*\\)\\s*$", RegexOption.IGNORE_CASE),
+        "",
+    ).trim()
+    // 去掉末尾裸露的版本号，如 " 1.3.280"
+    s = s.replace(Regex("\\s+\\d+(?:\\.\\d+)+\\s*$"), "").trim()
+    return s
+}
+
 private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?, config: PluginConfig): DeviceInfo {
     val glesReport = report?.backends?.firstOrNull { it.backend.contains("gles", true) }
     val vulkanReport = report?.backends?.firstOrNull { it.backend.contains("vulkan", true) }
     val glesRenderer = glesReport?.renderer.orEmpty()
     val vulkanRenderer = vulkanReport?.renderer.orEmpty()
 
-    val gpu = vulkanRenderer.substringBefore(" (").trim().ifEmpty {
-        glesRenderer.substringBefore(" (").trim().ifEmpty {
-            glInfo?.renderer.orEmpty().ifBlank { "未知 GPU" }
+    val gpu = cleanRendererName(vulkanRenderer).ifEmpty {
+        cleanRendererName(glesRenderer).ifEmpty {
+            cleanRendererName(glInfo?.renderer.orEmpty()).ifBlank { "未知 GPU" }
         }
     }
     val gles = glesRenderer.ifBlank { glInfo?.version.orEmpty().ifBlank { "未检测到" } }
