@@ -166,6 +166,7 @@ android {
     defaultConfig {
         buildConfigField 'boolean', 'SFPEW_BUNDLED', mobileGlUseSfpew.toString()
         buildConfigField 'String', 'GIT_HASH', "\"${mobileGlGitShortHash}\""
+        buildConfigField 'String', 'FULL_VERSION_NAME', "${mobileGlForkVersionName}"
     }
 
     defaultConfig {
