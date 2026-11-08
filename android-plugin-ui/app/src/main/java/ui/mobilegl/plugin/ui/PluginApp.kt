@@ -35,6 +35,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -201,6 +202,7 @@ fun MobileGlPluginApp() {
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
+        val deviceContext = LocalContext.current
         var pendingRestart by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
@@ -227,6 +229,9 @@ fun MobileGlPluginApp() {
             probing = io.report == null
         }
 
+        val device = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit) {
+            deviceInfo(deviceContext, report, glInfo, config)
+        }
         LaunchedEffect(Unit) {
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
             if (config.autoSelfTest) {
@@ -392,6 +397,10 @@ fun MobileGlPluginApp() {
                         Dest.Info -> InfoTab(
                             config = config,
                             lastReport = report,
+                            device = device,
+                            drivers = drivers,
+                            externalCount = externalLibraries.size,
+                            runtime = runtimeStatus,
                             onOpenSelfTest = { lastTab = 2; dest = Dest.SelfTest },
                             onShareReport = { shareReport(context, selfTestRepository) },
                         )
@@ -554,6 +563,9 @@ private data class DeviceInfo(
     val gles: String,
     val vulkan: String,
     val memory: String,
+    val memoryAvail: String,
+    val soc: String,
+    val android: String,
     val coreVersion: String,
     val coreCommit: String?,
 )
@@ -602,7 +614,10 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     val mi = ActivityManager.MemoryInfo()
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
-    return DeviceInfo(gpu, gles, vulkan, memory, coreVersion, coreCommit)
+    val memoryAvail = String.format(Locale.US, "%.1f GB 可用", mi.availMem / 1024.0 / 1024.0 / 1024.0)
+    val soc = Build.HARDWARE?.takeIf { it.isNotBlank() } ?: "未知"
+    val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
+    return DeviceInfo(gpu, gles, vulkan, memory, memoryAvail, soc, android, coreVersion, coreCommit)
 }
 
 @Composable
@@ -618,7 +633,7 @@ private fun HomeTab(
     glInfo: GlInfoProbe.Info?,
 ) {
     val context = LocalContext.current
-    val info = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit) { deviceInfo(context, report, glInfo, config) }
+    val info = device
     val authorized = hasAllFilesAccess()
     val sfpewActive = config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED
     val summary = when (config.backend) {
@@ -946,6 +961,10 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
 private fun InfoTab(
     config: PluginConfig,
     lastReport: SelfTestResult?,
+    device: DeviceInfo,
+    drivers: List<DriverPack>,
+    externalCount: Int,
+    runtime: RuntimeConfigWriter.Status,
     onOpenSelfTest: () -> Unit,
     onShareReport: () -> Unit,
 ) {
@@ -955,16 +974,24 @@ private fun InfoTab(
         clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
         Toast.makeText(context, "已复制" + label, Toast.LENGTH_SHORT).show()
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+    val ready = rememberContentReady()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
     ) {
-        BigTitle("信息")
-        Spacer(Modifier.height(4.dp))
-
+        item { BigTitle("信息") }
+        if (!ready) {
+            item {
+                Spacer(Modifier.height(4.dp))
+                SkeletonCard(3)
+                Spacer(Modifier.height(14.dp))
+                SkeletonCard(2)
+                Spacer(Modifier.height(14.dp))
+                SkeletonCard(4)
+            }
+        } else {
         // A: 版本 Hero 卡（点按复制版本号）
+        item {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
@@ -992,11 +1019,26 @@ private fun InfoTab(
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        }
+        item { Spacer(Modifier.height(14.dp)) }
+
+        // A2: 设备信息完整卡
+        item {
+        InfoCard {
+            InfoRow("SoC", device.soc)
+            InfoRow("GPU", device.gpu)
+            InfoRow("内存", device.memory + " · " + device.memoryAvail)
+            InfoRow("系统", device.android)
+            InfoRow("OpenGL ES", device.gles)
+            InfoRow("Vulkan", device.vulkan)
+        }
+        }
+        item { Spacer(Modifier.height(14.dp)) }
 
         // B: 自检状态（与主页共用 reportHealth 判定，唯一的自检入口）
         val backends = lastReport?.backends.orEmpty()
         val health = reportHealth(lastReport)
+        item {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
@@ -1046,26 +1088,48 @@ private fun InfoTab(
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        }
+        item { Spacer(Modifier.height(14.dp)) }
+
+        // C: 运行环境卡
+        item {
+        InfoCard {
+            InfoRow("渲染后端", config.backend)
+            InfoRow("SFPEW 包装器", if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) "已启用" else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置")
+            InfoRow("激活驱动", drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置")
+            InfoRow("外部库", externalCount.toString() + " 个")
+            InfoRow("共享配置", if (runtime.sharedWritten) "runtime.conf 已写入（启动器可读）" else "仅私有副本：" + (runtime.reason ?: "共享路径不可写"))
+        }
+        }
+        item { Spacer(Modifier.height(14.dp)) }
 
         // D: 链接卡片化
+        item {
         LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
         }
+        }
+        item {
         LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
         }
-        Spacer(Modifier.height(14.dp))
+        }
+        item { Spacer(Modifier.height(14.dp)) }
 
+        item {
         SectionLabel("关于")
+        }
+        item {
         InfoCard {
             InfoRow("开发者", "MobileGL-Dev")
             InfoRow("开源许可证", "GNU LGPL-3.0")
             InfoRow("兼容启动器", "FCL · Zalith · Pojav")
         }
-        Spacer(Modifier.height(16.dp))
+        }
+        item { Spacer(Modifier.height(16.dp)) }
 
         // E: 分享按钮升级（分享内容带版本号）
+        item {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
@@ -1090,7 +1154,8 @@ private fun InfoTab(
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
-        Spacer(Modifier.height(24.dp))
+        }
+        }
     }
 }
 
