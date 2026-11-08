@@ -623,7 +623,7 @@ private fun HomeTab(
         ) {
             HeroTitle()
             Text(
-                "v" + BuildConfig.VERSION_NAME,
+                "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build").substringBefore("-rc").substringBefore("-beta").substringBefore("-debug"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -948,7 +948,7 @@ private fun InfoTab(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = { copy("版本号", BuildConfig.VERSION_NAME) },
+            onClick = { copy("版本号", BuildConfig.FULL_VERSION_NAME) },
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 Text(
@@ -964,7 +964,7 @@ private fun InfoTab(
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Text(
-                    BuildConfig.GIT_HASH + " · " + BuildConfig.BUILD_TYPE,
+                    "内部版本：" + BuildConfig.FULL_VERSION_NAME + " · " + BuildConfig.BUILD_TYPE,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
