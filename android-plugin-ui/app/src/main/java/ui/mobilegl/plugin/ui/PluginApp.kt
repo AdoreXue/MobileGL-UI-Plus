@@ -64,7 +64,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -703,9 +702,37 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
     }
 }
 
+/** 自检健康状态：主页与信息页共用，避免两处判断不一致。 */
+private enum class ReportHealth { None, Error, Fail, Degraded, Ok }
+
+private fun reportHealth(report: SelfTestResult?): ReportHealth {
+    if (report == null) return ReportHealth.None
+    if (!report.ok) return ReportHealth.Error
+    val backends = report.backends
+    if (backends.isEmpty()) return ReportHealth.Error
+    val failCount = backends.sumOf { b -> b.checks.count { it.status.equals("fail", true) } }
+    if (failCount > 0) return ReportHealth.Fail
+    val degraded = backends.any { b ->
+        !b.available ||
+            b.verdict.contains("degrad", true) ||
+            b.verdict.contains("warn", true) ||
+            b.checks.any { it.status.equals("warn", true) || it.status.equals("degraded", true) }
+    }
+    return if (degraded) ReportHealth.Degraded else ReportHealth.Ok
+}
+
+private fun reportHealthTitle(report: SelfTestResult?): String = when (reportHealth(report)) {
+    ReportHealth.None -> "驱动自检：未运行"
+    ReportHealth.Error -> if (report?.error.isNullOrBlank()) "驱动自检：失败" else "驱动自检：失败 — " + report?.error
+    ReportHealth.Fail -> "驱动自检：" + (report?.backends?.sumOf { b -> b.checks.count { it.status.equals("fail", true) } } ?: 0) + " 项失败"
+    ReportHealth.Degraded -> "驱动自检：部分降级"
+    ReportHealth.Ok -> "驱动自检：全部通过"
+}
+
 @Composable
 private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
-    val ok = report != null && report.backends.all { it.checks.none { c -> c.status.equals("fail", true) } }
+    val health = reportHealth(report)
+    val ok = health == ReportHealth.Ok
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -725,9 +752,10 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
             Box(
                 Modifier.size(10.dp).clip(RoundedCornerShape(50))
                     .background(
-                    when {
-                        report == null -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        ok -> MaterialTheme.colorScheme.primary
+                    when (health) {
+                        ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        ReportHealth.Ok -> MaterialTheme.colorScheme.primary
+                        ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiary
                         else -> MaterialTheme.colorScheme.error
                     }
                 )
@@ -735,12 +763,18 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(
-                    when { report == null -> "驱动自检：未运行"; ok -> "驱动健康：通过"; else -> "驱动健康：有问题" },
+                    reportHealthTitle(report),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    if (report == null) "点按运行完整自检" else "点按查看报告 / 重测",
+                    when (health) {
+                        ReportHealth.None -> "点按运行完整自检"
+                        ReportHealth.Ok -> "点按查看报告 / 重测"
+                        ReportHealth.Degraded -> "部分能力降级，点按查看详情"
+                        ReportHealth.Fail -> "存在失败项，点按查看详情"
+                        ReportHealth.Error -> "自检未完成，点按重试"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -905,33 +939,38 @@ private fun InfoTab(
         }
         Spacer(Modifier.height(14.dp))
 
-        // B: 自检状态可视化
+        // B: 自检状态（与主页共用 reportHealth 判定，唯一的自检入口）
         val backends = lastReport?.backends.orEmpty()
+        val health = reportHealth(lastReport)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            colors = CardDefaults.cardColors(
+                containerColor = when (health) {
+                    ReportHealth.Ok -> MaterialTheme.colorScheme.secondaryContainer
+                    ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiaryContainer
+                    ReportHealth.Fail, ReportHealth.Error -> MaterialTheme.colorScheme.errorContainer
+                    ReportHealth.None -> MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+            ),
             onClick = onOpenSelfTest,
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(10.dp).clip(RoundedCornerShape(50))
                             .background(
-                                when {
-                                    backends.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    backends.all { it.available } -> MaterialTheme.colorScheme.primary
+                                when (health) {
+                                    ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    ReportHealth.Ok -> MaterialTheme.colorScheme.primary
+                                    ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiary
                                     else -> MaterialTheme.colorScheme.error
                                 }
                             ),
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        when {
-                            backends.isEmpty() -> "自检：未运行"
-                            backends.all { it.available } -> "自检：全部通过"
-                            else -> "自检：有问题"
-                        },
+                        reportHealthTitle(lastReport),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                     )
@@ -944,6 +983,12 @@ private fun InfoTab(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
+                Text(
+                    if (health == ReportHealth.None) "点按运行完整自检" else "点按查看报告 / 重测",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -955,7 +1000,6 @@ private fun InfoTab(
         LinkCardRow(Icons.Filled.Public, "上游项目", "MobileGL / SimpleFPEWrapper") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
         }
-        LinkCardRow(Icons.Filled.FactCheck, "驱动自检", "查看完整报告与说明", onOpenSelfTest)
         Spacer(Modifier.height(14.dp))
 
         SectionLabel("关于")
