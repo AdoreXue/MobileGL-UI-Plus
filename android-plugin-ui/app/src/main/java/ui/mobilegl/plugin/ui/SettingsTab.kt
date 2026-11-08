@@ -7,7 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,12 +17,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,14 +55,17 @@ fun SettingsTab(
     runtime: RuntimeConfigWriter.Status,
     drivers: List<DriverPack>,
     externalLibraries: List<ExternalLibrary>,
+    pendingRestart: Boolean,
     onSave: (PluginConfig) -> Unit,
     onOpenConfigFile: () -> Unit,
     onOpenDrivers: () -> Unit,
     onOpenSelfTest: () -> Unit,
+    onResetAll: () -> Unit,
 ) {
     val context = LocalContext.current
     var backend by remember(config.backend) { mutableStateOf(config.backend) }
     var sfpewBackend by remember(config.env["SFPEW_EGL"]) { mutableStateOf(config.env["SFPEW_EGL"] ?: "libMobileGL.so") }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     fun env(key: String, fallback: String = "0"): String = config.env[key] ?: fallback
     fun setEnv(key: String, value: String) {
@@ -78,7 +92,35 @@ fun SettingsTab(
     ) {
         BigTitle("设置")
 
-        SectionLabel("渲染")
+        if (pendingRestart) {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier.size(10.dp).clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.tertiary),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("有修改待生效", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text(
+                            "配置已写入 runtime.conf，重启游戏后生效",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+
+        SectionLabel("渲染后端")
         InfoCard {
             ValueChoiceRow(
                 title = "渲染后端",
@@ -92,17 +134,11 @@ fun SettingsTab(
                     setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it))
                 }
             }
-            DividerLine()
+        }
+
+        SectionLabel("包装器")
+        InfoCard {
             if (BuildConfig.SFPEW_BUNDLED) {
-                if (config.sfpewEnabled) {
-                    ValueChoiceRow(
-                        title = "SFPEW 后端",
-                        options = listOf("libMobileGL.so", "libEGL.so"),
-                        selected = sfpewBackend,
-                        onSelect = { setSfpewBackend(it) },
-                    )
-                    DividerLine()
-                }
                 SwitchRow(
                     title = "启用 SFPEW 包装器",
                     subtitle = if (config.sfpewEnabled)
@@ -116,6 +152,15 @@ fun SettingsTab(
                     updatedEnv["SFPEW_ENABLED"] = if (it) "1" else "0"
                     onSave(config.copy(sfpewEnabled = it, env = updatedEnv))
                 }
+                if (config.sfpewEnabled) {
+                    DividerLine()
+                    ValueChoiceRow(
+                        title = "SFPEW 后端",
+                        options = listOf("libMobileGL.so", "libEGL.so"),
+                        selected = sfpewBackend,
+                        onSelect = { setSfpewBackend(it) },
+                    )
+                }
             } else {
                 SwitchRow(
                     title = "SFPEW 包装器",
@@ -123,10 +168,20 @@ fun SettingsTab(
                     checked = false,
                 ) { }
             }
-            DividerLine()
+        }
+
+        SectionLabel("应用行为")
+        InfoCard {
             SwitchRow("启动时自动自检", "打开应用后自动运行一次驱动自检", config.autoSelfTest) {
                 onSave(config.copy(autoSelfTest = it))
             }
+            DividerLine()
+            ValueChoiceRow(
+                title = "主题",
+                options = listOf(THEME_SYSTEM, THEME_LIGHT, THEME_DARK),
+                selected = config.theme.ifBlank { THEME_SYSTEM },
+                onSelect = { onSave(config.copy(theme = it)) },
+            )
         }
 
         SectionLabel("配置")
@@ -156,9 +211,43 @@ fun SettingsTab(
             LinkRow("驱动自检", "查看完整报告与失败项说明", onOpenSelfTest)
         }
 
+        SectionLabel("危险操作")
+        InfoCard {
+            Text(
+                "重置会清空全部设置与驱动激活状态，配置和驱动需要重新设置。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("重置全部设置", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text("回到出厂默认，包含驱动激活状态", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                OutlinedButton(onClick = { showResetDialog = true }) { Text("重置") }
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
     }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("重置全部设置？") },
+            text = { Text("将清空渲染后端、包装器、主题、驱动激活与外部库选择。此操作不可撤销。") },
+            confirmButton = {
+                TextButton(onClick = { showResetDialog = false; onResetAll() }) { Text("确认重置") }
+            },
+            dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text("取消") } },
+        )
+    }
 }
+
+/** 主题取值。 */
+const val THEME_SYSTEM = "system"
+const val THEME_LIGHT = "light"
+const val THEME_DARK = "dark"
 
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
