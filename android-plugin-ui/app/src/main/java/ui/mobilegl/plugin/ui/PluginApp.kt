@@ -373,6 +373,7 @@ fun MobileGlPluginApp() {
                             probing = probing,
                             drivers = drivers,
                             externalCount = externalLibraries.size,
+                            device = device,
                             onOpenSettings = { lastTab = 1; dest = Dest.Settings },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
                             onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
@@ -627,6 +628,7 @@ private fun HomeTab(
     probing: Boolean,
     drivers: List<DriverPack>,
     externalCount: Int,
+    device: DeviceInfo,
     onOpenSettings: () -> Unit,
     onOpenDrivers: () -> Unit,
     onOpenSelfTest: () -> Unit,
@@ -727,7 +729,7 @@ private fun HomeTab(
                 }
                 if (info.coreVersion != BuildConfig.VERSION_NAME) {
                     Text(
-                        "核心库：v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: ""),
+                        "核心库：v" + info.coreVersion + (if (info.coreCommit != null) " (" + info.coreCommit + ")" else ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
