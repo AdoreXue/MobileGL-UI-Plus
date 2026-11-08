@@ -25,17 +25,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -97,14 +93,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ui.mobilegl.plugin.BuildConfig
@@ -185,15 +178,6 @@ fun MobileGlPluginApp() {
     var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
     MobileGlTheme(themeMode) {
         Box(Modifier.fillMaxSize()) {
-        // 应用内首帧启动层：图标 + Hero 同款大字；退出时背景/图标淡出，
-        // 标题原地飞向 Hero 区的位置，与首页大字无缝衔接。
-        var splashGone by remember { mutableStateOf(false) }
-        val splashProgress = remember { Animatable(0f) }
-        LaunchedEffect(Unit) {
-            delay(380)
-            splashProgress.animateTo(1f, tween(480, easing = FastOutSlowInEasing))
-            splashGone = true
-        }
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
         val driverRepository = remember { DriverRepository(context) }
@@ -476,9 +460,6 @@ fun MobileGlPluginApp() {
                 }
             }
         }
-        if (!splashGone) {
-            SplashOverlay(progress = splashProgress)
-        }
         }
     }
 }
@@ -633,7 +614,7 @@ private fun HomeTab(
                 .padding(top = 28.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HeroTitle(offsetY = { 0f })
+            HeroTitle()
             Text(
                 "v" + BuildConfig.VERSION_NAME,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1257,44 +1238,8 @@ internal fun openAllFilesAccessSettings(context: Context) {
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 @Composable
-private fun SplashOverlay(progress: Animatable<Float, AnimationVector1D>) {
-    // 性能关键：动画值只在渲染层读取（lambda graphicsLayer），
-    // 整个 splash 不随 progress 重组，避免每帧重建组合树造成卡顿。
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        val h = constraints.maxHeight.toFloat()
-        val move = -h * 0.30f
-        // 背景淡出
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .graphicsLayer { alpha = 1f - progress.value },
-        )
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Image(
-                painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(120.dp)
-                    .graphicsLayer { alpha = (1f - progress.value * 1.4f).coerceIn(0f, 1f) },
-                contentScale = ContentScale.Fit,
-            )
-            Spacer(Modifier.height(20.dp))
-            HeroTitle(offsetY = { move * progress.value })
-        }
-    }
-}
-
-@Composable
-private fun HeroTitle(offsetY: () -> Float) {
-    Row(modifier = Modifier.graphicsLayer { this.translationY = offsetY() }) {
+private fun HeroTitle() {
+    Row {
         Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
