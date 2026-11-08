@@ -527,11 +527,9 @@ private fun HomeTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(0.dp))
         // B: 渐变 Hero 区（含 Logo、版本、授权胶囊）
         Column(
             modifier = Modifier
@@ -565,6 +563,9 @@ private fun HomeTab(
                 }
             }
         }
+
+        // 其余内容统一左右 20dp 边距（Hero 保持通栏，避免渐变出现"边边"）
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(12.dp))
 
         // E: 快捷入口整行动效容器（对子项做进场动画）
@@ -641,6 +642,7 @@ private fun HomeTab(
         }
 
         Spacer(Modifier.height(20.dp))
+        }
     }
 }
 
