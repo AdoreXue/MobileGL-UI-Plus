@@ -27,6 +27,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -476,7 +477,7 @@ fun MobileGlPluginApp() {
             }
         }
         if (!splashGone) {
-            SplashOverlay(progress = splashProgress.value)
+            SplashOverlay(progress = splashProgress)
         }
         }
     }
@@ -632,7 +633,7 @@ private fun HomeTab(
                 .padding(top = 28.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HeroTitle(translationY = 0f)
+            HeroTitle(translationY = { 0f })
             Text(
                 "v" + BuildConfig.VERSION_NAME,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1256,50 +1257,44 @@ internal fun openAllFilesAccessSettings(context: Context) {
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 @Composable
-private fun SplashOverlay(progress: Float) {
-    // 背景/图标随 progress 淡出；标题保持在 Hero 同款字号，从屏幕中心
-    // 平移到顶部 Hero 区的位置，松手后正好落在首页大字上。
+private fun SplashOverlay(progress: Animatable<Float, AnimationVector1D>) {
+    // 性能关键：动画值只在渲染层读取（lambda graphicsLayer），
+    // 整个 splash 不随 progress 重组，避免每帧重建组合树造成卡顿。
     BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer(alpha = 1f),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         val h = constraints.maxHeight.toFloat()
-        val fade = (1f - progress).coerceIn(0f, 1f)
-        if (fade > 0.01f) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-                    .graphicsLayer(alpha = fade),
+        val move = -h * 0.30f
+        // 背景淡出
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .graphicsLayer { alpha = 1f - progress.value },
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(120.dp)
+                    .graphicsLayer { alpha = (1f - progress.value * 1.4f).coerceIn(0f, 1f) },
+                contentScale = ContentScale.Fit,
             )
-        }
-        if (progress < 1f) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                val iconAlpha = (1f - progress * 1.4f).coerceIn(0f, 1f)
-                Image(
-                    painter = painterResource(ui.mobilegl.plugin.R.drawable.splash_logo),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(120.dp)
-                        .graphicsLayer(alpha = iconAlpha),
-                    contentScale = ContentScale.Fit,
-                )
-                Spacer(Modifier.height(20.dp))
-                HeroTitle(translationY = -h * 0.30f * progress)
-            }
+            Spacer(Modifier.height(20.dp))
+            HeroTitle { move * progress.value }
         }
     }
 }
 
 @Composable
-private fun HeroTitle(translationY: Float) {
-    Row(modifier = Modifier.graphicsLayer(translationY = translationY)) {
+private fun HeroTitle(translationY: () -> Float) {
+    Row(modifier = Modifier.graphicsLayer { translationY = translationY() }) {
         Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
