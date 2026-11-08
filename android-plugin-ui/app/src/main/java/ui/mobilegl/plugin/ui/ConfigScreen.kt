@@ -203,6 +203,7 @@ fun ConfigScreen(
         InfoCard {
             OptionSelect(
                 label = "渲染后端",
+                key = "MOBILEGL_BACKEND_TYPE",
                 desc = "选择渲染后端实现：Vulkan 走 Magma，GLES 走 Espryt",
                 options = listOf("DirectVulkan", "DirectGLES"),
                 value = readKey(text, "MOBILEGL_BACKEND_TYPE", "DirectVulkan"),
@@ -256,6 +257,7 @@ fun ConfigScreen(
         InfoCard {
             OptionSelect(
                 label = "SFPEW 后端",
+                key = "SFPEW_EGL",
                 desc = "SFPEW 包装的 EGL 实现",
                 options = listOf("libMobileGL.so", "libEGL.so"),
                 value = readKey(text, "SFPEW_EGL", "libMobileGL.so"),
@@ -295,11 +297,18 @@ fun ConfigScreen(
 }
 
 @Composable
-private fun OptionSelect(label: String, options: List<String>, value: String, desc: String = "", onSelect: (String) -> Unit) {
+private fun OptionSelect(label: String, key: String = "", options: List<String>, value: String, desc: String = "", onSelect: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
         if (desc.isNotBlank()) {
             Text(desc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (key.isNotBlank()) {
+            Text(
+                key,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
@@ -319,11 +328,20 @@ private fun OptionText(label: String, key: String, text: String, desc: String = 
             modifier = Modifier.fillMaxWidth(),
             label = { Text(label) },
             supportingText = {
-                Text(
-                    if (desc.isNotBlank()) desc else key,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column {
+                    if (desc.isNotBlank()) {
+                        Text(
+                            desc,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        key,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
             },
             singleLine = true,
         )
@@ -339,10 +357,17 @@ private fun OptionToggle(label: String, key: String, text: String, desc: String 
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodySmall)
+            if (desc.isNotBlank()) {
+                Text(
+                    desc,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
-                if (desc.isNotBlank()) desc else key,
+                key,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
         }
         Switch(checked = enabled, onCheckedChange = onToggle)
