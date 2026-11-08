@@ -25,10 +25,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
@@ -92,11 +95,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ui.mobilegl.plugin.BuildConfig
@@ -177,6 +182,14 @@ fun MobileGlPluginApp() {
     var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
     MobileGlTheme(themeMode) {
         Box(Modifier.fillMaxSize()) {
+        // 应用内首帧启动层：图标 + Hero 同款大字，短暂展示后淡出。
+        var splashVisible by remember { mutableStateOf(true) }
+        val splashAlpha = remember { Animatable(1f) }
+        LaunchedEffect(Unit) {
+            delay(420)
+            splashAlpha.animateTo(0f, tween(280, easing = LinearEasing))
+            splashVisible = false
+        }
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
         val driverRepository = remember { DriverRepository(context) }
@@ -458,6 +471,9 @@ fun MobileGlPluginApp() {
                     }
                 }
             }
+        }
+        if (splashVisible) {
+            SplashOverlay(alpha = splashAlpha.value)
         }
         }
     }
@@ -1240,3 +1256,29 @@ internal fun openAllFilesAccessSettings(context: Context) {
 
 private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
+@Composable
+private fun BoxScope.SplashOverlay(alpha: Float) {
+    if (alpha <= 0f) return
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsAlpha(alpha)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = painterResource(R.drawable.splash_logo),
+                contentDescription = null,
+                modifier = Modifier.size(120.dp),
+                contentScale = ContentScale.Fit,
+            )
+            Spacer(Modifier.height(20.dp))
+            Row {
+                Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
