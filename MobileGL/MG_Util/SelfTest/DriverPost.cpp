@@ -7,6 +7,7 @@
 // End of Source File Header
 
 #include "DriverPost.h"
+#include "DriverPostClipDistance.h"
 #include "DriverPostIterationRPWitness.h"
 #include "DriverPostIterationRPWitnessSpv.h"
 #include "PrimitivesGeneratedNoXfbProbe.h"
@@ -340,6 +341,22 @@ namespace MobileGL::MG_Util::SelfTest {
             }
         }
 
+        void EmitClipDistanceRows(ReportBuilder& builder, Vector<ClipDistancePostRow> rows) {
+            for (ClipDistancePostRow& row : rows) {
+                switch (row.verdict) {
+                case ClipDistancePostRow::Verdict::Pass:
+                    builder.Pass(Move(row.name), Move(row.detail));
+                    break;
+                case ClipDistancePostRow::Verdict::Warn:
+                    builder.Warn(Move(row.name), Move(row.detail));
+                    break;
+                case ClipDistancePostRow::Verdict::FailOptional:
+                    builder.FailOptional(Move(row.name), Move(row.detail));
+                    break;
+                }
+            }
+        }
+
         void EvaluateGlesChecklist(ReportBuilder& builder, const MG_External::GLESCapabilities& caps,
                                    const MG_External::GLESFunctionsTable& glesFuncs) {
             const Int major = caps.GLESVersion.Major;
@@ -388,6 +405,7 @@ namespace MobileGL::MG_Util::SelfTest {
                                      "hard-fails, and a second fragment output cannot be produced any other "
                                      "way");
             }
+            EmitClipDistanceRows(builder, GlesClipDistancePostRows(caps, glesFuncs));
 
             if (es31) {
                 GLint maxVertexSsboBlocks = 0;
@@ -2776,6 +2794,10 @@ namespace MobileGL::MG_Util::SelfTest {
             builder.FailOptional("dualSrcBlend", "unsupported; a draw using a GL_SRC1_* blend factor hard-fails, and a "
                                                  "second fragment output cannot be produced any other way");
         }
+        EmitClipDistanceRows(builder, VulkanClipDistancePostRows(features.shaderClipDistance == VK_TRUE,
+                                                                 features.shaderCullDistance == VK_TRUE,
+                                                                 properties.limits.maxClipDistances,
+                                                                 properties.limits.maxCullDistances));
         // The Magma counterpart of the GLES "Buffer textures" row, so the two sections can be
         // read side by side. Vulkan has no optional-feature bit here: a uniform texel buffer is
         // core, and maxTexelBufferElements has a spec floor of 65536 - exactly the GL 3.1 floor
