@@ -1027,7 +1027,7 @@ private fun InfoTab(
         // A2: 设备信息完整卡
         item {
         InfoCard {
-            InfoRow("SoC", device.soc)
+            InfoRowWide("SoC", device.soc)
             InfoRow("GPU", device.gpu)
             InfoRow("内存", device.memory + " · " + device.memoryAvail)
             InfoRow("系统", device.android)
@@ -1251,6 +1251,15 @@ fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(label, modifier = Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+/** 长值行：标签在上、值独占一行完整显示，用于 SoC 这类可能很长的字段。 */
+@Composable
+fun InfoRowWide(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
