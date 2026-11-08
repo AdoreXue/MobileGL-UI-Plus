@@ -26,6 +26,11 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -188,7 +193,9 @@ fun MobileGlPluginApp() {
     val rootContext = LocalContext.current
     val themePrefs = remember { rootContext.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
     var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
+    var showSplash by remember { mutableStateOf(true) }
     MobileGlTheme(themeMode) {
+        Box(Modifier.fillMaxSize()) {
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
         val driverRepository = remember { DriverRepository(context) }
@@ -463,6 +470,14 @@ fun MobileGlPluginApp() {
                 }
             }
         }
+            // 启动页覆盖层：内容加载完成后淡出
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showSplash,
+                exit = fadeOut(tween(280)),
+            ) {
+                SplashOverlay { showSplash = false }
+            }
+        }
     }
 }
 
@@ -486,6 +501,49 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
         title = { Text(title, fontWeight = FontWeight.SemiBold) },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
     )
+}
+
+/** 自定义启动页：Logo + 名称 + 版本，轻微缩放后淡出。 */
+@Composable
+private fun SplashOverlay(onFinished: () -> Unit) {
+    val scale = remember { Animatable(0.88f) }
+    LaunchedEffect(Unit) {
+        scale.animateTo(1f, tween(280, easing = FastOutSlowInEasing))
+        delay(520)
+        onFinished()
+    }
+    Box(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                alpha = scale.value
+            },
+        ) {
+            Image(
+                painter = painterResource(id = ui.mobilegl.plugin.R.mipmap.ic_launcher),
+                contentDescription = null,
+                modifier = Modifier.size(84.dp).clip(MaterialTheme.shapes.medium),
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "MobileGL_UI_Plus",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                "v" + BuildConfig.VERSION_NAME,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
 }
 
 @Composable
