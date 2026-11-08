@@ -563,7 +563,13 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
     val memoryAvail = String.format(Locale.US, "%.1f GB 可用", mi.availMem / 1024.0 / 1024.0 / 1024.0)
-    val soc = Build.HARDWARE?.takeIf { it.isNotBlank() } ?: "未知"
+    val soc = if (Build.VERSION.SDK_INT >= 31) {
+        Build.SOC_MODEL?.takeIf { it.isNotBlank() && it != Build.SOC_MODEL_UNKNOWN }
+            ?: Build.HARDWARE?.takeIf { it.isNotBlank() }
+            ?: "未知"
+    } else {
+        Build.HARDWARE?.takeIf { it.isNotBlank() } ?: "未知"
+    }
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
     return DeviceInfo(gpu, gles, vulkan, memory, memoryAvail, soc, android, coreVersion, coreCommit)
 }
@@ -1050,13 +1056,13 @@ private fun InfoTab(
 
         // D: 链接卡片化
         item {
-        LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/xuhexue/MobileGL-UI-Plus") {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/xuhexue/MobileGL-UI-Plus")))
+        LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/AdoreXue/MobileGL-UI-Plus") {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus")))
         }
         }
         item {
         LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")))
         }
         }
         item { Spacer(Modifier.height(14.dp)) }
@@ -1066,9 +1072,9 @@ private fun InfoTab(
         }
         item {
         InfoCard {
-            InfoRow("开发者", "MobileGL-Dev")
+            InfoRow("开发者", "AdoreXue")
             InfoRow("开源许可证", "GNU LGPL-3.0")
-            InfoRow("兼容启动器", "FCL · Zalith · Pojav")
+            InfoRow("兼容启动器", "Pojav 系（FCL、Zalith 等）")
         }
         }
         item { Spacer(Modifier.height(16.dp)) }
