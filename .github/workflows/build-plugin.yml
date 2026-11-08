@@ -46,11 +46,11 @@ jobs:
             BASE=$(gradle --no-daemon -q -p android-plugin-ui :app:printBaseVersion | tail -1)
             echo "base version: $BASE"
             DEVN=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-              --jq '[.[].tag_name | select(startswith("$BASE-Dev"))] | map(ltrimstr("$BASE-Dev") | tonumber) | max // 0' \
+              --jq '[.[].tag_name | select(startswith("$BASE-Dev"))] | map(ltrimstr("$BASE-Dev") | ltrimstr(".") | tonumber) | max // 0' \
               | awk '{print $1+1}')
             [ -z "$DEVN" ] && DEVN=1
             echo "DevN: $DEVN"
-            echo "DISPLAY_VERSION=$BASE-Dev$DEVN" >> "$GITHUB_ENV"
+            echo "DISPLAY_VERSION=$BASE-Dev.$DEVN" >> "$GITHUB_ENV"
             echo "RELEASE_BUILD=0" >> "$GITHUB_ENV"
           fi
 

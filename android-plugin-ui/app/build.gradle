@@ -140,12 +140,17 @@ def mobileGlGitShortHash = {
 }()
 // CI 构建时附加短 commit hash，便于定位源码；本地默认不加
 def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false').toString().toBoolean()
-def mobileGlForkVersionName = {
+// 公开版本名：CI 传入的覆盖值（如 26.11.1-Dev.1 / 26.11.1-rc.1），否则基版本号
+// 内部版本名：公开版本-build号-哈希-构建类型，只在信息页展示
+def mobileGlPublicVersionName = {
     def over = findProperty('mobilegl.versionNameOverride')
     if (over != null) return over.toString()
-    def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-build${mobileGlForkBuildRevision}"
-    mobileGlAppendGitHash ? base + "-${mobileGlGitShortHash}" : base
+    "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}"
 }()
+def mobileGlInternalVersionName = { String buildType ->
+    "${mobileGlPublicVersionName}-build${mobileGlForkBuildRevision}-${mobileGlGitShortHash}-${buildType}"
+}
+def mobileGlForkVersionName = mobileGlPublicVersionName
 
 android {
     namespace 'ui.mobilegl.plugin'
@@ -166,7 +171,7 @@ android {
     defaultConfig {
         buildConfigField 'boolean', 'SFPEW_BUNDLED', mobileGlUseSfpew.toString()
         buildConfigField 'String', 'GIT_HASH', "\"${mobileGlGitShortHash}\""
-        buildConfigField 'String', 'FULL_VERSION_NAME', "\"${mobileGlForkVersionName.toString()}\""
+""
     }
 
     defaultConfig {
@@ -272,6 +277,7 @@ android {
                 signingConfig signingConfigs.debug
             }
             versionNameSuffix '-debug'
+            buildConfigField 'String', 'FULL_VERSION_NAME', "\"${mobileGlInternalVersionName('debug')}\""
         }
         release {
             debuggable debuggableRelease
@@ -279,6 +285,7 @@ android {
             if (releaseSigningReady) {
                 signingConfig signingConfigs.release
             }
+            buildConfigField 'String', 'FULL_VERSION_NAME', "\"${mobileGlInternalVersionName('release')}\""
         }
     }
 
