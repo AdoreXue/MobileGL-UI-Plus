@@ -646,10 +646,10 @@ private fun HomeTab(
         ) {
             // A: 设备信息竖排单列（每项一行，占满宽度，信息不截断）
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                InfoCardCell(UiIcons.Gpu, "GPU", if (probing) "检测中…" else info.gpu, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Gpu, "GPU", info.gpu, Modifier.fillMaxWidth())
                 InfoCardCell(UiIcons.Memory, "内存", info.memory, Modifier.fillMaxWidth())
-                InfoCardCell(UiIcons.Layers, "OpenGL ES", if (probing) "检测中…" else info.gles, Modifier.fillMaxWidth())
-                InfoCardCell(UiIcons.Bolt, "Vulkan", if (probing) "检测中…" else info.vulkan, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Layers, "OpenGL ES", info.gles, Modifier.fillMaxWidth())
+                InfoCardCell(UiIcons.Bolt, "Vulkan", info.vulkan, Modifier.fillMaxWidth())
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -958,7 +958,7 @@ private fun InfoTab(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    BuildConfig.VERSION_NAME,
+                    "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 4.dp),
@@ -1247,8 +1247,17 @@ private fun hasAllFilesAccess(): Boolean =
 @Composable
 private fun HeroTitle() {
     Row {
-        Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(
+            "MobileGL_UI_",
+            maxLines = 1,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "Plus",
+            maxLines = 1,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }

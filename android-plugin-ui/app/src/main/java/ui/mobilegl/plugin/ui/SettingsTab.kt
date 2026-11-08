@@ -167,6 +167,12 @@ fun SettingsTab(
                         selected = sfpewBackend,
                         onSelect = { setSfpewBackend(it) },
                     )
+                    Text(
+                        "切换后端同样需重启游戏生效",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
                 }
             } else {
                 SwitchRow(
