@@ -444,7 +444,12 @@ fun MobileGlPluginApp() {
                                 )
                             },
                         )
-                        Dest.SelfTest -> SelfTestScreen(repository = selfTestRepository, config = config)
+                        Dest.SelfTest -> SelfTestScreen(
+                            repository = selfTestRepository,
+                            config = config,
+                            latest = report,
+                            onResult = { report = it },
+                        )
                     }
                 }
             }
