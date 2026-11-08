@@ -54,11 +54,14 @@ import ui.mobilegl.plugin.selftest.SelfTestResult
 fun SelfTestScreen(
     repository: SelfTestRepository,
     config: PluginConfig,
+    latest: SelfTestResult? = null,
+    onResult: (SelfTestResult) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var running by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf(repository.cached()) }
+    // 报告由 PluginApp 统一持有：这里跑完要回传，否则首页健康卡与信息页仍是启动时的旧结果。
+    var result by remember(latest) { mutableStateOf(latest) }
     var expanded by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LazyColumn(
@@ -89,7 +92,9 @@ fun SelfTestScreen(
                             if (!running) {
                                 scope.launch {
                                     running = true
-                                    result = repository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
+                                    val fresh = repository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
+                                    result = fresh
+                                    onResult(fresh)
                                     running = false
                                 }
                             }
