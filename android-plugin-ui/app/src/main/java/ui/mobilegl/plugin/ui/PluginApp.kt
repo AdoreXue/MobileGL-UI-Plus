@@ -144,9 +144,9 @@ private val TABS = listOf(
 
 /** Same transition as MobileGlues 2.0 (MaterialApp.pageTransition). */
 private fun pageTransition(from: Dest, to: Dest): ContentTransform {
-    val fadeInSpec = tween<Float>(durationMillis = 260, easing = FastOutSlowInEasing)
-    val fadeOutSpec = tween<Float>(durationMillis = 180, easing = FastOutSlowInEasing)
-    val slide = tween<IntOffset>(durationMillis = 320, easing = FastOutSlowInEasing)
+    val fadeInSpec = tween<Float>(durationMillis = 150, easing = FastOutSlowInEasing)
+    val fadeOutSpec = tween<Float>(durationMillis = 110, easing = FastOutSlowInEasing)
+    val slide = tween<IntOffset>(durationMillis = 210, easing = FastOutSlowInEasing)
 
     val tabOrdinal = { destination: Dest ->
         when (destination) {
@@ -159,10 +159,10 @@ private fun pageTransition(from: Dest, to: Dest): ContentTransform {
     val fromOrdinal = tabOrdinal(from)
     val toOrdinal = tabOrdinal(to)
     val (enterFraction, exitFraction) = when {
-        toOrdinal < 0 -> 3 to -10
-        fromOrdinal < 0 -> -10 to 3
-        fromOrdinal >= 0 && toOrdinal > fromOrdinal -> 6 to -6
-        else -> -6 to 6
+        toOrdinal < 0 -> 9 to -14
+        fromOrdinal < 0 -> -14 to 9
+        fromOrdinal >= 0 && toOrdinal > fromOrdinal -> 9 to -9
+        else -> -9 to 9
     }
 
     return ContentTransform(
