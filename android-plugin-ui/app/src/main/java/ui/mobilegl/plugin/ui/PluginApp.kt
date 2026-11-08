@@ -1294,7 +1294,7 @@ private fun SplashOverlay(progress: Animatable<Float, AnimationVector1D>) {
 
 @Composable
 private fun HeroTitle(offsetY: () -> Float) {
-    Row(modifier = Modifier.graphicsLayer { it0 -> it0.translationY = offsetY() }) {
+    Row(modifier = Modifier.graphicsLayer { this.translationY = offsetY() }) {
         Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
