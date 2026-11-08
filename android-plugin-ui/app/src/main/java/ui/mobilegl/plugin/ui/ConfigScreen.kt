@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -97,15 +97,14 @@ fun ConfigScreen(
         message = "已保存 " + kv.size + " 项（校验通过）"
         busy = false
     }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+    // 首帧只画标题与搜索框，内容延后一帧再组合，避免转场第一帧掉帧。
+    val ready = rememberContentReady()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
-        BigTitle("启动配置")
-
+        item { BigTitle("启动配置") }
+        item {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -119,10 +118,13 @@ fun ConfigScreen(
                 }
             },
         )
+        }
+
         val matches = if (query.isBlank()) emptyList() else OPTION_INDEX.filter {
             it.label.contains(query, true) || it.key.contains(query, true) || it.desc.contains(query, true)
         }
         if (query.isNotBlank()) {
+            item {
             Spacer(Modifier.height(8.dp))
             SectionLabel("搜索结果（" + matches.size + "）")
             InfoCard {
@@ -137,8 +139,19 @@ fun ConfigScreen(
                     }
                 }
             }
+            }
         }
-        if (query.isBlank()) {
+        if (!ready) {
+            item {
+                Spacer(Modifier.height(12.dp))
+                SkeletonCard(4)
+                Spacer(Modifier.height(10.dp))
+                SkeletonCard(3)
+                Spacer(Modifier.height(10.dp))
+                SkeletonCard(4)
+            }
+        } else if (query.isBlank()) {
+            item {
         SectionLabel("文件")
         InfoCard {
             Text(status.sharedPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -180,7 +193,8 @@ fun ConfigScreen(
                 Text(it, style = MaterialTheme.typography.bodySmall)
             }
         }
-
+            }
+            item {
         SectionLabel("通用配置")
         InfoCard {
             Text(
@@ -201,8 +215,11 @@ fun ConfigScreen(
             OptionText("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", text, desc = "等待 GPU 的最长时间（毫秒），超时判定挂起") { text = setKey(text, "MOBILEGL_GPU_HANG_BUDGET_MS", it) }
             OptionToggle("Shader cache", "MOBILEGL_SHADER_CACHE", text, desc = "缓存编译好的着色器，二次启动更快") { text = setKey(text, "MOBILEGL_SHADER_CACHE", onOff(it)) }
             OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text, desc = "校验 SPIR-V 合法性，仅供排查问题") { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
-            Spacer(Modifier.height(6.dp))
-            Text("诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            }
+            }
+            item {
+                SectionLabel("诊断")
+                InfoCard {
             OptionToggle("管道统计", "MOBILEGL_PIPE_STATS", text, desc = "记录渲染管线统计信息") { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
             OptionToggle("FPS 日志", "MOBILEGL_FPS_LOG", text, desc = "输出帧率日志，用于排查性能") { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
             OptionText("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", text, desc = "每隔多少帧输出一次统计") { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
@@ -212,9 +229,9 @@ fun ConfigScreen(
             OptionToggle("顶点尺寸降级", "MOBILEGL_POINT_SIZE_DEMOTION", text, desc = "顶点尺寸降级处理，兼容异常驱动") { text = setKey(text, "MOBILEGL_POINT_SIZE_DEMOTION", onOff(it)) }
             OptionToggle("ITRP 修正", "MOBILEGL_ITRP_FIX", text, desc = "修正插值精度问题") { text = setKey(text, "MOBILEGL_ITRP_FIX", onOff(it)) }
             OptionToggle("ES 上下文标识", "MOBILEGL_ES_CONTEXT_IDENTITY", text, desc = "保持 ES 上下文标识一致") { text = setKey(text, "MOBILEGL_ES_CONTEXT_IDENTITY", onOff(it)) }
-        }
-
-
+                }
+            }
+            item {
         SectionLabel("管线与校验")
         InfoCard {
             Text(
@@ -231,9 +248,10 @@ fun ConfigScreen(
             OptionToggle("校验失败即中止", "MOBILEGL_PIPE_VERIFY_FATAL", text, desc = "校验失败直接中止进程，便于定位问题") { text = setKey(text, "MOBILEGL_PIPE_VERIFY_FATAL", onOff(it)) }
             OptionToggle("顶点元素去重", "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", text, desc = "合并重复的顶点属性设置") { text = setKey(text, "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", onOff(it)) }
         }
-
-        SectionLabel("按后端配置")
-        InfoCard {
+            }
+            item {
+                SectionLabel("按后端配置")
+                InfoCard {
             OptionSelect(
                 label = "渲染后端",
                 key = "MOBILEGL_BACKEND_TYPE",
@@ -242,8 +260,11 @@ fun ConfigScreen(
                 value = readKey(text, "MOBILEGL_BACKEND_TYPE", "DirectVulkan"),
                 onSelect = { text = setKey(text, "MOBILEGL_BACKEND_TYPE", it) },
             )
-            Spacer(Modifier.height(6.dp))
-            Text("DirectVulkan / Magma", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            item {
+                SectionLabel("DirectVulkan / Magma")
+                InfoCard {
             OptionToggle("R11G11B10F 回退格式", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", text, desc = "驱动不支持该格式时改用回退格式") { text = setKey(text, "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", onOff(it)) }
             OptionToggle("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text, desc = "交换链多备几张图像，减少等待") { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", onOff(it)) }
             OptionToggle("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text, desc = "分片拷贝，兼容性更好") { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", onOff(it)) }
@@ -262,8 +283,11 @@ fun ConfigScreen(
             OptionText("每条命令缓冲最大 draw", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", text, desc = "单个命令缓冲的 draw 次数上限") { text = setKey(text, "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", it) }
             OptionText("inpass clear", "MOBILEGL_MAGMA_INPASS_CLEAR", text, desc = "渲染通道内清屏策略") { text = setKey(text, "MOBILEGL_MAGMA_INPASS_CLEAR", it) }
             OptionText("inpass clear 默认值", "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", text, desc = "上面策略使用的默认取值") { text = setKey(text, "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", it) }
-            Spacer(Modifier.height(6.dp))
-            Text("DirectGLES / Espryt", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            item {
+                SectionLabel("DirectGLES / Espryt")
+                InfoCard {
             OptionToggle("启用 texture view", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", text, desc = "启用 texture view 扩展") { text = setKey(text, "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("使用 ANGLE", "MOBILEGL_ESPRYT_USE_ANGLE", text, desc = "通过 ANGLE 实现 GLES，兼容性更好") { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
             OptionToggle("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", text, desc = "关闭上传环缓冲，减少显存占用") { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", onOff(it)) }
@@ -284,8 +308,9 @@ fun ConfigScreen(
             OptionText("multidraw 模式", "MOBILEGL_ESPRYT_MULTIDRAW_MODE", text, desc = "multidraw 的实现方式") { text = setKey(text, "MOBILEGL_ESPRYT_MULTIDRAW_MODE", it) }
             OptionText("窗口年龄", "MOBILEGL_ESPRYT_WINDOW_AGE", text, desc = "窗口年龄追踪阈值") { text = setKey(text, "MOBILEGL_ESPRYT_WINDOW_AGE", it) }
             OptionText("atomic subgroup scratch", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", text, desc = "atomic subgroup 暂存区大小") { text = setKey(text, "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", it) }
-        }
-
+                }
+            }
+            item {
         SectionLabel("SFPEW 后端")
         InfoCard {
             OptionSelect(
@@ -300,7 +325,8 @@ fun ConfigScreen(
             OptionToggle("SFPEW 关闭 MultiDrawArrays", "SFPEW_NO_MULTIDRAWARRAYS", text, desc = "关闭 MultiDrawArrays 加速路径") { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
             OptionToggle("SFPEW 手动 mip 生成", "SFPEW_MANUAL_MIPGEN", text, desc = "手动生成 mipmap，兼容异常驱动") { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
         }
-
+            }
+            item {
         SectionLabel("原始文件")
         InfoCard {
             OutlinedTextField(
@@ -325,10 +351,9 @@ fun ConfigScreen(
                 }) { Text("分享") }
             }
         }
-        Spacer(Modifier.height(24.dp))
+            }
         }
     }
-
     if (confirmTemplate) {
         AlertDialog(
             onDismissRequest = { confirmTemplate = false },
