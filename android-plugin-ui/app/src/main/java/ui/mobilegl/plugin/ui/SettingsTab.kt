@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,12 +188,7 @@ fun SettingsTab(
             if (!hasAllFilesAccess()) {
                 DividerLine()
                 LinkRow("授予“所有文件访问权限”", "写共享配置、让启动器读取", {
-                    val packageUri = Uri.parse("package:" + context.packageName)
-                    runCatching {
-                        context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
-                    }.onFailure {
-                        context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                    }
+                    openAllFilesAccessSettings(context)
                 })
             }
         }
