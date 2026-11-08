@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the default dark Compose background; the app theme itself follows the system. -->
+    <color name="window_background">#FF1C1B1F</color>
+</resources>
