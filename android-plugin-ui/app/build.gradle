@@ -141,6 +141,8 @@ def mobileGlGitShortHash = {
 // CI 构建时附加短 commit hash，便于定位源码；本地默认不加
 def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false').toString().toBoolean()
 def mobileGlForkVersionName = {
+    def over = findProperty('mobilegl.versionNameOverride')
+    if (over != null) return over.toString()
     def base = "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}-build${mobileGlForkBuildRevision}"
     mobileGlAppendGitHash ? base + "-${mobileGlGitShortHash}" : base
 }()
