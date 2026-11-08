@@ -13,7 +13,7 @@ import org.json.JSONObject
 data class PluginConfig(
     val backend: String = "DirectVulkan",
     val sfpewEnabled: Boolean = false,
-    val autoSelfTest: Boolean = false,
+    val autoSelfTest: Boolean = true,
     val activeDriverId: String? = null,
     val activeIcdPath: String? = null,
     val selfTestLibraryPath: String? = null,
@@ -68,7 +68,7 @@ data class PluginConfig(
             return PluginConfig(
                 backend = backend,
                 sfpewEnabled = root.optBoolean("sfpewEnabled", false),
-                autoSelfTest = root.optBoolean("autoSelfTest", false),
+                autoSelfTest = root.optBoolean("autoSelfTest", true),
                 activeDriverId = if (root.isNull("activeDriverId")) null else root.optString("activeDriverId").ifEmpty { null },
                 activeIcdPath = if (root.isNull("activeIcdPath")) null else root.optString("activeIcdPath").ifEmpty { null },
                 selfTestLibraryPath = if (root.isNull("selfTestLibraryPath")) null else root.optString("selfTestLibraryPath").ifEmpty { null },
