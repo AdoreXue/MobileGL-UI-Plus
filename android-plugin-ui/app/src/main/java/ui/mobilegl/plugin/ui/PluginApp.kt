@@ -23,7 +23,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -43,7 +42,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -52,8 +50,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,8 +65,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -82,7 +76,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -108,7 +101,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -125,7 +117,6 @@ import ui.mobilegl.plugin.driver.DriverRepository
 import ui.mobilegl.plugin.driver.ExternalLibrary
 import ui.mobilegl.plugin.driver.ExternalLibraryRepository
 import ui.mobilegl.plugin.driver.scanMobileGlVersion
-import ui.mobilegl.plugin.selftest.BackendReport
 import ui.mobilegl.plugin.selftest.GlInfoProbe
 import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
@@ -289,12 +280,7 @@ fun MobileGlPluginApp() {
                     TextButton(onClick = {
                         prefs.edit().putBoolean("permission_prompted", true).putBoolean("awaiting_restart", true).apply()
                         showPermissionDialog = false
-                        val packageUri = Uri.parse("package:" + context.packageName)
-                        runCatching {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
-                        }.onFailure {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                        }
+                        openAllFilesAccessSettings(context)
                     }) { Text("去授权") }
                 },
                 dismissButton = {
@@ -390,7 +376,6 @@ fun MobileGlPluginApp() {
                             externalCount = externalLibraries.size,
                             onOpenSettings = { lastTab = 1; dest = Dest.Settings },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
-                            onOpenConfig = { lastTab = 1; dest = Dest.ConfigFile },
                             onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
                             glInfo = glInfo,
                         )
@@ -630,7 +615,6 @@ private fun HomeTab(
     externalCount: Int,
     onOpenSettings: () -> Unit,
     onOpenDrivers: () -> Unit,
-    onOpenConfig: () -> Unit,
     onOpenSelfTest: () -> Unit,
     glInfo: GlInfoProbe.Info?,
 ) {
@@ -680,12 +664,7 @@ private fun HomeTab(
             )
             Spacer(Modifier.height(12.dp))
             PermissionPill(authorized) {
-                val packageUri = Uri.parse("package:" + context.packageName)
-                runCatching {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
-                }.onFailure {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                }
+                openAllFilesAccessSettings(context)
             }
         }
 
@@ -962,22 +941,7 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun DeviceRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.weight(1f))
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(2.2f),
-        )
-    }
-}
+
 
 @Composable
 private fun InfoTab(
@@ -1185,23 +1149,7 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-@Composable
-private fun ActionRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        onClick = onClick,
-    ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
+
 
 @Composable
 fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
@@ -1257,6 +1205,16 @@ fun verdictColor(verdict: String): Color = when (verdict.uppercase()) {
     "OK", "PASS" -> MaterialTheme.colorScheme.primary
     "DEGRADED", "WARN" -> MaterialTheme.colorScheme.tertiary
     else -> MaterialTheme.colorScheme.error
+}
+
+/** 跳系统「所有文件访问权限」页；不支持的机型回退到通用授权页。 */
+internal fun openAllFilesAccessSettings(context: Context) {
+    val packageUri = Uri.parse("package:" + context.packageName)
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
+    }.onFailure {
+        runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+    }
 }
 
 private fun hasAllFilesAccess(): Boolean =
