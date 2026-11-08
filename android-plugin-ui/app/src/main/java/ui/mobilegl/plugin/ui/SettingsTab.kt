@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -79,16 +79,25 @@ fun SettingsTab(
         sfpewBackend = choice
         setEnv("SFPEW_EGL", choice)
     }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
+    // 首帧只画标题，内容延后一帧组合：设置页卡片多，塞进转场第一帧会掉帧。
+    val ready = rememberContentReady()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
-        BigTitle("设置")
-
-        if (pendingRestart) {
+        item { BigTitle("设置") }
+        if (!ready) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                SkeletonCard(4)
+                Spacer(Modifier.height(10.dp))
+                SkeletonCard(3)
+                Spacer(Modifier.height(10.dp))
+                SkeletonCard(4)
+            }
+        } else {
+            if (pendingRestart) {
+                item {
             Spacer(Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -114,8 +123,9 @@ fun SettingsTab(
                     }
                 }
             }
-        }
-
+                }
+            }
+            item {
         SectionLabel("渲染后端")
         InfoCard {
             ValueChoiceRow(
@@ -131,7 +141,8 @@ fun SettingsTab(
                 }
             }
         }
-
+            }
+            item {
         SectionLabel("包装器")
         InfoCard {
             if (BuildConfig.SFPEW_BUNDLED) {
@@ -165,7 +176,8 @@ fun SettingsTab(
                 ) { }
             }
         }
-
+            }
+            item {
         SectionLabel("应用行为")
         InfoCard {
             SwitchRow("启动时自动自检", "打开应用后自动运行一次驱动自检", config.autoSelfTest) {
@@ -179,7 +191,8 @@ fun SettingsTab(
                 onSelect = { onSave(config.copy(theme = it)) },
             )
         }
-
+            }
+            item {
         SectionLabel("配置")
         InfoCard {
             LinkRow("全部配置", "通用 / 按后端 / SFPEW 选项（原高级设置）", onOpenConfigFile)
@@ -192,7 +205,8 @@ fun SettingsTab(
                 })
             }
         }
-
+            }
+            item {
         SectionLabel("组件")
         InfoCard {
             LinkRow("驱动包", drivers.size.toString() + " 个 · 管理 PanVK / Vulkan ICD", onOpenDrivers)
@@ -201,7 +215,8 @@ fun SettingsTab(
             DividerLine()
             LinkRow("驱动自检", "查看完整报告与失败项说明", onOpenSelfTest)
         }
-
+            }
+            item {
         SectionLabel("危险操作")
         InfoCard {
             Text(
@@ -218,10 +233,9 @@ fun SettingsTab(
                 OutlinedButton(onClick = { showResetDialog = true }) { Text("重置") }
             }
         }
-
-        Spacer(Modifier.height(24.dp))
+            }
+        }
     }
-
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
