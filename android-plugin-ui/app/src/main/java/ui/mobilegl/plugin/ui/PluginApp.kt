@@ -209,9 +209,13 @@ fun MobileGlPluginApp() {
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
 
         LaunchedEffect(Unit) {
-            val loaded = withContext(Dispatchers.IO) {
+            val rawLoaded = withContext(Dispatchers.IO) {
                 store.load()
             }
+            // config.json 是唯一真源：backend 以 env 里的 MOBILEGL_BACKEND_TYPE 为准
+            val loaded = rawLoaded.copy(
+                backend = rawLoaded.env["MOBILEGL_BACKEND_TYPE"] ?: rawLoaded.backend,
+            )
             config = loaded
             val io = withContext(Dispatchers.IO) {
                 DriversData(
@@ -230,9 +234,12 @@ fun MobileGlPluginApp() {
 
         LaunchedEffect(Unit) {
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
-            if (report == null) {
+            if (config.autoSelfTest) {
                 probing = true
                 report = selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
+                probing = false
+            } else {
+                // 未开启自动自检：沿用上次缓存结果，不阻塞首屏
                 probing = false
             }
         }
@@ -424,6 +431,18 @@ fun MobileGlPluginApp() {
                             writer = runtimeWriter,
                             status = runtimeStatus,
                             onStatusChanged = { runtimeStatus = it },
+                            onMerge = { kv ->
+                                val merged = LinkedHashMap(config.env)
+                                merged.putAll(kv)
+                                persist(
+                                    config.copy(
+                                        env = merged,
+                                        backend = kv["MOBILEGL_BACKEND_TYPE"] ?: config.backend,
+                                        sfpewEnabled = kv["SFPEW_ENABLED"]?.let { v -> v == "1" || v.equals("true", true) }
+                                            ?: config.sfpewEnabled,
+                                    )
+                                )
+                            },
                         )
                         Dest.SelfTest -> SelfTestScreen(repository = selfTestRepository, config = config)
                     }
