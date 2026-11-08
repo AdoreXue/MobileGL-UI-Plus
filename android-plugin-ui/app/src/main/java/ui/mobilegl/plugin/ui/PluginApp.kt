@@ -633,7 +633,7 @@ private fun HomeTab(
                 .padding(top = 28.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HeroTitle(translationY = { 0f })
+            HeroTitle(offsetY = { 0f })
             Text(
                 "v" + BuildConfig.VERSION_NAME,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1287,14 +1287,14 @@ private fun SplashOverlay(progress: Animatable<Float, AnimationVector1D>) {
                 contentScale = ContentScale.Fit,
             )
             Spacer(Modifier.height(20.dp))
-            HeroTitle { move * progress.value }
+            HeroTitle(offsetY = { move * progress.value })
         }
     }
 }
 
 @Composable
-private fun HeroTitle(translationY: () -> Float) {
-    Row(modifier = Modifier.graphicsLayer { translationY = translationY() }) {
+private fun HeroTitle(offsetY: () -> Float) {
+    Row(modifier = Modifier.graphicsLayer { it0 -> it0.translationY = offsetY() }) {
         Text("MobileGL", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("_UI_", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("Plus", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
