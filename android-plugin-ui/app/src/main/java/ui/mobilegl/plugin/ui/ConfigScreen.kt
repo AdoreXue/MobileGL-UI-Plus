@@ -59,6 +59,7 @@ fun ConfigScreen(
     writer: RuntimeConfigWriter,
     status: RuntimeConfigWriter.Status,
     onStatusChanged: (RuntimeConfigWriter.Status) -> Unit,
+    onMerge: (Map<String, String>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -81,12 +82,12 @@ fun ConfigScreen(
 
     fun save() {
         busy = true
-        scope.launch {
-            val s = withContext(Dispatchers.IO) { writer.writeRaw(text) }
-            onStatusChanged(s)
-            message = if (s.sharedWritten) "已写入 " + s.sharedPath else "共享路径不可写：" + (s.reason ?: "")
-            busy = false
-        }
+        // 解析成键值对交回 PluginApp：写入 config.json（唯一真源），再由它统一生成 runtime.conf，
+        // 这样设置页开关与这里的编辑不会再互相覆盖。
+        val kv = parseKeyValues(text)
+        onMerge(kv)
+        message = "已保存 " + kv.size + " 项（已写入配置并重新生成 runtime.conf）"
+        busy = false
     }
 
     Column(
@@ -267,6 +268,19 @@ private fun OptionToggle(label: String, key: String, text: String, onToggle: (Bo
         }
         Switch(checked = enabled, onCheckedChange = onToggle)
     }
+}
+
+private fun parseKeyValues(text: String): Map<String, String> {
+    val out = LinkedHashMap<String, String>()
+    text.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") && it.contains('=') }
+        .forEach { line ->
+            val key = line.substringBefore('=').trim()
+            val value = line.substringAfter('=').trim()
+            if (key.isNotEmpty()) out[key] = value
+        }
+    return out
 }
 
 private fun readKey(text: String, key: String, fallback: String): String =
