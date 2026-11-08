@@ -659,7 +659,7 @@ private fun HomeTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             onClick = onOpenSettings,
         ) {
             Column(
@@ -718,7 +718,7 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,
     ) {
         Row(
@@ -772,7 +772,7 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = when {
-                report == null -> MaterialTheme.colorScheme.surfaceContainerHigh
+                report == null -> MaterialTheme.colorScheme.surfaceContainer
                 ok -> MaterialTheme.colorScheme.secondaryContainer
                 else -> MaterialTheme.colorScheme.tertiaryContainer
             }
@@ -822,7 +822,7 @@ private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifi
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -864,7 +864,7 @@ private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, mo
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,
     ) {
         Row(
@@ -947,7 +947,7 @@ private fun InfoTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             onClick = { copy("版本号", BuildConfig.VERSION_NAME) },
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
@@ -984,7 +984,7 @@ private fun InfoTab(
                     ReportHealth.Ok -> MaterialTheme.colorScheme.secondaryContainer
                     ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiaryContainer
                     ReportHealth.Fail, ReportHealth.Error -> MaterialTheme.colorScheme.errorContainer
-                    ReportHealth.None -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    ReportHealth.None -> MaterialTheme.colorScheme.surfaceContainer
                 }
             ),
             onClick = onOpenSelfTest,
@@ -1121,7 +1121,7 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { content() }
     }
@@ -1132,7 +1132,7 @@ private fun ActionRow(title: String, subtitle: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         onClick = onClick,
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1164,7 +1164,7 @@ fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
