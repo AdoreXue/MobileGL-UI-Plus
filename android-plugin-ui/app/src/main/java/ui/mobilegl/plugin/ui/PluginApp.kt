@@ -185,7 +185,10 @@ private fun pageTransition(from: Dest, to: Dest): ContentTransform {
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MobileGlPluginApp() {
-    MobileGlTheme {
+    val rootContext = LocalContext.current
+    val themePrefs = remember { rootContext.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
+    var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
+    MobileGlTheme(themeMode) {
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
         val driverRepository = remember { DriverRepository(context) }
@@ -206,6 +209,7 @@ fun MobileGlPluginApp() {
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
+        var pendingRestart by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
             val rawLoaded = withContext(Dispatchers.IO) {
@@ -245,6 +249,11 @@ fun MobileGlPluginApp() {
 
         fun persist(updated: PluginConfig) {
             config = updated
+            pendingRestart = true
+            if (themeMode != updated.theme) {
+                themeMode = updated.theme
+                themePrefs.edit().putString("theme", updated.theme).apply()
+            }
             ui.mobilegl.plugin.NativeEnv.apply(updated)
             scope.launch {
                 val status = withContext(Dispatchers.IO) {
@@ -383,10 +392,16 @@ fun MobileGlPluginApp() {
                             runtime = runtimeStatus,
                             drivers = drivers,
                             externalLibraries = externalLibraries,
+                            pendingRestart = pendingRestart,
                             onSave = { persist(it) },
                             onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
                             onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
+                            onResetAll = {
+                                persist(PluginConfig().copy(theme = config.theme))
+                                drivers = emptyList()
+                                externalLibraries = emptyList()
+                            },
                         )
                         Dest.Info -> InfoTab(
                             config = config,
@@ -474,9 +489,14 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MobileGlTheme(content: @Composable () -> Unit) {
+private fun MobileGlTheme(themeMode: String = "system", content: @Composable () -> Unit) {
     // Material 3 标准：Android 12+ 动态取色，低版本回退到标准 light/dark 方案
-    val dark = isSystemInDarkTheme()
+    val systemDark = isSystemInDarkTheme()
+    val dark = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> systemDark
+    }
     val context = LocalContext.current
     val scheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
