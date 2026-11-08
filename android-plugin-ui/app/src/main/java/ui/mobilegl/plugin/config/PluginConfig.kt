@@ -21,7 +21,7 @@ data class PluginConfig(
     val activeRendererVersion: String? = null,
     val activeRendererCommit: String? = null,
     val env: Map<String, String> = defaultEnv("DirectVulkan"),
-    val theme: String = "dark",
+    val theme: String = "system",
 ) {
     fun toJson(): JSONObject {
         val root = JSONObject()
@@ -76,7 +76,7 @@ data class PluginConfig(
                 activeRendererVersion = if (root.isNull("activeRendererVersion")) null else root.optString("activeRendererVersion").ifEmpty { null },
                 activeRendererCommit = if (root.isNull("activeRendererCommit")) null else root.optString("activeRendererCommit").ifEmpty { null },
                 env = env,
-                theme = root.optString("theme", "dark"),
+                theme = root.optString("theme", "system"),
             )
         }
     }
