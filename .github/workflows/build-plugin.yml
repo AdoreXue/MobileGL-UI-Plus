@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      versionName:
+        description: "APK 内部 versionName（如 26.11.1-rc.2）；留空则自动生成 buildN"
+        required: false
+        type: string
 
 jobs:
   build:
@@ -38,12 +43,19 @@ jobs:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: gradle --no-daemon -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true -Pmobilegl.versionGitHash=true :app:assembleMagmaPluginRelease
+        run: |
+          VER_ARGS=""
+          if [ -n '${{ github.event.inputs.versionName }}' ]; then
+            VER_ARGS="-Pmobilegl.versionNameOverride='${{ github.event.inputs.versionName }}' -Pmobilegl.versionGitHash=false"
+          else
+            VER_ARGS="-Pmobilegl.versionGitHash=true"
+          fi
+          gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginRelease
 
       - name: Collect artifact (rename with version)
         working-directory: android-plugin-ui
         run: |
-          VERSION=$(gradle --no-daemon -q :app:printVersionName | tail -1)
+          VERSION=$(gradle --no-daemon -q :app:printVersionName ${{ github.event.inputs.versionName != '' && format('-Pmobilegl.versionNameOverride={0}', github.event.inputs.versionName) || '' }} | tail -1)
           echo "versionName=$VERSION"
           cp app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk \
              "../MobileGL-${VERSION}.apk"
