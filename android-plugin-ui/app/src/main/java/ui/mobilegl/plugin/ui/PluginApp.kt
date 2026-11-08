@@ -564,7 +564,8 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
     val memoryAvail = String.format(Locale.US, "%.1f GB 可用", mi.availMem / 1024.0 / 1024.0 / 1024.0)
     val soc = if (Build.VERSION.SDK_INT >= 31) {
-        Build.SOC_MODEL?.takeIf { it.isNotBlank() && it != Build.SOC_MODEL_UNKNOWN }
+        // SOC_MODEL 未知时返回 "unknown"，一并过滤
+        Build.SOC_MODEL?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
             ?: Build.HARDWARE?.takeIf { it.isNotBlank() }
             ?: "未知"
     } else {
