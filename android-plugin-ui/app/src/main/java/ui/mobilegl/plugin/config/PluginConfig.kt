@@ -11,7 +11,7 @@ import org.json.JSONObject
  * ConfigLoader can read from shared storage (see RuntimeConfigWriter).
  */
 data class PluginConfig(
-    val backend: String = "DirectVulkan",
+    val backend: String = "DirectGLES",
     val sfpewEnabled: Boolean = false,
     val autoSelfTest: Boolean = true,
     val activeDriverId: String? = null,
@@ -20,7 +20,7 @@ data class PluginConfig(
     val activeRendererLibPath: String? = null,
     val activeRendererVersion: String? = null,
     val activeRendererCommit: String? = null,
-    val env: Map<String, String> = defaultEnv("DirectVulkan"),
+    val env: Map<String, String> = defaultEnv("DirectGLES"),
     val theme: String = "system",
 ) {
     fun toJson(): JSONObject {
@@ -52,7 +52,7 @@ data class PluginConfig(
         )
 
         fun fromJson(root: JSONObject): PluginConfig {
-            val backend = root.optString("backend", "DirectVulkan")
+            val backend = root.optString("backend", "DirectGLES")
             val envJson = root.optJSONObject("env")
             val env = LinkedHashMap<String, String>()
             if (envJson != null) {

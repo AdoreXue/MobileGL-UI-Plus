@@ -52,5 +52,5 @@ class ConfigStore(private val context: Context) {
 
     fun defaultBackend(): String = runCatching {
         context.getString(R.string.mobilegl_default_backend)
-    }.getOrDefault("DirectVulkan")
+    }.getOrDefault("DirectGLES")
 }
