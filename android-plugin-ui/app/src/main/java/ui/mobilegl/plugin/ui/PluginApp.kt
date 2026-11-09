@@ -964,7 +964,7 @@ private fun InfoTab(
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Text(
-                    "内部版本：" + BuildConfig.FULL_VERSION_NAME + " · " + BuildConfig.BUILD_TYPE,
+                    "内部版本：" + BuildConfig.FULL_VERSION_NAME,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
