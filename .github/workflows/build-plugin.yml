@@ -48,7 +48,7 @@ jobs:
             # DevN 按本工作流在本分支上的成功构建次数递增（含本次运行），不依赖发 release
             WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id')
             DEVN=$(gh api "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
-              --jq '[.workflow_runs | length]')
+              --jq '.workflow_runs | length' | tr -d '[]')
             [ -z "$DEVN" ] && DEVN=1
             echo "DevN: $DEVN"
             echo "DISPLAY_VERSION=$BASE-Dev.$DEVN" >> "$GITHUB_ENV"
