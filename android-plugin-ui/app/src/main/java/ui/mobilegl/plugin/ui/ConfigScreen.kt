@@ -222,16 +222,16 @@ fun ConfigScreen(
             )
             Spacer(Modifier.height(8.dp))
             OptionToggle("禁用 GPU 计时查询", "MOBILEGL_DISABLE_TIMERQUERY", text, desc = "游戏可用它测每帧 GPU 耗时（如优化 mod、HUD 显示帧耗时）。部分驱动实现有 bug 会卡顿，关掉即不再提供", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_TIMERQUERY", onOff(it)) }
-            OptionQuirk("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", text, desc = "Vulkan 子组指令（一组线程协同操作）驱动不支持时软件模拟。开＝总是模拟；关＝用驱动原生的，最快", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_SUBGROUP_EMULATION", it) }
+            OptionQuirk("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", text, desc = "Vulkan 子组指令（一组线程协同操作）驱动不支持时以软件模拟。开＝总是模拟；关＝用驱动原生的，最快", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_SUBGROUP_EMULATION", it) }
             OptionQuirk("模拟裁剪平面", "MOBILEGL_CLIP_DISTANCE_EMULATION", text, desc = "驱动不支持 gl_ClipDistance 时用「丢弃片元」模拟。开＝总是模拟；关＝用驱动原生的", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_CLIP_DISTANCE_EMULATION", it) }
             OptionToggle("持久映射当已刷新", "MOBILEGL_COHERENT_AS_FLUSH", text, desc = "GPU 缓冲的「持续映射内存」默认要游戏手动刷新才可见。老引擎（如 Flywheel）不刷新就读，导致画面不动；打开后视为自动可见", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_COHERENT_AS_FLUSH", onOff(it)) }
-            OptionToggle("放宽 GL 规则", "MOBILEGL_RELAXED_SEMANTICS", text, desc = "对现代游戏也容忍老版 OpenGL 的坏习惯：用 0 号默认 VAO 画图、删掉的纹理名立刻重用。极少数老模组需要", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
-            OptionToggle("大缓冲不直通 GPU", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text, desc = "超过 16MiB 的缓冲不再直接映射给后端，改走 CPU 拷贝。省显存、避开 Mali 卡死，代价是写入慢一点", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
+            OptionToggle("放宽 GL 规则", "MOBILEGL_RELAXED_SEMANTICS", text, desc = "允许现代游戏继续使用旧版 OpenGL 中已弃用的用法：绘制时未绑定自定义 VAO、删除纹理后立即重用其名称。仅少数旧模组需要", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
+            OptionToggle("大缓冲不直通 GPU", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text, desc = "超过 16MiB 的缓冲不再直接映射给后端，改经 CPU 拷贝。可降低显存占用，并避免 Mali 驱动在处理忙碌缓冲时停顿，代价是写入多一次拷贝", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
             OptionQuirk("着色器后台编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text, desc = "着色器编译放后台线程，游戏不卡在编译上。自动＝通常等于开", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", it) }
             OptionText("后台编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", text, desc = "0＝自动（取 min(4, 大核数)）", default = "0（自动）", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", it) }
             OptionText("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", text, desc = "CPU 最多提前准备几帧。大＝流畅但吃内存；1＝完全同步，最稳最慢", default = "3", parsed = parsed) { text = setKey(text, "MOBILEGL_FRAMES_IN_FLIGHT", it) }
             OptionQuirk("着色器翻译缓存", "MOBILEGL_SHADER_CACHE", text, desc = "GLSL 翻译成 GPU 代码的结果存内存里，重进同一画面不用重译。出渲染 bug 时可关掉排查", default = "自动（通常等于开）", parsed = parsed) { text = setKey(text, "MOBILEGL_SHADER_CACHE", it) }
-            OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text, desc = "翻译出的 GPU 中间码逐条检查合法性。只用于排查着色器问题，平时开着白白变慢", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
+            OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text, desc = "对翻译生成的 GPU 中间码逐条检查合法性。仅用于排查着色器问题；日常开启会持续产生额外开销", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
             }
             }
             item {
@@ -240,9 +240,9 @@ fun ConfigScreen(
             OptionToggle("管线统计", "MOBILEGL_PIPE_STATS", text, desc = "输出前后端之间每次调用的字节数、次数等计数，用来分析性能瓶颈在哪", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
             OptionToggle("帧率日志", "MOBILEGL_FPS_LOG", text, desc = "每两秒输出一行帧率和帧时间", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
             OptionText("统计输出周期", "MOBILEGL_PIPE_STATS_PERIOD", text, desc = "每隔多少帧输出一行统计摘要", default = "120 帧", parsed = parsed) { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
-            OptionToggle("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", text, desc = "有些光影包看到不支持双精度就拒载。打开后向游戏谎称支持（GL_ARB_gpu_shader_fp64），实际仍按 32 位精度算，够骗过检查但精度不高", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
-            OptionToggle("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text, desc = "启动时先热身编译器内建表，省 20-100 毫秒启动时间；代价是第一次编译着色器略慢", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
-            OptionQuirk("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", text, desc = "着色器还在后台编译就让游戏立即拿到「已完成」，不用干等。真实编译失败时仍会报错，但游戏可能先拿到空着色器", default = "自动（通常等于关）", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", it) }
+            OptionToggle("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", text, desc = "部分光影包在检测到不支持双精度时会拒绝加载。开启后向游戏声明支持双精度（GL_ARB_gpu_shader_fp64），实际运算仍为 32 位精度，可通过检查但精度受限", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
+            OptionToggle("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text, desc = "启动时预先初始化编译器内建表，可缩短 20-100 毫秒启动时间；代价是首次编译着色器稍慢", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
+            OptionQuirk("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", text, desc = "着色器尚在后台编译时即向游戏返回完成状态，无需同步等待。实际编译失败仍会报错，但游戏可能先获得未完成的着色器", default = "自动（通常等于关）", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", it) }
             OptionQuirk("点大小前移", "MOBILEGL_POINT_SIZE_DEMOTION", text, desc = "把 gl_PointSize 的计算从几何着色器挪到顶点着色器。某些驱动几何阶段改不了点大小，需要这个", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_POINT_SIZE_DEMOTION", it) }
             OptionQuirk("iterationRP 修复", "MOBILEGL_ITRP_FIX", text, desc = "修 iterationRP 光影包自带的两个计算着色器 bug。自动＝装了这个光影包才修", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ITRP_FIX", it) }
                 }
@@ -286,7 +286,7 @@ fun ConfigScreen(
             OptionQuirk("分层纹理拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text, desc = "跨格式拷贝大纹理时一层一层提交。部分 Adreno 只拷第一层，拆开能修好", default = "自动（探测到才启用）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", it) }
             OptionQuirk("渲染通道复用", "MOBILEGL_MAGMA_PASS_CACHE", text, desc = "Vulkan 的渲染通道对象很贵，内容没变的帧直接复用上一帧的", default = "自动（通常等于开）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", it) }
             OptionQuirk("丢弃后补状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", text, desc = "画面内容被丢弃后重新下发绘制状态，避免那一帧空白", default = "自动（探测到设备需要才启用）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", it) }
-            OptionQuirk("高通混合写深度", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text, desc = "高通驱动在开透明混合时会抑制深度写入，游戏可能依赖这个怪癖。自动＝只在高通设备上模仿", default = "自动（只在高通设备上套用）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", it) }
+            OptionQuirk("高通混合写深度", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text, desc = "高通驱动在启用透明混合时会抑制深度写入，部分游戏依赖此行为。自动＝仅在高通设备上模拟该行为", default = "自动（只在高通设备上套用）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", it) }
             OptionText("帧在途数（旧名）", "MOBILEGL_MAGMA_FRAMESINFLIGHT", text, desc = "MOBILEGL_FRAMES_IN_FLIGHT 的旧拼法，已被取代", default = "3（同帧在途数）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_FRAMESINFLIGHT", it) }
             OptionQuirk("E5B9G9R9 直读", "MOBILEGL_MAGMA_E5_RAW_READS", text, desc = "这种共享指数的纹理格式直接按原始位读取，绕过驱动错误的自动转换", default = "自动（探测到才启用）", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", it) }
             OptionToggle("容忍无效 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", text, desc = "没过校验的着色器代码也交给驱动试试，排查用", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", onOff(it)) }
@@ -305,19 +305,19 @@ fun ConfigScreen(
                 SectionLabel("DirectGLES / Espryt")
                 InfoCard {
             OptionToggle("纹理视图扩展", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", text, desc = "对外声明支持 GL_ARB_texture_view（同一张纹理的不同解读方式）", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", onOff(it)) }
-            OptionToggle("经由 ANGLE 渲染", "MOBILEGL_ESPRYT_USE_ANGLE", text, desc = "改用 ANGLE（Google 的 GLES-on-Vulkan 实现）替代系统 GLES 驱动。兼容性兜底", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
+            OptionToggle("经由 ANGLE 渲染", "MOBILEGL_ESPRYT_USE_ANGLE", text, desc = "改用 ANGLE（Google 的 GLES-on-Vulkan 实现）替代系统 GLES 驱动。作为兼容性备选方案", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
             OptionToggle("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", text, desc = "缓冲数据不走环形上传队列，改回老的逐次拷贝，兼容个别驱动", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", onOff(it)) }
             OptionToggle("禁用 mipmap 缩小采样", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", text, desc = "缩小采样不用 mipmap，规避部分驱动贴图发黑的 bug，画质略降", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", onOff(it)) }
             OptionQuirk("顶点状态去重", "MOBILEGL_ESPRYT_VAO_SHADOW", text, desc = "只在顶点属性真正变化时才通知驱动，避免重复设置", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", it) }
             OptionQuirk("几何输出延迟", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text, desc = "几何着色器先写完内存再产出顶点。Adreno 会在 emit 后丢写入，需要这个", default = "自动（探测到才启用）", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", it) }
             OptionText("索引缓冲镜像上限", "MOBILEGL_PIPE_INDEX_MIRROR_MB", text, desc = "后端留一块内存镜像索引数据（MiB），装得下才能做图元重启改写和多次绘制合并", default = "64", parsed = parsed) { text = setKey(text, "MOBILEGL_PIPE_INDEX_MIRROR_MB", it) }
             OptionToggle("忽略 LOD 偏移", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", text, desc = "不叠加游戏写的细节层级偏移。规避 ANGLE + llvmpipe 的崩溃", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", onOff(it)) }
-            OptionToggle("禁用失效刷新", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", text, desc = "映射内存的「先失效再读」路径跳过，直接走拷贝，个别驱动会死在这条路上", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", onOff(it)) }
+            OptionToggle("禁用失效刷新", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", text, desc = "映射内存的「先失效再读」路径跳过，直接走拷贝，个别驱动在该路径上会停止响应", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", onOff(it)) }
             OptionToggle("禁用 UBO 环", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", text, desc = "全局常量缓冲不走环形队列，回老式直接写入", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UBO_RING", onOff(it)) }
             OptionToggle("禁用纹理上传环", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", text, desc = "纹理上传不走环形队列，回老式逐次拷贝", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", onOff(it)) }
             OptionToggle("深度模板模拟回读", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", text, desc = "读回深度/模板改走 CPU 模拟路径，不用原生 GLES 读回", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", onOff(it)) }
             OptionQuirk("多视口模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", text, desc = "多视口扩展用软件模拟，不用驱动原生实现", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", it) }
-            OptionQuirk("非法图像占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", text, desc = "游戏绑了无效图像时给一张空图，不按规范报错（有些游戏就靠报错后的行为活着）", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", it) }
+            OptionQuirk("非法图像占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", text, desc = "游戏绑定无效图像时改绑一张空白图像，而不是按规范报错。部分游戏依赖报错后的既定行为，此选项会改变该行为", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", it) }
             OptionQuirk("自动分配着色器接口位置", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", text, desc = "着色器输入输出块没写位置编号时按声明顺序补上", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", it) }
             OptionQuirk("加宽 16 位格式存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", text, desc = "RGB565 这类 16 位纹理内部用 32 位存，避免精度丢失；显存翻倍", default = "自动（探测到驱动出问题才启用）", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", it) }
             OptionText("多次绘制模拟", "MOBILEGL_ESPRYT_MULTIDRAW_MODE", text, desc = "Espryt 模拟 glMultiDrawElements 的方式：ext／multiindirect／indirect／basevertex／drawelements／compute", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ESPRYT_MULTIDRAW_MODE", it) }
@@ -336,8 +336,8 @@ fun ConfigScreen(
                 onSelect = { text = setKey(text, "SFPEW_EGL", it) },
             )
             OptionToggle("SFPEW 宽松建上下文", "SFPEW_RELAXED_CONTEXT", text, desc = "创建 EGL 上下文时放宽校验，兼容不规范的启动器", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_RELAXED_CONTEXT", onOff(it)) }
-            OptionToggle("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", text, desc = "关掉 MultiDrawArrays 加速路径，个别驱动有 bug", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
-            OptionToggle("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", text, desc = "不用驱动自动生成多级纹理，自己算，规避个别驱动 bug", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
+            OptionToggle("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", text, desc = "关掉 MultiDrawArrays 加速路径，个别驱动存在问题", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
+            OptionToggle("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", text, desc = "不用驱动自动生成多级纹理，自己算，规避个别驱动的缺陷", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
         }
             }
             item {
@@ -608,22 +608,22 @@ private data class OptionMeta(
 /** 供搜索使用的选项索引（与页面上的选项一一对应）。 */
 private val OPTION_INDEX: List<OptionMeta> = listOf(
     OptionMeta("禁用 GPU 计时查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "游戏可用它测每帧 GPU 耗时（如优化 mod、HUD 显示帧耗时）。部分驱动实现有 bug 会卡顿，关掉即不再提供", "关"),
-    OptionMeta("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", false, "Vulkan 子组指令（一组线程协同操作）驱动不支持时软件模拟。开＝总是模拟；关＝用驱动原生的，最快", "自动"),
+    OptionMeta("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", false, "Vulkan 子组指令（一组线程协同操作）驱动不支持时以软件模拟。开＝总是模拟；关＝用驱动原生的，最快", "自动"),
     OptionMeta("模拟裁剪平面", "MOBILEGL_CLIP_DISTANCE_EMULATION", false, "驱动不支持 gl_ClipDistance 时用「丢弃片元」模拟。开＝总是模拟；关＝用驱动原生的", "自动"),
     OptionMeta("持久映射当已刷新", "MOBILEGL_COHERENT_AS_FLUSH", false, "GPU 缓冲的「持续映射内存」默认要游戏手动刷新才可见。老引擎（如 Flywheel）不刷新就读，导致画面不动；打开后视为自动可见", "关"),
-    OptionMeta("放宽 GL 规则", "MOBILEGL_RELAXED_SEMANTICS", false, "对现代游戏也容忍老版 OpenGL 的坏习惯：用 0 号默认 VAO 画图、删掉的纹理名立刻重用。极少数老模组需要", "关"),
-    OptionMeta("大缓冲不直通 GPU", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", false, "超过 16MiB 的缓冲不再直接映射给后端，改走 CPU 拷贝。省显存、避开 Mali 卡死，代价是写入慢一点", "关"),
+    OptionMeta("放宽 GL 规则", "MOBILEGL_RELAXED_SEMANTICS", false, "允许现代游戏继续使用旧版 OpenGL 中已弃用的用法：绘制时未绑定自定义 VAO、删除纹理后立即重用其名称。仅少数旧模组需要", "关"),
+    OptionMeta("大缓冲不直通 GPU", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", false, "超过 16MiB 的缓冲不再直接映射给后端，改经 CPU 拷贝。可降低显存占用，并避免 Mali 驱动在处理忙碌缓冲时停顿，代价是写入多一次拷贝", "关"),
     OptionMeta("着色器后台编译", "MOBILEGL_ASYNC_SHADER_COMPILE", false, "着色器编译放后台线程，游戏不卡在编译上。自动＝通常等于开", "自动"),
     OptionMeta("后台编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", true, "0＝自动（取 min(4, 大核数)）", "0（自动）"),
     OptionMeta("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", true, "CPU 最多提前准备几帧。大＝流畅但吃内存；1＝完全同步，最稳最慢", "3"),
     OptionMeta("着色器翻译缓存", "MOBILEGL_SHADER_CACHE", false, "GLSL 翻译成 GPU 代码的结果存内存里，重进同一画面不用重译。出渲染 bug 时可关掉排查", "自动（通常等于开）"),
-    OptionMeta("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", false, "翻译出的 GPU 中间码逐条检查合法性。只用于排查着色器问题，平时开着白白变慢", "关"),
+    OptionMeta("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", false, "对翻译生成的 GPU 中间码逐条检查合法性。仅用于排查着色器问题；日常开启会持续产生额外开销", "关"),
     OptionMeta("管线统计", "MOBILEGL_PIPE_STATS", false, "输出前后端之间每次调用的字节数、次数等计数，用来分析性能瓶颈在哪", "关"),
     OptionMeta("帧率日志", "MOBILEGL_FPS_LOG", false, "每两秒输出一行帧率和帧时间", "关"),
     OptionMeta("统计输出周期", "MOBILEGL_PIPE_STATS_PERIOD", true, "每隔多少帧输出一行统计摘要", "120 帧"),
-    OptionMeta("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", false, "有些光影包看到不支持双精度就拒载。打开后向游戏谎称支持（GL_ARB_gpu_shader_fp64），实际仍按 32 位精度算，够骗过检查但精度不高", "关"),
-    OptionMeta("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", false, "启动时先热身编译器内建表，省 20-100 毫秒启动时间；代价是第一次编译着色器略慢", "关"),
-    OptionMeta("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", false, "着色器还在后台编译就让游戏立即拿到「已完成」，不用干等。真实编译失败时仍会报错，但游戏可能先拿到空着色器", "自动（通常等于关）"),
+    OptionMeta("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", false, "部分光影包在检测到不支持双精度时会拒绝加载。开启后向游戏声明支持双精度（GL_ARB_gpu_shader_fp64），实际运算仍为 32 位精度，可通过检查但精度受限", "关"),
+    OptionMeta("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", false, "启动时预先初始化编译器内建表，可缩短 20-100 毫秒启动时间；代价是首次编译着色器稍慢", "关"),
+    OptionMeta("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", false, "着色器尚在后台编译时即向游戏返回完成状态，无需同步等待。实际编译失败仍会报错，但游戏可能先获得未完成的着色器", "自动（通常等于关）"),
     OptionMeta("点大小前移", "MOBILEGL_POINT_SIZE_DEMOTION", false, "把 gl_PointSize 的计算从几何着色器挪到顶点着色器。某些驱动几何阶段改不了点大小，需要这个", "自动"),
     OptionMeta("iterationRP 修复", "MOBILEGL_ITRP_FIX", false, "修 iterationRP 光影包自带的两个计算着色器 bug。自动＝装了这个光影包才修", "自动"),
     OptionMeta("帧缓冲状态记忆", "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO", false, "记住帧缓冲当前绑定，游戏重复设置同样的状态时直接跳过，省调用", "自动"),
@@ -637,7 +637,7 @@ private val OPTION_INDEX: List<OptionMeta> = listOf(
     OptionMeta("分层纹理拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", false, "跨格式拷贝大纹理时一层一层提交。部分 Adreno 只拷第一层，拆开能修好", "自动（探测到才启用）"),
     OptionMeta("渲染通道复用", "MOBILEGL_MAGMA_PASS_CACHE", false, "Vulkan 的渲染通道对象很贵，内容没变的帧直接复用上一帧的", "自动（通常等于开）"),
     OptionMeta("丢弃后补状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", false, "画面内容被丢弃后重新下发绘制状态，避免那一帧空白", "自动（探测到设备需要才启用）"),
-    OptionMeta("高通混合写深度", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", false, "高通驱动在开透明混合时会抑制深度写入，游戏可能依赖这个怪癖。自动＝只在高通设备上模仿", "自动（只在高通设备上套用）"),
+    OptionMeta("高通混合写深度", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", false, "高通驱动在启用透明混合时会抑制深度写入，部分游戏依赖此行为。自动＝仅在高通设备上模拟该行为", "自动（只在高通设备上套用）"),
     OptionMeta("帧在途数（旧名）", "MOBILEGL_MAGMA_FRAMESINFLIGHT", true, "MOBILEGL_FRAMES_IN_FLIGHT 的旧拼法，已被取代", "3（同帧在途数）"),
     OptionMeta("E5B9G9R9 直读", "MOBILEGL_MAGMA_E5_RAW_READS", false, "这种共享指数的纹理格式直接按原始位读取，绕过驱动错误的自动转换", "自动（探测到才启用）"),
     OptionMeta("容忍无效 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", false, "没过校验的着色器代码也交给驱动试试，排查用", "关"),
@@ -651,26 +651,26 @@ private val OPTION_INDEX: List<OptionMeta> = listOf(
     OptionMeta("渲染中清屏合并", "MOBILEGL_MAGMA_INPASS_CLEAR", false, "清屏操作直接并进渲染通道开头，少一次全屏写入", "自动（只在能证明等价时启用）"),
     OptionMeta("渲染中清屏（默认帧缓冲）", "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", false, "同上，但作用于屏幕本身那个帧缓冲。自动＝关（Adreno 750 有回归）", "自动（等于关闭）"),
     OptionMeta("纹理视图扩展", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", false, "对外声明支持 GL_ARB_texture_view（同一张纹理的不同解读方式）", "关"),
-    OptionMeta("经由 ANGLE 渲染", "MOBILEGL_ESPRYT_USE_ANGLE", false, "改用 ANGLE（Google 的 GLES-on-Vulkan 实现）替代系统 GLES 驱动。兼容性兜底", "关"),
+    OptionMeta("经由 ANGLE 渲染", "MOBILEGL_ESPRYT_USE_ANGLE", false, "改用 ANGLE（Google 的 GLES-on-Vulkan 实现）替代系统 GLES 驱动。作为兼容性备选方案", "关"),
     OptionMeta("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", false, "缓冲数据不走环形上传队列，改回老的逐次拷贝，兼容个别驱动", "关"),
     OptionMeta("禁用 mipmap 缩小采样", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", false, "缩小采样不用 mipmap，规避部分驱动贴图发黑的 bug，画质略降", "关"),
     OptionMeta("顶点状态去重", "MOBILEGL_ESPRYT_VAO_SHADOW", false, "只在顶点属性真正变化时才通知驱动，避免重复设置", "自动"),
     OptionMeta("几何输出延迟", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", false, "几何着色器先写完内存再产出顶点。Adreno 会在 emit 后丢写入，需要这个", "自动（探测到才启用）"),
     OptionMeta("索引缓冲镜像上限", "MOBILEGL_PIPE_INDEX_MIRROR_MB", true, "后端留一块内存镜像索引数据（MiB），装得下才能做图元重启改写和多次绘制合并", "64"),
     OptionMeta("忽略 LOD 偏移", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", false, "不叠加游戏写的细节层级偏移。规避 ANGLE + llvmpipe 的崩溃", "关"),
-    OptionMeta("禁用失效刷新", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", false, "映射内存的「先失效再读」路径跳过，直接走拷贝，个别驱动会死在这条路上", "关"),
+    OptionMeta("禁用失效刷新", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", false, "映射内存的「先失效再读」路径跳过，直接走拷贝，个别驱动在该路径上会停止响应", "关"),
     OptionMeta("禁用 UBO 环", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", false, "全局常量缓冲不走环形队列，回老式直接写入", "关"),
     OptionMeta("禁用纹理上传环", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", false, "纹理上传不走环形队列，回老式逐次拷贝", "关"),
     OptionMeta("深度模板模拟回读", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", false, "读回深度/模板改走 CPU 模拟路径，不用原生 GLES 读回", "关"),
     OptionMeta("多视口模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", false, "多视口扩展用软件模拟，不用驱动原生实现", "自动"),
-    OptionMeta("非法图像占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", false, "游戏绑了无效图像时给一张空图，不按规范报错（有些游戏就靠报错后的行为活着）", "自动"),
+    OptionMeta("非法图像占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", false, "游戏绑定无效图像时改绑一张空白图像，而不是按规范报错。部分游戏依赖报错后的既定行为，此选项会改变该行为", "自动"),
     OptionMeta("自动分配着色器接口位置", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", false, "着色器输入输出块没写位置编号时按声明顺序补上", "自动"),
     OptionMeta("加宽 16 位格式存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", false, "RGB565 这类 16 位纹理内部用 32 位存，避免精度丢失；显存翻倍", "自动（探测到驱动出问题才启用）"),
     OptionMeta("多次绘制模拟", "MOBILEGL_ESPRYT_MULTIDRAW_MODE", true, "Espryt 模拟 glMultiDrawElements 的方式：ext／multiindirect／indirect／basevertex／drawelements／compute", "自动"),
     OptionMeta("子组暂存原子读", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", false, "子组模拟的共享内存读取改用原子操作。Adreno 编译器会重排普通读取导致错数据", "自动（探测到才启用）"),
     OptionMeta("SFPEW 宽松建上下文", "SFPEW_RELAXED_CONTEXT", false, "创建 EGL 上下文时放宽校验，兼容不规范的启动器", "关"),
-    OptionMeta("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", false, "关掉 MultiDrawArrays 加速路径，个别驱动有 bug", "关"),
-    OptionMeta("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", false, "不用驱动自动生成多级纹理，自己算，规避个别驱动 bug", "关"),
+    OptionMeta("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", false, "关掉 MultiDrawArrays 加速路径，个别驱动存在问题", "关"),
+    OptionMeta("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", false, "不用驱动自动生成多级纹理，自己算，规避个别驱动的缺陷", "关"),
 )
 
 /** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
