@@ -99,6 +99,16 @@ fun ConfigScreen(
     }
     // 整页共用一份解析结果：原始文件每敲一个字只解析一次，供所有选项读取。
     val parsed = remember(text) { parseKeyValues(text) }
+    // 搜索过滤按 query 记忆，LazyColumn 重组时不重复扫索引。
+    val matches = remember(query) {
+        if (query.isBlank()) {
+            emptyList<OptionMeta>()
+        } else {
+            OPTION_INDEX.filter {
+                it.label.contains(query, true) || it.key.contains(query, true) || it.desc.contains(query, true)
+            }
+        }
+    }
     // 首帧只画标题与搜索框，内容延后一帧再组合，避免转场第一帧掉帧。
     val ready = rememberContentReady()
     LazyColumn(
@@ -122,11 +132,6 @@ fun ConfigScreen(
         )
         }
 
-        val matches = remember(query) {
-            if (query.isBlank()) emptyList() else OPTION_INDEX.filter {
-                it.label.contains(query, true) || it.key.contains(query, true) || it.desc.contains(query, true)
-            }
-        }
         if (query.isNotBlank()) {
             item {
             Spacer(Modifier.height(8.dp))
