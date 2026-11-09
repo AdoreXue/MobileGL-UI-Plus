@@ -45,9 +45,10 @@ jobs:
           else
             BASE=$(gradle --no-daemon -q -p android-plugin-ui :app:printBaseVersion | tail -1)
             echo "base version: $BASE"
-            DEVN=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-              --jq '[.[].tag_name | select(startswith("$BASE-Dev"))] | map(ltrimstr("$BASE-Dev") | ltrimstr(".") | tonumber) | max // 0' \
-              | awk '{print $1+1}')
+            # DevN 按本工作流在本分支上的成功构建次数递增（含本次运行），不依赖发 release
+            WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id')
+            DEVN=$(gh api "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
+              --jq '[.workflow_runs | length]')
             [ -z "$DEVN" ] && DEVN=1
             echo "DevN: $DEVN"
             echo "DISPLAY_VERSION=$BASE-Dev.$DEVN" >> "$GITHUB_ENV"
