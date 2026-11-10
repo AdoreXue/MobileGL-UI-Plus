@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +59,7 @@ fun SettingsTab(
     onOpenDrivers: () -> Unit,
     onOpenSelfTest: () -> Unit,
     onResetAll: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
     var backend by remember(config.backend) { mutableStateOf(config.backend) }
@@ -80,8 +83,9 @@ fun SettingsTab(
         setEnv("SFPEW_EGL", choice)
     }
     // 首帧只画标题，内容延后一帧组合：设置页卡片多，塞进转场第一帧会掉帧。
-    val ready = rememberContentReady()
+    val ready = rememberContentReady("settings")
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {

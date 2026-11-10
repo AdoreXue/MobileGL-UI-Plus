@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -60,6 +62,7 @@ fun ConfigScreen(
     status: RuntimeConfigWriter.Status,
     onStatusChanged: (RuntimeConfigWriter.Status) -> Unit,
     onMerge: (Map<String, String>) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -110,8 +113,10 @@ fun ConfigScreen(
         }
     }
     // 首帧只画标题与搜索框，内容延后一帧再组合，避免转场第一帧掉帧。
-    val ready = rememberContentReady()
+    // 本页内容要异步读 /sdcard 上的 runtime.conf，不能用缓存骨架：每次进入都等一帧。
+    val ready = rememberContentReady("config", warm = false)
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {

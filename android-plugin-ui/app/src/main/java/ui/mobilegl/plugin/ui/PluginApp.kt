@@ -26,6 +26,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -33,6 +34,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -200,6 +203,12 @@ fun MobileGlPluginApp() {
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
         val deviceContext = LocalContext.current
         var pendingRestart by remember { mutableStateOf(false) }
+        // 各页滚动位置由这里持有：AnimatedContent 切走会丢弃页面组合，
+        // 状态放在这里，切回来才能停在原来的位置，而不是跳回顶部。
+        val homeScroll = rememberScrollState()
+        val settingsListState = rememberLazyListState()
+        val infoListState = rememberLazyListState()
+        val configListState = rememberLazyListState()
 
         LaunchedEffect(Unit) {
             val rawLoaded = withContext(Dispatchers.IO) {
@@ -348,20 +357,24 @@ fun MobileGlPluginApp() {
             },
         ) { padding ->
             val layoutDir = LocalLayoutDirection.current
-            val outerPadding = if (dest == Dest.Home) {
-                PaddingValues(
-                    start = padding.calculateStartPadding(layoutDir),
-                    top = 0.dp,
-                    end = padding.calculateEndPadding(layoutDir),
-                    bottom = padding.calculateBottomPadding(),
-                )
-            } else padding
-            Box(Modifier.fillMaxSize().padding(outerPadding)) {
-                AnimatedContent(
-                    targetState = dest,
-                    transitionSpec = { pageTransition(initialState, targetState) },
-                    label = "screen",
-                ) { target ->
+            AnimatedContent(
+                targetState = dest,
+                transitionSpec = { pageTransition(initialState, targetState) },
+                label = "screen",
+            ) { target ->
+                // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
+                // 内边距按 target 算而不是按 dest 算，过渡中进出的两页各用各的，整页不会跳一下。
+                val outerPadding = if (target == Dest.Home) {
+                    PaddingValues(
+                        start = padding.calculateStartPadding(layoutDir),
+                        top = 0.dp,
+                        end = padding.calculateEndPadding(layoutDir),
+                        bottom = padding.calculateBottomPadding(),
+                    )
+                } else {
+                    padding
+                }
+                Box(Modifier.fillMaxSize().padding(outerPadding)) {
                     when (target) {
                         Dest.Home -> HomeTab(
                             config = config,
@@ -374,8 +387,10 @@ fun MobileGlPluginApp() {
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
                             onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
                             glInfo = glInfo,
+                            scrollState = homeScroll,
                         )
                         Dest.Settings -> SettingsTab(
+                            listState = settingsListState,
                             config = config,
                             runtime = runtimeStatus,
                             drivers = drivers,
@@ -392,6 +407,7 @@ fun MobileGlPluginApp() {
                             },
                         )
                         Dest.Info -> InfoTab(
+                            listState = infoListState,
                             config = config,
                             lastReport = report,
                             device = device,
@@ -434,6 +450,7 @@ fun MobileGlPluginApp() {
                             },
                         )
                         Dest.ConfigFile -> ConfigScreen(
+                            listState = configListState,
                             writer = runtimeWriter,
                             status = runtimeStatus,
                             onStatusChanged = { runtimeStatus = it },
@@ -587,6 +604,7 @@ private fun HomeTab(
     onOpenDrivers: () -> Unit,
     onOpenSelfTest: () -> Unit,
     glInfo: GlInfoProbe.Info?,
+    scrollState: ScrollState,
 ) {
     val context = LocalContext.current
     val info = device
@@ -605,7 +623,7 @@ private fun HomeTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // B: 渐变 Hero 区（含 Logo、版本、授权胶囊）
@@ -919,6 +937,7 @@ private fun InfoTab(
     runtime: RuntimeConfigWriter.Status,
     onOpenSelfTest: () -> Unit,
     onShareReport: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -926,8 +945,9 @@ private fun InfoTab(
         clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
         Toast.makeText(context, "已复制" + label, Toast.LENGTH_SHORT).show()
     }
-    val ready = rememberContentReady()
+    val ready = rememberContentReady("info")
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
     ) {
