@@ -143,11 +143,16 @@ private val TABS = listOf(
     Tab("信息", Icons.Filled.Info, Dest.Info),
 )
 
+/** 页面转场与上下栏共用这套时长，避免栏位先滑完、内容还在动。 */
+private const val PAGE_SLIDE_MS = 210
+private const val PAGE_FADE_IN_MS = 150
+private const val PAGE_FADE_OUT_MS = 110
+
 /** Same transition as MobileGlues 2.0 (MaterialApp.pageTransition). */
 private fun pageTransition(from: Dest, to: Dest): ContentTransform {
-    val fadeInSpec = tween<Float>(durationMillis = 150, easing = FastOutSlowInEasing)
-    val fadeOutSpec = tween<Float>(durationMillis = 110, easing = FastOutSlowInEasing)
-    val slide = tween<IntOffset>(durationMillis = 210, easing = FastOutSlowInEasing)
+    val fadeInSpec = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
+    val fadeOutSpec = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
+    val slide = tween<IntOffset>(durationMillis = PAGE_SLIDE_MS, easing = FastOutSlowInEasing)
 
     val tabOrdinal = { destination: Dest ->
         when (destination) {
@@ -169,7 +174,8 @@ private fun pageTransition(from: Dest, to: Dest): ContentTransform {
     return ContentTransform(
         targetContentEnter = slideInHorizontally(slide) { it / enterFraction } + fadeIn(fadeInSpec),
         initialContentExit = slideOutHorizontally(slide) { it / exitFraction } + fadeOut(fadeOutSpec),
-        sizeTransform = SizeTransform(clip = false),
+        // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
+        sizeTransform = SizeTransform(clip = true),
     )
 }
 
@@ -299,6 +305,10 @@ fun MobileGlPluginApp() {
         val tabIndex = TABS.indexOfFirst { it.dest == dest }
         val isSubPage = tabIndex < 0
 
+        val barSlide = tween<IntOffset>(durationMillis = PAGE_SLIDE_MS, easing = FastOutSlowInEasing)
+        val barFadeIn = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
+        val barFadeOut = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
+
         BackHandler(enabled = isSubPage) { dest = TABS[lastTab].dest }
         BackHandler(enabled = !isSubPage && dest != Dest.Home) { dest = Dest.Home }
 
@@ -308,8 +318,8 @@ fun MobileGlPluginApp() {
             topBar = {
                 AnimatedVisibility(
                     visible = isSubPage,
-                    enter = slideInVertically { -it } + fadeIn(),
-                    exit = slideOutVertically { -it } + fadeOut(),
+                    enter = slideInVertically(barSlide) { -it } + fadeIn(barFadeIn),
+                    exit = slideOutVertically(barSlide) { -it } + fadeOut(barFadeOut),
                 ) {
                     MobileGlTopBar(
                         title = when (dest) {
@@ -325,8 +335,8 @@ fun MobileGlPluginApp() {
             bottomBar = {
                 AnimatedVisibility(
                     visible = !isSubPage,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut(),
+                    enter = slideInVertically(barSlide) { it } + fadeIn(barFadeIn),
+                    exit = slideOutVertically(barSlide) { it } + fadeOut(barFadeOut),
                 ) {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         TABS.forEachIndexed { index, tab ->
@@ -349,8 +359,8 @@ fun MobileGlPluginApp() {
                 }
                 AnimatedVisibility(
                     visible = isSubPage,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut(),
+                    enter = slideInVertically(barSlide) { it } + fadeIn(barFadeIn),
+                    exit = slideOutVertically(barSlide) { it } + fadeOut(barFadeOut),
                 ) {
                     BottomBackCard(onClick = { dest = TABS[lastTab].dest })
                 }
