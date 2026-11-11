@@ -41,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 import ui.mobilegl.plugin.driver.DriverPack
@@ -63,7 +62,6 @@ fun SettingsTab(
 ) {
     val context = LocalContext.current
     var backend by remember(config.backend) { mutableStateOf(config.backend) }
-    var sfpewBackend by remember(config.env["SFPEW_EGL"]) { mutableStateOf(config.env["SFPEW_EGL"] ?: "libMobileGL.so") }
     var showResetDialog by remember { mutableStateOf(false) }
 
     fun env(key: String, fallback: String = "0"): String = config.env[key] ?: fallback
@@ -77,10 +75,6 @@ fun SettingsTab(
         val updated = LinkedHashMap(config.env)
         updated["MOBILEGL_BACKEND_TYPE"] = choice
         onSave(config.copy(backend = choice, env = updated))
-    }
-    fun setSfpewBackend(choice: String) {
-        sfpewBackend = choice
-        setEnv("SFPEW_EGL", choice)
     }
     // 首帧只画标题，内容延后一帧组合：设置页卡片多，塞进转场第一帧会掉帧。
     val ready = rememberContentReady("settings")
@@ -144,47 +138,12 @@ fun SettingsTab(
                     setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it))
                 }
             }
-        }
-            }
-            item {
-        SectionLabel("包装器")
-        InfoCard {
-            if (BuildConfig.SFPEW_BUNDLED) {
-                SwitchRow(
-                    title = "启用 SFPEW 包装器",
-                    subtitle = if (config.sfpewEnabled)
-                        "此选项可使 MobileGL 运行在 1.16.5 及以下版本；打开后不建议启动高版本。\n" +
-                            "libRendererProxy 会按配置选择 SFPEW，切换后重启游戏生效"
-                    else
-                        "当前配置按直连 MobileGL 使用；打开后可使 MobileGL 运行在 1.16.5 及以下版本，不建议启动高版本",
-                    checked = config.sfpewEnabled,
-                ) {
-                    val updatedEnv = LinkedHashMap(config.env)
-                    updatedEnv["SFPEW_ENABLED"] = if (it) "1" else "0"
-                    onSave(config.copy(sfpewEnabled = it, env = updatedEnv))
-                }
-                if (config.sfpewEnabled) {
-                    DividerLine()
-                    ValueChoiceRow(
-                        title = "SFPEW 后端",
-                        options = listOf("libMobileGL.so", "libEGL.so"),
-                        selected = sfpewBackend,
-                        onSelect = { setSfpewBackend(it) },
-                    )
-                    Text(
-                        "切换后端同样需重启游戏生效",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-            } else {
-                SwitchRow(
-                    title = "SFPEW 包装器",
-                    subtitle = "当前安装包是直连版，不含 libSimpleFPEWrapper.so",
-                    checked = false,
-                ) { }
-            }
+            DividerLine()
+            Text(
+                "SFPEW 包装器与它的细分项已移到「启动配置」页顶部的说明卡里。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
             }
             item {
