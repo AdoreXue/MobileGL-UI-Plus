@@ -129,6 +129,22 @@ fun ConfigScreen(
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("启动配置") }
+        // 搜索框放在最前：配置项多，找东西不用先滑过整张说明卡。
+        item {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            label = { Text("搜索配置项") },
+            placeholder = { Text("中文名或英文键名，如 帧在途 / FRAMES_IN_FLIGHT") },
+            singleLine = true,
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    TextButton(onClick = { query = "" }) { Text("清除") }
+                }
+            },
+        )
+        }
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
         item {
             Spacer(Modifier.height(4.dp))
@@ -166,7 +182,8 @@ fun ConfigScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),
                     )
-                    if (BuildConfig.SFPEW_BUNDLED) {
+                    // 控件等 runtime.conf 读完再画：否则先按模板渲染一遍，读完又跳一次。
+                    if (BuildConfig.SFPEW_BUNDLED && ready) {
                         Spacer(Modifier.height(6.dp))
                         OptionToggle(
                             "启用 SFPEW 包装器",
@@ -189,6 +206,9 @@ fun ConfigScreen(
                         OptionToggle("SFPEW 宽松建上下文", "SFPEW_RELAXED_CONTEXT", text, desc = "创建 EGL 上下文时放宽校验，兼容不规范的启动器", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_RELAXED_CONTEXT", onOff(it)) }
                         OptionToggle("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", text, desc = "关掉 MultiDrawArrays 加速路径，个别驱动存在问题", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
                         OptionToggle("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", text, desc = "不用驱动自动生成多级纹理，自己算，规避个别驱动的缺陷", default = "关", parsed = parsed) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
+                    } else if (BuildConfig.SFPEW_BUNDLED) {
+                        Spacer(Modifier.height(6.dp))
+                        SkeletonCard(3)
                     } else {
                         Text(
                             "当前安装包是直连版，不含 libSimpleFPEWrapper.so，无法启用。",
@@ -199,23 +219,6 @@ fun ConfigScreen(
                     }
                 }
             }
-        }
-        if (ready) {
-        item {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            label = { Text("搜索配置项") },
-            placeholder = { Text("中文名或英文键名，如 帧在途 / FRAMES_IN_FLIGHT") },
-            singleLine = true,
-            trailingIcon = {
-                if (query.isNotBlank()) {
-                    TextButton(onClick = { query = "" }) { Text("清除") }
-                }
-            },
-        )
-        }
         }
 
         if (query.isNotBlank()) {
