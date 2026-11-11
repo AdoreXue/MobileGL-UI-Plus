@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -126,6 +128,46 @@ fun ConfigScreen(
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("启动配置") }
+        // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
+        item {
+            Spacer(Modifier.height(4.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    Text(
+                        "SFPEW 包装器是什么",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "给 1.16.5 及以下的老版 Minecraft 用的兼容层。老模组还在调固定管线指令" +
+                            "（glBegin、glMatrixMode 这一套），现代 GLES 驱动已经不提供。SFPEW 把这些调用" +
+                            "翻译成现代着色器调用，它本身不渲染，只负责把老接口接到下游后端。",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Text(
+                        "打开：游戏 → 代理 → SFPEW → MobileGL → GPU\n" +
+                            "关闭：游戏 → 代理 → MobileGL → GPU",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Text(
+                        "总开关在设置页「包装器」；下面「SFPEW 后端」一节是它的细分项。" +
+                            "玩 1.17 及以上不要打开，多包一层只会掉性能。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        }
         if (ready) {
         item {
         OutlinedTextField(
