@@ -66,8 +66,10 @@ fun ConfigScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // /sdcard 是 FUSE IO，组合期间同步读会卡首帧：先显示默认模板，后台加载真实内容。
+    // /sdcard 是 FUSE IO，组合期间同步读会卡首帧：先显示骨架，后台读完真实文件再一次铺内容，
+    // 避免先显示模板、读完又整体替换的二次跳动。
     var text by remember { mutableStateOf(DEFAULT_CONFIG) }
+    var loaded by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -76,6 +78,7 @@ fun ConfigScreen(
     LaunchedEffect(Unit) {
         val shared = withContext(Dispatchers.IO) { writer.readShared() }
         if (shared != null) text = shared
+        loaded = true
     }
     fun reload() {
         busy = true
@@ -112,15 +115,18 @@ fun ConfigScreen(
             }
         }
     }
-    // 首帧只画标题与搜索框，内容延后一帧再组合，避免转场第一帧掉帧。
-    // 本页内容要异步读 /sdcard 上的 runtime.conf，不能用缓存骨架：每次进入都等一帧。
-    val ready = rememberContentReady("config", warm = false)
+    // 骨架持续到 runtime.conf 读取完成：一步显示真实内容，不经过模板中间态。
+    val ready = loaded
+    // 每次进入（重新组合）时列表回到顶部：骨架与内容高度差异大，
+    // 保留旧滚动位置会落在内容区中间，看起来像"进了半个页面"。
+    LaunchedEffect(Unit) { listState.scrollToItem(0) }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("启动配置") }
+        if (ready) {
         item {
         OutlinedTextField(
             value = query,
@@ -135,6 +141,7 @@ fun ConfigScreen(
                 }
             },
         )
+        }
         }
 
         if (query.isNotBlank()) {

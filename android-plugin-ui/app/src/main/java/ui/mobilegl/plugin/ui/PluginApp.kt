@@ -164,11 +164,13 @@ private fun pageTransition(from: Dest, to: Dest): ContentTransform {
     }
     val fromOrdinal = tabOrdinal(from)
     val toOrdinal = tabOrdinal(to)
+    // 二级页收窄到 1/6 屏：之前进二级页要滑 1/9+1/14 屏（约 25% 宽度）加长淡入，
+    // 看起来是"飘"进来。距离短了以后和返回的方向感都更干脆。
     val (enterFraction, exitFraction) = when {
-        toOrdinal < 0 -> 9 to -14
-        fromOrdinal < 0 -> -14 to 9
-        fromOrdinal >= 0 && toOrdinal > fromOrdinal -> 9 to -9
-        else -> -9 to 9
+        toOrdinal < 0 -> 6 to -6
+        fromOrdinal < 0 -> -6 to 6
+        fromOrdinal >= 0 && toOrdinal > fromOrdinal -> 6 to -6
+        else -> -6 to 6
     }
 
     return ContentTransform(
