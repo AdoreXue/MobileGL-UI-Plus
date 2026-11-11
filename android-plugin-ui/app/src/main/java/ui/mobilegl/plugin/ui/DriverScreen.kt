@@ -112,7 +112,7 @@ fun DriverScreen(
             InfoRow("SFPEW 包装器", if (sfpewBundled) "已内置" else "未内置（可用外部库页导入自检）")
             InfoRow("后端库", "libMobileGL.so（APK 内置）")
             Text(
-                "说明：启用外部库后，libRendererProxy.so 会在启动游戏时按配置加载（memfd），驱动自检也用它。",
+                "说明：启用外部库后，libRendererProxy.so 会在启动游戏时按配置加载（memfd），驱动自检同样使用该库。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -120,27 +120,27 @@ fun DriverScreen(
 
         SectionCard("外部库（单个 .so）") {
             Text(
-                "单独替换渲染链上的某一个库，不用重装 APK。只接受两种：",
+                "用于单独替换渲染链中的某个库，无需重新安装 APK。仅接受以下两种文件：",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))
             InfoRow("libMobileGL.so", "MobileGL 渲染器核心（Magma / Espryt）")
-            InfoRow("libSimpleFPEWrapper.so", "SFPEW 包装器，老版本固定管线兼容层")
+            InfoRow("libSimpleFPEWrapper.so", "SFPEW 包装器，旧版本固定管线兼容层")
             Spacer(Modifier.height(6.dp))
             Text(
-                "导入要求：AArch64 64 位小端 ELF，不超过 128 MiB，且包含 MobileGL 的 Driver POST / EGL 符号。",
+                "导入要求：AArch64 64 位小端 ELF，体积不超过 128 MiB，且包含 MobileGL 的 Driver POST 与 EGL 符号。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "生效范围：点选启用后，驱动自检直接使用该库；启动游戏时由 libRendererProxy.so 经 memfd 加载它。" +
-                    "未启用时一律用 APK 内置的那一份。",
+                "生效范围：选定启用后，驱动自检直接使用该库；启动游戏时由 libRendererProxy.so 经 memfd 加载。" +
+                    "未启用时一律使用 APK 内置的副本。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
             Text(
-                "用途：官方 CI 出了新版本想先试试、或怀疑当前核心库有问题要换成旧版对照时用。",
+                "适用场景：需要先试用官方 CI 的新版本，或需替换为旧版本以对照排查当前核心库的问题。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -182,27 +182,27 @@ fun DriverScreen(
 
         SectionCard("驱动包（Vulkan 驱动 · 未完善）") {
             Text(
-                "一个 zip 包，根目录带 driver.json 清单，里面装的是第三方 Vulkan 驱动，主要是给 Mali GPU 用的 " +
-                    "Mesa PanVK。系统驱动有问题时，可以换成别人编译好的版本。",
+                "该包为 zip 格式，根目录含 driver.json 清单，内容为第三方 Vulkan 驱动，主要为适用于 Mali GPU 的 " +
+                    "Mesa PanVK。系统驱动存在问题时，可替换为他人编译的版本。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "与外部库的区别：驱动包位于 MobileGL 之下，替换的是系统 Vulkan 驱动；" +
-                    "外部库替换的是 MobileGL 自身。",
+                "与外部库的区别：驱动包位于 MobileGL 之下，用于替换系统 Vulkan 驱动；" +
+                    "外部库用于替换 MobileGL 自身。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "导入时校验清单字段与库文件完整性；kind 为 vulkan-icd 的包会生成 ICD 配置文件，" +
-                    "让 Vulkan loader 能找到它。",
+                "导入时校验清单字段与库文件完整性；kind 为 vulkan-icd 的包将生成 ICD 配置文件，" +
+                    "供 Vulkan loader 定位该驱动。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
             Text(
-                "当前限制：还没接通 PanVK 的 loader 接入，所以激活驱动包只会完成安装、校验和 ICD 生成，" +
-                    "不会改变实际渲染。现在导入只是提前准备。",
+                "当前限制：PanVK 的 loader 接入尚未完成，激活驱动包仅完成安装、校验与 ICD 生成，" +
+                    "不会改变实际渲染路径。此时导入属于预先准备。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp),

@@ -783,14 +783,14 @@ private fun HomeTab(
                 drivers.size.toString(),
                 onOpenDrivers,
                 Modifier.weight(1f),
-                hint = "第三方 Vulkan 驱动",
+                hint = "第三方 Vulkan 驱动包",
             )
             ActionStatCard(
                 "外部库",
                 externalCount.toString(),
                 onOpenDrivers,
                 Modifier.weight(1f),
-                hint = "替换单个 .so",
+                hint = "替换单个渲染库文件",
             )
         }
 
