@@ -118,11 +118,32 @@ fun DriverScreen(
             )
         }
 
-        SectionCard("外部 .so（更新渲染器 / SFPEW）") {
+        SectionCard("外部库（单个 .so）") {
             Text(
-                "可导入官方 Action 构建的 libMobileGL.so，或 libSimpleFPEWrapper.so。会校验 arm64 ELF。" +
-                    "启用后：启动游戏时由 libRendererProxy.so 读取所选库；驱动自检也用它。",
+                "单独替换渲染链上的某一个库，不用重装 APK。只接受两种：",
                 style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            InfoRow("libMobileGL.so", "MobileGL 渲染器核心（Magma / Espryt）")
+            InfoRow("libSimpleFPEWrapper.so", "SFPEW 包装器，老版本固定管线兼容层")
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "导入要求：AArch64 64 位小端 ELF，不超过 128 MiB，且包含 MobileGL 的 Driver POST / EGL 符号。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "生效范围：点选启用后，驱动自检直接使用该库；启动游戏时由 libRendererProxy.so 经 memfd 加载它。" +
+                    "未启用时一律用 APK 内置的那一份。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "用途：官方 CI 出了新版本想先试试、或怀疑当前核心库有问题要换成旧版对照时用。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,10 +180,32 @@ fun DriverScreen(
             }
         }
 
-        SectionCard("驱动包（PanVK / Vulkan ICD · 未完善）") {
+        SectionCard("驱动包（Vulkan 驱动 · 未完善）") {
             Text(
-                "带 driver.json 的 zip：安装、校验、生成 ICD。功能尚未完善，PanVK loader 接入前不会影响游戏。",
+                "一个 zip 包，根目录带 driver.json 清单，里面装的是第三方 Vulkan 驱动，主要是给 Mali GPU 用的 " +
+                    "Mesa PanVK。系统驱动有问题时，可以换成别人编译好的版本。",
                 style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "与外部库的区别：驱动包位于 MobileGL 之下，替换的是系统 Vulkan 驱动；" +
+                    "外部库替换的是 MobileGL 自身。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "导入时校验清单字段与库文件完整性；kind 为 vulkan-icd 的包会生成 ICD 配置文件，" +
+                    "让 Vulkan loader 能找到它。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "当前限制：还没接通 PanVK 的 loader 接入，所以激活驱动包只会完成安装、校验和 ICD 生成，" +
+                    "不会改变实际渲染。现在导入只是提前准备。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp),
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

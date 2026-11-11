@@ -777,8 +777,21 @@ private fun HomeTab(
 
         // ② 驱动包 / 外部库可点卡片
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            ActionStatCard("驱动包", drivers.size.toString(), onOpenDrivers, Modifier.weight(1f))
-            ActionStatCard("外部库", externalCount.toString(), onOpenDrivers, Modifier.weight(1f))
+            // 两张卡一行放不下完整解释，副标题只点到为止，详情在驱动管理页。
+            ActionStatCard(
+                "驱动包",
+                drivers.size.toString(),
+                onOpenDrivers,
+                Modifier.weight(1f),
+                hint = "第三方 Vulkan 驱动",
+            )
+            ActionStatCard(
+                "外部库",
+                externalCount.toString(),
+                onOpenDrivers,
+                Modifier.weight(1f),
+                hint = "替换单个 .so",
+            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -933,7 +946,13 @@ private fun StatusBadge(text: String) {
 }
 
 @Composable
-private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ActionStatCard(
+    label: String,
+    count: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String = "点按管理",
+) {
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
@@ -948,7 +967,7 @@ private fun ActionStatCard(label: String, count: String, onClick: () -> Unit, mo
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text("点按管理", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
