@@ -542,10 +542,41 @@ private data class DeviceInfo(
     val memory: String,
     val memoryAvail: String,
     val soc: String,
+    val socVendor: String,
+    val socDetail: String,
     val android: String,
     val coreVersion: String,
     val coreCommit: String?,
 )
+
+/** 读文件首行，权限不足或不存在时返回 null。 */
+private fun readFirstLine(path: String): String? = runCatching {
+    java.io.File(path).takeIf { it.canRead() }?.readText()?.lineSequence()?.firstOrNull()?.trim()
+}.getOrNull()?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
+
+private fun readSocMachine(): String? = readFirstLine("/sys/devices/soc0/machine")
+
+/**
+ * CPU 规格摘要：核心数与最高主频。SoC 型号往往只有一个代号，
+ * 补上这两项才能看出是哪一档芯片。
+ */
+private fun socDetailText(): String {
+    val cores = Runtime.getRuntime().availableProcessors()
+    var maxKhz = 0L
+    for (i in 0 until cores) {
+        val f = readFirstLine("/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq")?.toLongOrNull() ?: continue
+        if (f > maxKhz) maxKhz = f
+    }
+    if (maxKhz == 0L) {
+        readFirstLine("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")?.toLongOrNull()?.let { maxKhz = it }
+    }
+    return buildString {
+        append(cores).append(" 核")
+        if (maxKhz > 0) {
+            append(" · 最高 ").append(String.format(Locale.US, "%.2f", maxKhz / 1_000_000.0)).append(" GHz")
+        }
+    }
+}
 
 /** 渲染器字符串里保留 "Adreno (TM) 740" 这类名字，只去掉末尾的后端/版本尾巴。 */
 private fun cleanRendererName(raw: String): String {
@@ -592,16 +623,25 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
     val memoryAvail = String.format(Locale.US, "%.1f GB 可用", mi.availMem / 1024.0 / 1024.0 / 1024.0)
-    val soc = if (Build.VERSION.SDK_INT >= 31) {
-        // SOC_MODEL 未知时返回 "unknown"，一并过滤
+    // SoC 型号：SOC_MODEL 最准；部分机型只填 HARDWARE（如 "qcom"），
+    // 再退到 /sys/devices/soc0/machine 与 cpuinfo。
+    val socModel = if (Build.VERSION.SDK_INT >= 31) {
         Build.SOC_MODEL?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
-            ?: Build.HARDWARE?.takeIf { it.isNotBlank() }
-            ?: "未知"
     } else {
-        Build.HARDWARE?.takeIf { it.isNotBlank() } ?: "未知"
+        null
     }
+    val soc = socModel
+        ?: Build.HARDWARE?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
+        ?: readSocMachine()
+        ?: "未知"
+    val socVendor = if (Build.VERSION.SDK_INT >= 31) {
+        Build.SOC_MANUFACTURER?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
+    } else {
+        null
+    } ?: readFirstLine("/sys/devices/soc0/family") ?: ""
+    val socDetail = socDetailText()
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
-    return DeviceInfo(gpu, gles, vulkan, memory, memoryAvail, soc, android, coreVersion, coreCommit)
+    return DeviceInfo(gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android, coreVersion, coreCommit)
 }
 
 @Composable
@@ -1009,7 +1049,15 @@ private fun InfoTab(
         // A2: 设备信息完整卡
         item {
         InfoCard {
-            InfoRowWide("SoC", device.soc)
+            InfoRow("SoC", device.soc)
+            if (device.socVendor.isNotBlank() || device.socDetail.isNotBlank()) {
+                InfoRow(
+                    "规格",
+                    listOf(device.socVendor, device.socDetail)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · "),
+                )
+            }
             InfoRow("GPU", device.gpu)
             InfoRow("内存", device.memory + " · " + device.memoryAvail)
             InfoRow("系统", device.android)
@@ -1233,15 +1281,6 @@ fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(label, modifier = Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-    }
-}
-
-/** 长值行：标签在上、值独占一行完整显示，用于 SoC 这类可能很长的字段。 */
-@Composable
-fun InfoRowWide(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
