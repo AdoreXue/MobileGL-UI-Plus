@@ -14,6 +14,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -98,6 +99,8 @@ internal fun InfoTab(
     var glMore by remember { mutableStateOf(false) }
     val clusterText = device.socExtra.clusters.ifBlank { device.socDetail }
     val activeName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置"
+    val kernelText = if (device.coreVersion.isBlank()) "未知" else "v" + device.coreVersion +
+        (device.coreCommit?.take(7)?.let { " · " + it } ?: "")
     val busy = device.socExtra.gpuBusy
 
     LazyColumn(
@@ -281,12 +284,117 @@ internal fun InfoTab(
             }
             item { SectionLabel("关于") }
             item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Row {
+                            Text(
+                                "MobileGL_UI_",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "Plus",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Text(
+                            "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
+                            modifier = Modifier.padding(top = 4.dp),
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    ThinDivider()
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+                        InfoLine(UiIcons.Code, "开发者", "AdoreXue", mono = false) { copy("开发者", "AdoreXue") }
+                        ThinDivider()
+                        InfoLine(UiIcons.Chip, "内核版本", kernelText, mono = false) { copy("内核版本", kernelText) }
+                        ThinDivider()
+                        InfoLine(UiIcons.Layers, "开源许可证", "GNU LGPL-3.0", mono = false) {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.gnu.org/licenses/lgpl-3.0.txt")),
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        "© AdoreXue · 以 GNU LGPL-3.0 发布",
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 14.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            item {
+                Card(
+                    modifier = Modifier.padding(top = 10.dp).fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus/releases"),
+                                ),
+                            )
+                        }
+                    },
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "检查更新",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "›",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
+            }
+            item { SectionLabel("致谢") }
+            item {
                 InfoCard {
-                    InfoLine(null, "开发者", "AdoreXue", mono = false) { }
+                    CreditLine("MobileGL", "渲染核心，DirectGLES 与 DirectVulkan 后端")
                     ThinDivider()
-                    InfoLine(null, "开源许可证", "GNU LGPL-3.0", mono = false) { }
+                    CreditLine("SimpleFPEWrapper", "MC 1.16.5 及以下的 FPE 包装层")
                     ThinDivider()
-                    InfoLine(null, "兼容启动器", "Pojav 系（FCL、Zalith 等）", mono = false) { }
+                    CreditLine("Mesa PanVK", "部分驱动包使用的开源 Vulkan 实现")
+                    ThinDivider()
+                    CreditLine("PojavLauncher 系启动器", "FCL、Zalith 等，经 RendererPlugin 加载")
+                }
+            }
+            item { SectionLabel("第三方组件") }
+            item {
+                InfoCard {
+                    CreditLine("Jetpack Compose", "Apache-2.0")
+                    ThinDivider()
+                    CreditLine("Kotlin 标准库与协程", "Apache-2.0")
+                    ThinDivider()
+                    CreditLine("AndroidX Core", "Apache-2.0")
                 }
             }
             item {
@@ -568,6 +676,20 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
             }
             Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** 致谢与组件行：名称加一句说明，不带点击。 */
+@Composable
+private fun CreditLine(title: String, subtitle: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        Text(
+            subtitle,
+            modifier = Modifier.padding(top = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
