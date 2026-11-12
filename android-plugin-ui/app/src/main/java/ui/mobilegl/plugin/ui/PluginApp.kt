@@ -893,31 +893,6 @@ private fun StatusBadge(text: String) {
     }
 }
 
-    label: String,
-    count: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    hint: String = "点按管理",
-) {
-    Card(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        onClick = onClick,
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(count, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
 
 @Composable
 private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
