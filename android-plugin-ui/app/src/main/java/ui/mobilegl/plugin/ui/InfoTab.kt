@@ -52,8 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -74,7 +74,7 @@ import ui.mobilegl.plugin.selftest.SelfTestResult
  * 剩下的明细按「芯片 / 图形与系统 / 运行环境」分组，冷门项折进「更多」。
  */
 @Composable
-fun InfoTab(
+internal fun InfoTab(
     config: PluginConfig,
     lastReport: SelfTestResult?,
     device: DeviceInfo,
@@ -97,6 +97,7 @@ fun InfoTab(
     var chipMore by remember { mutableStateOf(false) }
     var glMore by remember { mutableStateOf(false) }
     val clusterText = device.socExtra.clusters.ifBlank { device.socDetail }
+    val activeName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置"
     val busy = device.socExtra.gpuBusy
 
     LazyColumn(
@@ -246,9 +247,9 @@ fun InfoTab(
                     InfoLine(
                         UiIcons.Chip,
                         "激活驱动",
-                        drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置",
+                        activeName,
                         mono = false,
-                    ) { copy("激活驱动", config.activeDriverId.ifBlank { "内置" }) }
+                    ) { copy("激活驱动", activeName) }
                     ThinDivider()
                     InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false) { }
                     ThinDivider()
