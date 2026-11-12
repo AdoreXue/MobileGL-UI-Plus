@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -52,6 +53,7 @@ fun DriverScreen(
     onActivate: (DriverPack) -> Unit,
     onClearActive: () -> Unit,
     onActivateLibrary: (ExternalLibrary?) -> Unit,
+    scrollState: ScrollState = rememberScrollState(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -96,13 +98,20 @@ fun DriverScreen(
         }.getOrDefault(false)
     }
 
+    val ready = rememberContentReady("drivers")
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .verticalScroll(scrollState)
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        if (!ready) {
+            SkeletonCard(4)
+            SkeletonCard(3)
+            SkeletonCard(4)
+            return@Column
+        }
         SectionCard("渲染器组件") {
             Text(
                 "本 APK 的渲染链：启动器 → libRendererProxy.so →（SFPEW 包装器 或 直连）→ libMobileGL.so。",

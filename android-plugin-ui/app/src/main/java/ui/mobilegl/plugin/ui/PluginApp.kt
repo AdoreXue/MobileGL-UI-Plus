@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
@@ -214,6 +215,8 @@ fun MobileGlPluginApp() {
         // 各页滚动位置由这里持有：AnimatedContent 切走会丢弃页面组合，
         // 状态放在这里，切回来才能停在原来的位置，而不是跳回顶部。
         val homeScroll = rememberScrollState()
+        val driversScroll = rememberScrollState()
+        val selfTestListState = rememberLazyListState()
         val renderListState = rememberLazyListState()
         val settingsListState = rememberLazyListState()
         val infoListState = rememberLazyListState()
@@ -360,13 +363,6 @@ fun MobileGlPluginApp() {
                         }
                     }
                 }
-                AnimatedVisibility(
-                    visible = isSubPage,
-                    enter = slideInVertically(barSlide) { it } + fadeIn(barFadeIn),
-                    exit = slideOutVertically(barSlide) { it } + fadeOut(barFadeOut),
-                ) {
-                    BottomBackCard(onClick = { dest = TABS[lastTab].dest })
-                }
             },
         ) { padding ->
             val layoutDir = LocalLayoutDirection.current
@@ -440,10 +436,10 @@ fun MobileGlPluginApp() {
                             drivers = drivers,
                             externalCount = externalLibraries.size,
                             runtime = runtimeStatus,
-                            onOpenSelfTest = { lastTab = 2; dest = Dest.SelfTest },
                             onShareReport = { shareReport(context, selfTestRepository) },
                         )
                         Dest.Drivers -> DriverScreen(
+                            scrollState = driversScroll,
                             repository = driverRepository,
                             externalRepository = externalRepository,
                             drivers = drivers,
@@ -494,6 +490,7 @@ fun MobileGlPluginApp() {
                             },
                         )
                         Dest.SelfTest -> SelfTestScreen(
+                            listState = selfTestListState,
                             repository = selfTestRepository,
                             config = config,
                             latest = report,
@@ -739,7 +736,7 @@ private fun HomeTab(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(Modifier.width(8.dp))
-                    StatusBadge(if (config.backend == "DirectVulkan") "Vulkan" else "GLES")
+                    StatusPill(if (config.backend == "DirectVulkan") "Vulkan" else "GLES", MaterialTheme.colorScheme.primary)
                 }
                 if (info.coreVersion != BuildConfig.VERSION_NAME) {
                     Text(
@@ -878,23 +875,6 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
 
 
 @Composable
-private fun StatusBadge(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(50),
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-        )
-    }
-}
-
-
-@Composable
 private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
     Surface(
         color = if (authorized) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer,
@@ -927,7 +907,6 @@ private fun InfoTab(
     drivers: List<DriverPack>,
     externalCount: Int,
     runtime: RuntimeConfigWriter.Status,
-    onOpenSelfTest: () -> Unit,
     onShareReport: () -> Unit,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -948,9 +927,9 @@ private fun InfoTab(
             item {
                 Spacer(Modifier.height(4.dp))
                 SkeletonCard(3)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(18.dp))
                 SkeletonCard(2)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(18.dp))
                 SkeletonCard(4)
             }
         } else {
@@ -984,9 +963,7 @@ private fun InfoTab(
             }
         }
         }
-        item { Spacer(Modifier.height(14.dp)) }
-
-        // A2: 设备信息完整卡
+        item { SectionLabel("设备") }
         item {
         InfoCard {
             InfoRow("SoC", device.soc)
@@ -1005,65 +982,7 @@ private fun InfoTab(
             InfoRow("Vulkan", device.vulkan)
         }
         }
-        item { Spacer(Modifier.height(14.dp)) }
-
-        // B: 自检状态（与主页共用 reportHealth 判定，唯一的自检入口）
-        val backends = lastReport?.backends.orEmpty()
-        val health = reportHealth(lastReport)
-        item {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = when (health) {
-                    ReportHealth.Ok -> MaterialTheme.colorScheme.secondaryContainer
-                    ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiaryContainer
-                    ReportHealth.Fail, ReportHealth.Error -> MaterialTheme.colorScheme.errorContainer
-                    ReportHealth.None -> MaterialTheme.colorScheme.surfaceContainer
-                }
-            ),
-            onClick = onOpenSelfTest,
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(10.dp).clip(RoundedCornerShape(50))
-                            .background(
-                                when (health) {
-                                    ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    ReportHealth.Ok -> MaterialTheme.colorScheme.primary
-                                    ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiary
-                                    else -> MaterialTheme.colorScheme.error
-                                }
-                            ),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        reportHealthTitle(lastReport),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-                if (backends.isNotEmpty()) {
-                    Text(
-                        backends.joinToString(" · ") { it.backend + " " + it.verdict },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-                Text(
-                    if (health == ReportHealth.None) "点按运行完整自检" else "点按查看报告 / 重测",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-        }
-        }
-        item { Spacer(Modifier.height(14.dp)) }
-
-        // C: 运行环境卡
+        item { SectionLabel("运行环境") }
         item {
         InfoCard {
             InfoRow("渲染后端", config.backend)
@@ -1073,9 +992,7 @@ private fun InfoTab(
             InfoRow("共享配置", if (runtime.sharedWritten) "runtime.conf 已写入（启动器可读）" else "仅私有副本：" + (runtime.reason ?: "共享路径不可写"))
         }
         }
-        item { Spacer(Modifier.height(14.dp)) }
-
-        // D: 链接卡片化
+        item { SectionLabel("链接") }
         item {
         LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/AdoreXue/MobileGL-UI-Plus") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus")))
@@ -1086,11 +1003,7 @@ private fun InfoTab(
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")))
         }
         }
-        item { Spacer(Modifier.height(14.dp)) }
-
-        item {
-        SectionLabel("关于")
-        }
+        item { SectionLabel("关于") }
         item {
         InfoCard {
             InfoRow("开发者", "AdoreXue")
@@ -1098,7 +1011,7 @@ private fun InfoTab(
             InfoRow("兼容启动器", "Pojav 系（FCL、Zalith 等）")
         }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(18.dp)) }
 
         // E: 分享按钮升级（分享内容带版本号）
         item {
@@ -1127,27 +1040,6 @@ private fun InfoTab(
             )
         }
         }
-        }
-    }
-}
-
-@Composable
-private fun BottomBackCard(onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-            onClick = onClick,
-        ) {
-            Text(
-                "← 返回",
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                textAlign = TextAlign.Center,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.bodyLarge,
-            )
         }
     }
 }
@@ -1219,7 +1111,14 @@ fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
 @Composable
 fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(label, modifier = Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // 标签只兜底最小宽度：短标签与其它行对齐，长标签（如 .so 文件名）不被挤成多行。
+        Text(
+            label,
+            modifier = Modifier.widthIn(min = 96.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(12.dp))
         Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
