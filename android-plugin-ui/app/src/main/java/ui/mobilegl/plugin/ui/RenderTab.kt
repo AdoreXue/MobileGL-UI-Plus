@@ -2,7 +2,6 @@
 package ui.mobilegl.plugin.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -65,7 +63,6 @@ fun RenderTab(
         updated["MOBILEGL_BACKEND_TYPE"] = choice
         onSave(config.copy(backend = choice, env = updated))
     }
-    val health = reportHealth(report)
     val reveal = rememberContentReveal(ready)
     LazyColumn(
         state = listState,
@@ -148,51 +145,12 @@ fun RenderTab(
         }
         item {
             SectionLabel("驱动自检")
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(
-                    containerColor = when (health) {
-                        ReportHealth.Ok -> MaterialTheme.colorScheme.secondaryContainer
-                        ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiaryContainer
-                        ReportHealth.Fail, ReportHealth.Error -> MaterialTheme.colorScheme.errorContainer
-                        ReportHealth.None -> MaterialTheme.colorScheme.surfaceContainer
-                    }
-                ),
-            ) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    Text(
-                        if (probing) "正在运行驱动自检…" else reportHealthTitle(report),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    val backends = report?.backends.orEmpty()
-                    if (backends.isNotEmpty()) {
-                        Text(
-                            backends.joinToString(" · ") { it.backend + " " + it.verdict },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    } else if (!probing) {
-                        Text(
-                            "还没有自检结果。自检会加载 libMobileGL.so 并枚举当前驱动。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 10.dp),
-                    ) {
-                        OutlinedButton(enabled = !probing, onClick = onRunSelfTest) {
-                            Text(if (report == null) "运行自检" else "重新自检")
-                        }
-                        OutlinedButton(onClick = onOpenSelfTest) { Text("完整报告") }
-                    }
-                }
-            }
+            SelfTestCard(
+                report = report,
+                probing = probing,
+                onRunSelfTest = onRunSelfTest,
+                onOpenReport = onOpenSelfTest,
+            )
         }
         item {
             SectionLabel("组件")

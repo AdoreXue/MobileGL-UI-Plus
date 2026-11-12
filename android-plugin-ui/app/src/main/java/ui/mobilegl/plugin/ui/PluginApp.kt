@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
@@ -373,6 +372,15 @@ fun MobileGlPluginApp() {
                             probing = probing,
                             device = device,
                             onOpenRender = { lastTab = 1; dest = Dest.Render },
+                            onRunSelfTest = {
+                                scope.launch {
+                                    probing = true
+                                    report = withContext(Dispatchers.IO) {
+                                        selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
+                                    }
+                                    probing = false
+                                }
+                            },
                             onOpenSelfTest = { lastTab = 0; dest = Dest.SelfTest },
                             scrollState = homeScroll,
                         )
@@ -654,6 +662,7 @@ private fun HomeTab(
     probing: Boolean,
     device: DeviceInfo,
     onOpenRender: () -> Unit,
+    onRunSelfTest: () -> Unit,
     onOpenSelfTest: () -> Unit,
     scrollState: ScrollState,
 ) {
@@ -708,7 +717,12 @@ private fun HomeTab(
         Spacer(Modifier.height(12.dp))
 
         // 首页只保留状态与渲染器两块：设备详情在「信息」页，组件的增删在「渲染」页。
-        HealthCard(report, onOpenSelfTest)
+        SelfTestCard(
+            report = report,
+            probing = probing,
+            onRunSelfTest = onRunSelfTest,
+            onOpenReport = onOpenSelfTest,
+        )
         Spacer(Modifier.height(18.dp))
 
         // ③ 渲染器卡片 + 状态徽标
@@ -811,59 +825,6 @@ internal fun reportHealthTitle(report: SelfTestResult?): String = when (reportHe
     ReportHealth.Ok -> "驱动自检：全部通过"
 }
 
-@Composable
-private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
-    val health = reportHealth(report)
-    val ok = health == ReportHealth.Ok
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                report == null -> MaterialTheme.colorScheme.surfaceContainer
-                ok -> MaterialTheme.colorScheme.secondaryContainer
-                else -> MaterialTheme.colorScheme.tertiaryContainer
-            }
-        ),
-        onClick = onOpenSelfTest,
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier.size(10.dp).clip(RoundedCornerShape(50))
-                    .background(
-                    when (health) {
-                        ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        ReportHealth.Ok -> MaterialTheme.colorScheme.primary
-                        ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.error
-                    }
-                )
-            )
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(
-                    reportHealthTitle(report),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    when (health) {
-                        ReportHealth.None -> "点按运行完整自检"
-                        ReportHealth.Ok -> "点按查看报告 / 重测"
-                        ReportHealth.Degraded -> "部分能力降级，点按查看详情"
-                        ReportHealth.Fail -> "存在失败项，点按查看详情"
-                        ReportHealth.Error -> "自检未完成，点按重试"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
 
 
 @Composable
@@ -934,7 +895,7 @@ private fun InfoTab(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             onClick = { copy("版本号", BuildConfig.FULL_VERSION_NAME) },
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp)) {
                 Text(
                     "MobileGL_UI_Plus",
                     style = MaterialTheme.typography.labelMedium,
@@ -967,8 +928,13 @@ private fun InfoTab(
                 "核心",
                 device.socExtra.clusters.ifBlank { device.socDetail },
             )
-            InfoRow("GPU", device.gpu + device.socExtra.gpuBusy.let { if (it.isBlank()) "" else " · 占用 " + it })
             if (device.socExtra.governor.isNotBlank()) InfoRow("调度", device.socExtra.governor)
+        }
+        }
+        item { SectionLabel("图形与系统") }
+        item {
+        InfoCard {
+            InfoRow("GPU", device.gpu + device.socExtra.gpuBusy.let { if (it.isBlank()) "" else " · 占用 " + it })
             InfoRow("内存", device.memory + " · " + device.memoryAvail)
             InfoRow("系统", device.android)
             InfoRow("OpenGL ES", device.gles)
@@ -992,6 +958,7 @@ private fun InfoTab(
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus")))
         }
         }
+        item { Spacer(Modifier.height(12.dp)) }
         item {
         LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")))
@@ -1087,33 +1054,42 @@ fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
     }
 }
 
+/** 子页沿用的分组写法：与主 tab 一样是「卡外小标题 + 白卡」，避免两套视觉。 */
 @Composable
 fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(10.dp))
-            content()
-        }
-    }
+    SectionLabel(title)
+    InfoCard(content)
 }
 
 @Composable
 fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        // 标签只兜底最小宽度：短标签与其它行对齐，长标签（如 .so 文件名）不被挤成多行。
-        Text(
-            label,
-            modifier = Modifier.widthIn(min = 96.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    // 标签列固定 96dp，保证同一张卡里所有值都从同一条竖线开始；
+    // 标签本身比这个宽度还长时（如 libSimpleFPEWrapper.so）改成上下两行，
+    // 免得把值挤到右侧只剩一小条、折成好几行。
+    if (label.length > 10) {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            Text(
+                label,
+                modifier = Modifier.width(96.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        }
     }
 }
 
