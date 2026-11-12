@@ -106,4 +106,40 @@ object UiIcons {
             curveTo(9f, 6f, 9f, 18f, 12f, 21f)
         }
     }
+
+    /** 芯片/CPU：外框 + 内部小方块。 */
+    val Chip: ImageVector by lazy {
+        build("Chip") {
+            moveTo(6f, 6f); lineTo(18f, 6f); lineTo(18f, 18f); lineTo(6f, 18f); close()
+            moveTo(9f, 9f); lineTo(15f, 9f); lineTo(15f, 15f); lineTo(9f, 15f); close()
+            moveTo(9f, 3f); lineTo(9f, 6f)
+            moveTo(15f, 3f); lineTo(15f, 6f)
+            moveTo(9f, 18f); lineTo(9f, 21f)
+            moveTo(15f, 18f); lineTo(15f, 21f)
+        }
+    }
+
+    /** 速度表：半圆 + 指针。 */
+    val Speed: ImageVector by lazy {
+        build("Speed") {
+            moveTo(4f, 17f)
+            curveTo(4f, 12f, 8f, 8f, 12f, 8f)
+            curveTo(16f, 8f, 20f, 12f, 20f, 17f)
+            moveTo(12f, 17f); lineTo(16f, 12f)
+        }
+    }
+
+    /** 勾选。 */
+    val Check: ImageVector by lazy {
+        build("Check") {
+            moveTo(5f, 13f); lineTo(10f, 18f); lineTo(19f, 7f)
+        }
+    }
+
+    /** 箭头展开/收起。 */
+    val Chevron: ImageVector by lazy {
+        build("Chevron") {
+            moveTo(9f, 7f); lineTo(15f, 12f); lineTo(9f, 17f)
+        }
+    }
 }

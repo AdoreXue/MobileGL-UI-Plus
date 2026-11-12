@@ -3,8 +3,6 @@ package ui.mobilegl.plugin.ui
 
 import android.app.ActivityManager
 import android.content.Context
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -28,8 +26,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -84,7 +80,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -92,7 +87,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,7 +106,6 @@ import ui.mobilegl.plugin.selftest.GlInfoProbe
 import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
 import java.util.Locale
-
 
 /** 一次性装载二级页与首页所需的磁盘数据，避免多次跨线程往返。 */
 private data class DriversData(
@@ -516,7 +509,6 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
     )
 }
 
-
 @Composable
 private fun MobileGlTheme(themeMode: String = "system", content: @Composable () -> Unit) {
     // Material 3 标准：Android 12+ 动态取色，低版本回退到标准 light/dark 方案
@@ -536,7 +528,7 @@ private fun MobileGlTheme(themeMode: String = "system", content: @Composable () 
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
-private data class DeviceInfo(
+internal data class DeviceInfo(
     val gpu: String,
     val gles: String,
     val vulkan: String,
@@ -775,29 +767,6 @@ private fun HomeTab(
     }
 }
 
-@Composable
-private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        onClick = onClick,
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
 /** 自检健康状态：主页与信息页共用，避免两处判断不一致。 */
 internal enum class ReportHealth { None, Error, Fail, Degraded, Ok }
 
@@ -825,8 +794,6 @@ internal fun reportHealthTitle(report: SelfTestResult?): String = when (reportHe
     ReportHealth.Ok -> "驱动自检：全部通过"
 }
 
-
-
 @Composable
 private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
     Surface(
@@ -846,161 +813,6 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(8.dp))
             Text(if (authorized) "已授权" else "未授权 · 点击授权", color = if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
-        }
-    }
-}
-
-
-
-@Composable
-private fun InfoTab(
-    config: PluginConfig,
-    lastReport: SelfTestResult?,
-    device: DeviceInfo,
-    drivers: List<DriverPack>,
-    externalCount: Int,
-    runtime: RuntimeConfigWriter.Status,
-    onShareReport: () -> Unit,
-    listState: LazyListState = rememberLazyListState(),
-) {
-    val context = LocalContext.current
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    fun copy(label: String, value: String) {
-        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
-        Toast.makeText(context, "已复制" + label, Toast.LENGTH_SHORT).show()
-    }
-    val ready = rememberContentReady("info")
-    val reveal = rememberContentReveal(ready)
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-    ) {
-        item { BigTitle("信息") }
-        if (!ready) {
-            item {
-                Spacer(Modifier.height(4.dp))
-                SkeletonCard(3)
-                Spacer(Modifier.height(18.dp))
-                SkeletonCard(2)
-                Spacer(Modifier.height(18.dp))
-                SkeletonCard(4)
-            }
-        } else {
-        // A: 版本 Hero 卡（点按复制版本号）
-        item {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = { copy("版本号", BuildConfig.FULL_VERSION_NAME) },
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp)) {
-                Text(
-                    "MobileGL_UI_Plus",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Text(
-                    "内部版本：" + BuildConfig.FULL_VERSION_NAME,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-        }
-        item { SectionLabel("设备") }
-        item {
-        InfoCard {
-            InfoRow("SoC", device.soc)
-            if (device.socExtra.socId.isNotBlank()) InfoRow("编号", device.socExtra.socId)
-            if (device.socVendor.isNotBlank()) InfoRow("厂商", device.socVendor)
-            // 核心构成优先用分簇信息（含小/中/大核与频率区间），读不到再退回核数与最高频率。
-            InfoRow(
-                "核心",
-                device.socExtra.clusters.ifBlank { device.socDetail },
-            )
-            if (device.socExtra.governor.isNotBlank()) InfoRow("调度", device.socExtra.governor)
-        }
-        }
-        item { SectionLabel("图形与系统") }
-        item {
-        InfoCard {
-            InfoRow("GPU", device.gpu + device.socExtra.gpuBusy.let { if (it.isBlank()) "" else " · 占用 " + it })
-            InfoRow("内存", device.memory + " · " + device.memoryAvail)
-            InfoRow("系统", device.android)
-            InfoRow("OpenGL ES", device.gles)
-            InfoRow("Vulkan", device.vulkan)
-            if (device.socExtra.features.isNotBlank()) InfoRow("特性", device.socExtra.features)
-        }
-        }
-        item { SectionLabel("运行环境") }
-        item {
-        InfoCard {
-            InfoRow("渲染后端", config.backend)
-            InfoRow("SFPEW 包装器", if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) "已启用" else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置")
-            InfoRow("激活驱动", drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置")
-            InfoRow("外部库", externalCount.toString() + " 个")
-            InfoRow("共享配置", if (runtime.sharedWritten) "runtime.conf 已写入（启动器可读）" else "仅私有副本：" + (runtime.reason ?: "共享路径不可写"))
-        }
-        }
-        item { SectionLabel("链接") }
-        item {
-        LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/AdoreXue/MobileGL-UI-Plus") {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus")))
-        }
-        }
-        item { Spacer(Modifier.height(12.dp)) }
-        item {
-        LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")))
-        }
-        }
-        item { SectionLabel("关于") }
-        item {
-        InfoCard {
-            InfoRow("开发者", "AdoreXue")
-            InfoRow("开源许可证", "GNU LGPL-3.0")
-            InfoRow("兼容启动器", "Pojav 系（FCL、Zalith 等）")
-        }
-        }
-        item { Spacer(Modifier.height(18.dp)) }
-
-        // E: 分享按钮升级（分享内容带版本号）
-        item {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-            onClick = {
-                val text = SelfTestRepository.readableReportOf(lastReport).ifBlank {
-                    "MobileGL_UI_Plus " + BuildConfig.VERSION_NAME + "\n（无自检数据）"
-                }
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }
-                context.startActivity(Intent.createChooser(send, "分享自检报告"))
-            },
-        ) {
-            Text(
-                "分享自检报告",
-                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
-                textAlign = TextAlign.Center,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
-        }
         }
     }
 }
@@ -1037,8 +849,6 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { content() }
     }
 }
-
-
 
 @Composable
 fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
