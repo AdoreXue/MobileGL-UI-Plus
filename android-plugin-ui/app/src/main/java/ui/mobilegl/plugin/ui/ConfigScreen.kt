@@ -7,6 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Environment
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -123,12 +130,13 @@ fun ConfigScreen(
     }
     // 骨架持续到 runtime.conf 读取完成：一步显示真实内容，不经过模板中间态。
     val ready = loaded
+    val reveal = rememberContentReveal(ready)
     // 每次进入（重新组合）时列表回到顶部：骨架与内容高度差异大，
     // 保留旧滚动位置会落在内容区中间，看起来像"进了半个页面"。
     LaunchedEffect(Unit) { listState.scrollToItem(0) }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("启动配置") }
@@ -224,28 +232,36 @@ fun ConfigScreen(
             }
         }
 
-        if (query.isNotBlank()) {
-            item {
-                Spacer(Modifier.height(8.dp))
-                SectionLabel("搜索结果（" + matches.size + "）")
-                InfoCard {
-                    if (matches.isEmpty()) {
-                        Text("没有匹配的配置项", style = MaterialTheme.typography.bodySmall)
-                    }
-                    matches.forEach { meta ->
-                        when {
-                            QUIRK_KEYS.contains(meta.key) ->
-                                OptionQuirk(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
-                                    text = setKey(text, meta.key, it)
-                                }
-                            meta.isText ->
-                                OptionText(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
-                                    text = setKey(text, meta.key, it)
-                                }
-                            else ->
-                                OptionToggle(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
-                                    text = setKey(text, meta.key, onOff(it))
-                                }
+        // 搜索结果常驻一个 item，用 AnimatedVisibility 淡入淡出：
+        // LazyColumn 的增删 item 没有动画，直接 if 会让整块突然出现。
+        item {
+            AnimatedVisibility(
+                visible = query.isNotBlank(),
+                enter = fadeIn(tween(110)) + expandVertically(tween(160)),
+                exit = fadeOut(tween(90)) + shrinkVertically(tween(140)),
+            ) {
+                Column {
+                    Spacer(Modifier.height(8.dp))
+                    SectionLabel("搜索结果（" + matches.size + "）")
+                    InfoCard {
+                        if (matches.isEmpty()) {
+                            Text("没有匹配的配置项", style = MaterialTheme.typography.bodySmall)
+                        }
+                        matches.forEach { meta ->
+                            when {
+                                QUIRK_KEYS.contains(meta.key) ->
+                                    OptionQuirk(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
+                                        text = setKey(text, meta.key, it)
+                                    }
+                                meta.isText ->
+                                    OptionText(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
+                                        text = setKey(text, meta.key, it)
+                                    }
+                                else ->
+                                    OptionToggle(meta.label, meta.key, text, desc = meta.desc, default = meta.default) {
+                                        text = setKey(text, meta.key, onOff(it))
+                                    }
+                            }
                         }
                     }
                 }

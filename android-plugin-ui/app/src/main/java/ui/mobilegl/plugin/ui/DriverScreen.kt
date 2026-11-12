@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -99,9 +100,11 @@ fun DriverScreen(
     }
 
     val ready = rememberContentReady("drivers")
+    val reveal = rememberContentReveal(ready)
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = reveal }
             .verticalScroll(scrollState)
             .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),

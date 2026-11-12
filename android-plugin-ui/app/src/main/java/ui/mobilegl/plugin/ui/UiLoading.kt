@@ -18,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +47,31 @@ fun rememberContentReady(tag: String = "", warm: Boolean = true): Boolean {
         ready = true
     }
     return ready
+}
+
+/**
+ * 骨架换成真实内容时的淡入 alpha。
+ *
+ * 只在内容第一次就位时从 0.35 升到 1：整块列表用 graphicsLayer 做，纯合成层，不触发重排。
+ * 之后切回该页（ready 一直为 true）不再重放，避免每次进页面都淡一次。
+ */
+@Composable
+fun rememberContentReveal(ready: Boolean, durationMs: Int = 140): Float {
+    val alpha = remember { Animatable(1f) }
+    // 只有「本页从骨架过渡到内容」才淡入；暖启动一进来就有内容时不动，
+    // 否则会和页面转场本身的淡入叠在一起，整页显得发灰。
+    var seenComposition by remember { mutableStateOf(false) }
+    LaunchedEffect(ready) {
+        if (!seenComposition) {
+            seenComposition = true
+            if (ready) return@LaunchedEffect
+        }
+        if (ready) {
+            alpha.snapTo(0.35f)
+            alpha.animateTo(1f, tween(durationMs))
+        }
+    }
+    return alpha.value
 }
 
 /** 内容就位前的占位卡片，形状、颜色与真实卡片一致，避免闪白。 */

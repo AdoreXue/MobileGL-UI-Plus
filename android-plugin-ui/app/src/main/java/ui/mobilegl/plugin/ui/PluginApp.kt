@@ -19,9 +19,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -87,6 +85,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -143,40 +142,20 @@ private val TABS = listOf(
     Tab("设置", Icons.Filled.Settings, Dest.Settings),
 )
 
-/** 页面转场与上下栏共用这套时长，避免栏位先滑完、内容还在动。 */
-private const val PAGE_SLIDE_MS = 210
+/** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
+private const val PAGE_MOVE_MS = 200
 private const val PAGE_FADE_IN_MS = 150
 private const val PAGE_FADE_OUT_MS = 110
 
-/** Same transition as MobileGlues 2.0 (MaterialApp.pageTransition). */
-private fun pageTransition(from: Dest, to: Dest): ContentTransform {
+/** 新页从下方微微上移并淡入，旧页略微上移淡出：不横移，切换安静。 */
+private fun pageTransition(): ContentTransform {
     val fadeInSpec = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
     val fadeOutSpec = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
-    val slide = tween<IntOffset>(durationMillis = PAGE_SLIDE_MS, easing = FastOutSlowInEasing)
-
-    val tabOrdinal = { destination: Dest ->
-        when (destination) {
-            Dest.Home -> 0
-            Dest.Render -> 1
-            Dest.Info -> 2
-            Dest.Settings -> 3
-            else -> -1
-        }
-    }
-    val fromOrdinal = tabOrdinal(from)
-    val toOrdinal = tabOrdinal(to)
-    // 二级页收窄到 1/6 屏：之前进二级页要滑 1/9+1/14 屏（约 25% 宽度）加长淡入，
-    // 看起来是"飘"进来。距离短了以后和返回的方向感都更干脆。
-    val (enterFraction, exitFraction) = when {
-        toOrdinal < 0 -> 6 to -6
-        fromOrdinal < 0 -> -6 to 6
-        fromOrdinal >= 0 && toOrdinal > fromOrdinal -> 6 to -6
-        else -> -6 to 6
-    }
+    val move = tween<IntOffset>(durationMillis = PAGE_MOVE_MS, easing = FastOutSlowInEasing)
 
     return ContentTransform(
-        targetContentEnter = slideInHorizontally(slide) { it / enterFraction } + fadeIn(fadeInSpec),
-        initialContentExit = slideOutHorizontally(slide) { it / exitFraction } + fadeOut(fadeOutSpec),
+        targetContentEnter = slideInVertically(move) { it / 20 } + fadeIn(fadeInSpec),
+        initialContentExit = slideOutVertically(move) { -it / 40 } + fadeOut(fadeOutSpec),
         // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
         sizeTransform = SizeTransform(clip = true),
     )
@@ -311,7 +290,7 @@ fun MobileGlPluginApp() {
         val tabIndex = TABS.indexOfFirst { it.dest == dest }
         val isSubPage = tabIndex < 0
 
-        val barSlide = tween<IntOffset>(durationMillis = PAGE_SLIDE_MS, easing = FastOutSlowInEasing)
+        val barMove = tween<IntOffset>(durationMillis = PAGE_MOVE_MS, easing = FastOutSlowInEasing)
         val barFadeIn = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
         val barFadeOut = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
 
@@ -324,8 +303,8 @@ fun MobileGlPluginApp() {
             topBar = {
                 AnimatedVisibility(
                     visible = isSubPage,
-                    enter = slideInVertically(barSlide) { -it } + fadeIn(barFadeIn),
-                    exit = slideOutVertically(barSlide) { -it } + fadeOut(barFadeOut),
+                    enter = slideInVertically(barMove) { -it / 4 } + fadeIn(barFadeIn),
+                    exit = slideOutVertically(barMove) { -it / 4 } + fadeOut(barFadeOut),
                 ) {
                     MobileGlTopBar(
                         title = when (dest) {
@@ -341,8 +320,8 @@ fun MobileGlPluginApp() {
             bottomBar = {
                 AnimatedVisibility(
                     visible = !isSubPage,
-                    enter = slideInVertically(barSlide) { it } + fadeIn(barFadeIn),
-                    exit = slideOutVertically(barSlide) { it } + fadeOut(barFadeOut),
+                    enter = slideInVertically(barMove) { it / 4 } + fadeIn(barFadeIn),
+                    exit = slideOutVertically(barMove) { it / 4 } + fadeOut(barFadeOut),
                 ) {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                         TABS.forEachIndexed { index, tab ->
@@ -368,7 +347,7 @@ fun MobileGlPluginApp() {
             val layoutDir = LocalLayoutDirection.current
             AnimatedContent(
                 targetState = dest,
-                transitionSpec = { pageTransition(initialState, targetState) },
+                transitionSpec = { pageTransition() },
                 label = "screen",
             ) { target ->
                 // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
@@ -917,9 +896,10 @@ private fun InfoTab(
         Toast.makeText(context, "已复制" + label, Toast.LENGTH_SHORT).show()
     }
     val ready = rememberContentReady("info")
+    val reveal = rememberContentReveal(ready)
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("信息") }
