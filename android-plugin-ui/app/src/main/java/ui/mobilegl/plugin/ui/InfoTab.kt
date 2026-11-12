@@ -694,14 +694,14 @@ private fun CreditLine(title: String, subtitle: String) {
 }
 
 @Composable
-private fun healthColor(report: SelfTestResult?): Color = when (reportHealth(report)) {
+internal fun healthColor(report: SelfTestResult?): Color = when (reportHealth(report)) {
     ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant
     ReportHealth.Ok -> MaterialTheme.colorScheme.primary
     ReportHealth.Degraded -> MaterialTheme.colorScheme.tertiary
     else -> MaterialTheme.colorScheme.error
 }
 
-private fun healthShort(report: SelfTestResult?): String = when (reportHealth(report)) {
+internal fun healthShort(report: SelfTestResult?): String = when (reportHealth(report)) {
     ReportHealth.None -> "自检未运行"
     ReportHealth.Ok -> "自检通过"
     ReportHealth.Degraded -> "自检降级"
