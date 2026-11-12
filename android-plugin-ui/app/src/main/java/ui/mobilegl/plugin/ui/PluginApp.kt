@@ -25,13 +25,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -80,13 +77,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -128,8 +125,9 @@ private data class DriversData(
 
 private sealed interface Dest {
     data object Home : Dest
-    data object Settings : Dest
+    data object Render : Dest
     data object Info : Dest
+    data object Settings : Dest
     data object Drivers : Dest
     data object ConfigFile : Dest
     data object SelfTest : Dest
@@ -139,8 +137,9 @@ private data class Tab(val label: String, val icon: ImageVector, val dest: Dest)
 
 private val TABS = listOf(
     Tab("首页", Icons.Filled.Home, Dest.Home),
-    Tab("设置", Icons.Filled.Settings, Dest.Settings),
+    Tab("渲染", UiIcons.Gpu, Dest.Render),
     Tab("信息", Icons.Filled.Info, Dest.Info),
+    Tab("设置", Icons.Filled.Settings, Dest.Settings),
 )
 
 /** 页面转场与上下栏共用这套时长，避免栏位先滑完、内容还在动。 */
@@ -157,8 +156,9 @@ private fun pageTransition(from: Dest, to: Dest): ContentTransform {
     val tabOrdinal = { destination: Dest ->
         when (destination) {
             Dest.Home -> 0
-            Dest.Settings -> 1
+            Dest.Render -> 1
             Dest.Info -> 2
+            Dest.Settings -> 3
             else -> -1
         }
     }
@@ -214,6 +214,7 @@ fun MobileGlPluginApp() {
         // 各页滚动位置由这里持有：AnimatedContent 切走会丢弃页面组合，
         // 状态放在这里，切回来才能停在原来的位置，而不是跳回顶部。
         val homeScroll = rememberScrollState()
+        val renderListState = rememberLazyListState()
         val settingsListState = rememberLazyListState()
         val infoListState = rememberLazyListState()
         val configListState = rememberLazyListState()
@@ -392,26 +393,39 @@ fun MobileGlPluginApp() {
                             config = config,
                             report = report,
                             probing = probing,
-                            drivers = drivers,
-                            externalCount = externalLibraries.size,
                             device = device,
-                            onOpenSettings = { lastTab = 1; dest = Dest.Settings },
+                            onOpenRender = { lastTab = 1; dest = Dest.Render },
+                            onOpenSelfTest = { lastTab = 0; dest = Dest.SelfTest },
+                            scrollState = homeScroll,
+                        )
+                        Dest.Render -> RenderTab(
+                            listState = renderListState,
+                            config = config,
+                            pendingRestart = pendingRestart,
+                            report = report,
+                            probing = probing,
+                            driverCount = drivers.size,
+                            externalCount = externalLibraries.size,
+                            onSave = { persist(it) },
+                            onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
                             onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
-                            glInfo = glInfo,
-                            scrollState = homeScroll,
+                            onRunSelfTest = {
+                                scope.launch {
+                                    probing = true
+                                    report = withContext(Dispatchers.IO) {
+                                        selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
+                                    }
+                                    probing = false
+                                }
+                            },
                         )
                         Dest.Settings -> SettingsTab(
                             listState = settingsListState,
                             config = config,
                             runtime = runtimeStatus,
-                            drivers = drivers,
-                            externalLibraries = externalLibraries,
                             pendingRestart = pendingRestart,
                             onSave = { persist(it) },
-                            onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
-                            onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
-                            onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
                             onResetAll = {
                                 persist(PluginConfig().copy(theme = config.theme))
                                 drivers = emptyList()
@@ -649,13 +663,9 @@ private fun HomeTab(
     config: PluginConfig,
     report: SelfTestResult?,
     probing: Boolean,
-    drivers: List<DriverPack>,
-    externalCount: Int,
     device: DeviceInfo,
-    onOpenSettings: () -> Unit,
-    onOpenDrivers: () -> Unit,
+    onOpenRender: () -> Unit,
     onOpenSelfTest: () -> Unit,
-    glInfo: GlInfoProbe.Info?,
     scrollState: ScrollState,
 ) {
     val context = LocalContext.current
@@ -708,23 +718,7 @@ private fun HomeTab(
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(12.dp))
 
-        // E: 快捷入口整行动效容器（对子项做进场动画）
-        // E: 进场动效容器——包住信息卡
-        AnimatedVisibility(
-            visible = !probing,
-            enter = fadeIn(tween(150)) + slideInVertically(tween(150)) { it / 6 },
-        ) {
-            // A: 设备信息竖排单列（每项一行，占满宽度，信息不截断）
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                InfoCardCell(UiIcons.Gpu, "GPU", info.gpu, Modifier.fillMaxWidth())
-                InfoCardCell(UiIcons.Memory, "内存", info.memory, Modifier.fillMaxWidth())
-                InfoCardCell(UiIcons.Layers, "OpenGL ES", info.gles, Modifier.fillMaxWidth())
-                InfoCardCell(UiIcons.Bolt, "Vulkan", info.vulkan, Modifier.fillMaxWidth())
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-
-        // D: 驱动健康状态卡
+        // 首页只保留状态与渲染器两块：设备详情在「信息」页，组件的增删在「渲染」页。
         HealthCard(report, onOpenSelfTest)
         Spacer(Modifier.height(18.dp))
 
@@ -733,10 +727,10 @@ private fun HomeTab(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            onClick = onOpenSettings,
+            onClick = onOpenRender,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -765,33 +759,12 @@ private fun HomeTab(
                     )
                 }
                 Text(
-                    "点击调整渲染器设置",
+                    "点按查看渲染设置",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
-        }
-
-        Spacer(Modifier.height(18.dp))
-
-        // ② 驱动包 / 外部库可点卡片
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            // 两张卡一行放不下完整解释，副标题只点到为止，详情在驱动管理页。
-            ActionStatCard(
-                "驱动包",
-                drivers.size.toString(),
-                onOpenDrivers,
-                Modifier.weight(1f),
-                hint = "第三方 Vulkan 驱动包",
-            )
-            ActionStatCard(
-                "外部库",
-                externalCount.toString(),
-                onOpenDrivers,
-                Modifier.weight(1f),
-                hint = "替换单个渲染库文件",
-            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -823,9 +796,9 @@ private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onCl
 }
 
 /** 自检健康状态：主页与信息页共用，避免两处判断不一致。 */
-private enum class ReportHealth { None, Error, Fail, Degraded, Ok }
+internal enum class ReportHealth { None, Error, Fail, Degraded, Ok }
 
-private fun reportHealth(report: SelfTestResult?): ReportHealth {
+internal fun reportHealth(report: SelfTestResult?): ReportHealth {
     if (report == null) return ReportHealth.None
     if (!report.ok) return ReportHealth.Error
     val backends = report.backends
@@ -841,7 +814,7 @@ private fun reportHealth(report: SelfTestResult?): ReportHealth {
     return if (degraded) ReportHealth.Degraded else ReportHealth.Ok
 }
 
-private fun reportHealthTitle(report: SelfTestResult?): String = when (reportHealth(report)) {
+internal fun reportHealthTitle(report: SelfTestResult?): String = when (reportHealth(report)) {
     ReportHealth.None -> "驱动自检：未运行"
     ReportHealth.Error -> if (report?.error.isNullOrBlank()) "驱动自检：失败" else "驱动自检：失败 — " + report?.error
     ReportHealth.Fail -> "驱动自检：" + (report?.backends?.sumOf { b -> b.checks.count { it.status.equals("fail", true) } } ?: 0) + " 项失败"
@@ -903,31 +876,6 @@ private fun HealthCard(report: SelfTestResult?, onOpenSelfTest: () -> Unit) {
     }
 }
 
-@Composable
-private fun InfoCardCell(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun StatusBadge(text: String) {
@@ -945,8 +893,6 @@ private fun StatusBadge(text: String) {
     }
 }
 
-@Composable
-private fun ActionStatCard(
     label: String,
     count: String,
     onClick: () -> Unit,
