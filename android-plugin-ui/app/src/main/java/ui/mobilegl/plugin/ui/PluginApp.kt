@@ -188,6 +188,7 @@ fun MobileGlPluginApp() {
         var lastTab by remember { mutableIntStateOf(0) }
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
+        var socExtra by remember { mutableStateOf(SocExtra()) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
         val deviceContext = LocalContext.current
         var pendingRestart by remember { mutableStateOf(false) }
@@ -225,10 +226,12 @@ fun MobileGlPluginApp() {
             probing = io.report == null
         }
 
-        val device = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit) {
-            deviceInfo(deviceContext, report, glInfo, config)
+        val device = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit, socExtra) {
+            deviceInfo(deviceContext, report, glInfo, config, socExtra)
         }
         LaunchedEffect(Unit) {
+            // sysfs 与 /proc/cpuinfo 是多次小文件读，放到 IO 线程，装配期不阻塞
+            socExtra = withContext(Dispatchers.IO) { readSocExtra() }
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
             if (config.autoSelfTest) {
                 probing = true
@@ -537,6 +540,7 @@ private data class DeviceInfo(
     val android: String,
     val coreVersion: String,
     val coreCommit: String?,
+    val socExtra: SocExtra,
 )
 
 /** 读文件首行，权限不足或不存在时返回 null。 */
@@ -582,7 +586,13 @@ private fun cleanRendererName(raw: String): String {
     return s
 }
 
-private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?, config: PluginConfig): DeviceInfo {
+private fun deviceInfo(
+    context: Context,
+    report: SelfTestResult?,
+    glInfo: GlInfoProbe.Info?,
+    config: PluginConfig,
+    socExtra: SocExtra,
+): DeviceInfo {
     val glesReport = report?.backends?.firstOrNull { it.backend.contains("gles", true) }
     val vulkanReport = report?.backends?.firstOrNull { it.backend.contains("vulkan", true) }
     val glesRenderer = glesReport?.renderer.orEmpty()
@@ -631,7 +641,10 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     } ?: readFirstLine("/sys/devices/soc0/family") ?: ""
     val socDetail = socDetailText()
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
-    return DeviceInfo(gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android, coreVersion, coreCommit)
+    return DeviceInfo(
+        gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android,
+        coreVersion, coreCommit, socExtra,
+    )
 }
 
 @Composable
@@ -947,19 +960,20 @@ private fun InfoTab(
         item {
         InfoCard {
             InfoRow("SoC", device.soc)
-            if (device.socVendor.isNotBlank() || device.socDetail.isNotBlank()) {
-                InfoRow(
-                    "规格",
-                    listOf(device.socVendor, device.socDetail)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" · "),
-                )
-            }
-            InfoRow("GPU", device.gpu)
+            if (device.socExtra.socId.isNotBlank()) InfoRow("编号", device.socExtra.socId)
+            if (device.socVendor.isNotBlank()) InfoRow("厂商", device.socVendor)
+            // 核心构成优先用分簇信息（含小/中/大核与频率区间），读不到再退回核数与最高频率。
+            InfoRow(
+                "核心",
+                device.socExtra.clusters.ifBlank { device.socDetail },
+            )
+            InfoRow("GPU", device.gpu + device.socExtra.gpuBusy.let { if (it.isBlank()) "" else " · 占用 " + it })
+            if (device.socExtra.governor.isNotBlank()) InfoRow("调度", device.socExtra.governor)
             InfoRow("内存", device.memory + " · " + device.memoryAvail)
             InfoRow("系统", device.android)
             InfoRow("OpenGL ES", device.gles)
             InfoRow("Vulkan", device.vulkan)
+            if (device.socExtra.features.isNotBlank()) InfoRow("特性", device.socExtra.features)
         }
         }
         item { SectionLabel("运行环境") }
