@@ -829,14 +829,31 @@ fun BigTitle(text: String) {
 }
 
 @Composable
-fun SectionLabel(text: String) {
-    Text(
-        text,
+fun SectionLabel(text: String, count: Int? = null) {
+    Row(
         modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Medium,
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium,
+        )
+        // 项数是附加信息：不给就不画，保持其他页面的标题原样。
+        if (count != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                count.toString() + " 项",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
+    }
 }
 
 @Composable

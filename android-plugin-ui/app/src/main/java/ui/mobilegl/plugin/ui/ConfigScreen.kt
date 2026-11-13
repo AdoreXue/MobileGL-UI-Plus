@@ -13,7 +13,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +39,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,10 +55,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 
@@ -128,16 +139,19 @@ fun ConfigScreen(
             }
         }
     }
+    // 与官方默认不同的项数：概览条与常驻保存条都用它。
+    val changedTotal = remember(parsed) { OPTION_INDEX.count { optionChangedValue(it, parsed) } }
     // 骨架持续到 runtime.conf 读取完成：一步显示真实内容，不经过模板中间态。
     val ready = loaded
     val reveal = rememberContentReveal(ready)
     // 每次进入（重新组合）时列表回到顶部：骨架与内容高度差异大，
     // 保留旧滚动位置会落在内容区中间，看起来像"进了半个页面"。
     LaunchedEffect(Unit) { listState.scrollToItem(0) }
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
-        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 96.dp),
     ) {
         item { BigTitle("启动配置") }
         // 搜索框放在最前：配置项多，找东西不用先滑过整张说明卡。
@@ -154,6 +168,15 @@ fun ConfigScreen(
                         TextButton(onClick = { query = "" }) { Text("清除") }
                     }
                 },
+            )
+        }
+        item {
+            Spacer(Modifier.height(10.dp))
+            OverviewStrip(
+                total = OPTION_INDEX.size,
+                changed = changedTotal,
+                backend = parsed["MOBILEGL_BACKEND_TYPE"] ?: "DirectGLES",
+                sfpewOn = parsed["SFPEW_ENABLED"] == "1",
             )
         }
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
@@ -278,7 +301,7 @@ fun ConfigScreen(
             }
         } else if (query.isBlank()) {
             item {
-                SectionLabel("渲染后端")
+                SectionLabel("渲染后端", 1)
                 InfoCard {
                     OptionSelect(
                         label = "渲染后端",
@@ -299,7 +322,7 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("通用配置")
+                SectionLabel("通用配置", 11)
                 InfoCard {
                     Text(
                         "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
@@ -321,23 +344,7 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("兼容性")
-                InfoCard {
-                    Text(
-                        "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OptionToggle("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", text, desc = "部分光影包在检测到不支持双精度时会拒绝加载。开启后向游戏声明支持双精度（GL_ARB_gpu_shader_fp64），实际运算仍为 32 位精度，可通过检查但精度受限", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
-                    OptionQuirk("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", text, desc = "着色器尚在后台编译时即向游戏返回完成状态，无需同步等待。实际编译失败仍会报错，但游戏可能先获得未完成的着色器", default = "自动（通常等于关）", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", it) }
-                    OptionQuirk("点大小前移", "MOBILEGL_POINT_SIZE_DEMOTION", text, desc = "把 gl_PointSize 的计算从几何着色器挪到顶点着色器。某些驱动几何阶段改不了点大小，需要这个", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_POINT_SIZE_DEMOTION", it) }
-                    OptionQuirk("iterationRP 修复", "MOBILEGL_ITRP_FIX", text, desc = "修 iterationRP 光影包自带的两个计算着色器 bug。自动＝装了这个光影包才修", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ITRP_FIX", it) }
-                    OptionToggle("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text, desc = "启动时预先初始化编译器内建表，可缩短 20-100 毫秒启动时间；代价是首次编译着色器稍慢", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
-                }
-            }
-            item {
-                SectionLabel("管线")
+                SectionLabel("管线", 5)
                 InfoCard {
                     Text(
                         "前后端命令传递相关的进阶选项。",
@@ -353,7 +360,23 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("诊断")
+                SectionLabel("兼容性", 5)
+                InfoCard {
+                    Text(
+                        "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OptionToggle("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", text, desc = "部分光影包在检测到不支持双精度时会拒绝加载。开启后向游戏声明支持双精度（GL_ARB_gpu_shader_fp64），实际运算仍为 32 位精度，可通过检查但精度受限", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
+                    OptionQuirk("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", text, desc = "着色器尚在后台编译时即向游戏返回完成状态，无需同步等待。实际编译失败仍会报错，但游戏可能先获得未完成的着色器", default = "自动（通常等于关）", parsed = parsed) { text = setKey(text, "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", it) }
+                    OptionQuirk("点大小前移", "MOBILEGL_POINT_SIZE_DEMOTION", text, desc = "把 gl_PointSize 的计算从几何着色器挪到顶点着色器。某些驱动几何阶段改不了点大小，需要这个", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_POINT_SIZE_DEMOTION", it) }
+                    OptionQuirk("iterationRP 修复", "MOBILEGL_ITRP_FIX", text, desc = "修 iterationRP 光影包自带的两个计算着色器 bug。自动＝装了这个光影包才修", default = "自动", parsed = parsed) { text = setKey(text, "MOBILEGL_ITRP_FIX", it) }
+                    OptionToggle("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text, desc = "启动时预先初始化编译器内建表，可缩短 20-100 毫秒启动时间；代价是首次编译着色器稍慢", default = "关", parsed = parsed) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
+                }
+            }
+            item {
+                SectionLabel("诊断", 5)
                 InfoCard {
                     Text(
                         "输出日志与内部校验，用于定位问题。日常开启会产生额外开销。",
@@ -369,7 +392,7 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("DirectVulkan / Magma 专用")
+                SectionLabel("DirectVulkan / Magma 专用", 18)
                 InfoCard {
                     Text(
                         "仅在渲染后端为 DirectVulkan 时生效。已按官方默认值配置，通常无需改动。",
@@ -405,7 +428,7 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("DirectGLES / Espryt 专用")
+                SectionLabel("DirectGLES / Espryt 专用", 17)
                 InfoCard {
                     Text(
                         "仅在渲染后端为 DirectGLES 时生效。已按官方默认值配置，通常无需改动。",
@@ -529,6 +552,13 @@ fun ConfigScreen(
             }
         }
     }
+    SaveBar(
+        modifier = Modifier.align(Alignment.BottomCenter),
+        busy = busy,
+        changed = changedTotal,
+        onSave = { save() },
+    )
+    }
     if (confirmTemplate) {
         AlertDialog(
             onDismissRequest = { confirmTemplate = false },
@@ -593,8 +623,9 @@ private fun OptionSelect(
     parsed: Map<String, String> = emptyMap(),
     onSelect: (String) -> Unit,
 ) {
+    val changed = changedSelect(value, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        OptionLabel(label, changed)
         OptionDesc(desc, default)
         if (key.isNotBlank()) {
             Text(
@@ -631,8 +662,9 @@ private fun OptionQuirk(
         "0", "off", "false", "no", "forceoff" -> "关"
         else -> "自动"
     }
+    val changed = changedQuirk(current, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        OptionLabel(label, changed)
         OptionDesc(desc, default)
         Text(
             key,
@@ -670,12 +702,13 @@ private fun OptionText(
     onChange: (String) -> Unit,
 ) {
     var value by remember(key, text) { mutableStateOf(parsed[key] ?: "") }
+    val changed = changedText(value, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         OutlinedTextField(
             value = value,
             onValueChange = { value = it; onChange(it) },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text(label) },
+            label = { OptionLabel(label, changed) },
             supportingText = {
                 Column {
                     OptionDesc(desc, default)
@@ -702,12 +735,13 @@ private fun OptionToggle(
     onToggle: (Boolean) -> Unit,
 ) {
     val enabled = parsed[key] == "1"
+    val changed = changedToggle(parsed[key] ?: "", default)
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodySmall)
+            OptionLabel(label, changed)
             OptionDesc(desc, default)
             Text(
                 key,
@@ -971,3 +1005,152 @@ private fun hasAllFilesAccess(): Boolean =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 
 private fun openAllFilesSettings(context: Context) = openAllFilesAccessSettings(context)
+
+
+/** 行首改动点：与官方默认不同时画一个小圆点。 */
+@Composable
+private fun OptionLabel(label: String, changed: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (changed) {
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun changedSelect(value: String, default: String): Boolean {
+    val expected = default.substringBefore("（").trim()
+    return expected.isNotBlank() && !value.trim().equals(expected, true)
+}
+
+private fun changedQuirk(current: String, default: String): Boolean {
+    val expected = when {
+        default.startsWith("开") -> "1"
+        default.startsWith("关") -> "0"
+        else -> "auto"
+    }
+    val now = current.trim().lowercase()
+    if (now.isBlank() || now == "auto") return false
+    return now != expected
+}
+
+private fun changedToggle(current: String, default: String): Boolean {
+    val expected = if (default.startsWith("开")) "1" else "0"
+    val now = current.trim().lowercase()
+    if (now.isBlank()) return false
+    return now != expected
+}
+
+private fun changedText(current: String, default: String): Boolean {
+    val expected = default.substringBefore("（").trim()
+    val now = current.trim()
+    if (now.isBlank()) return false
+    return now != expected
+}
+
+/** 概览条计数用：按索引里的默认值判断这一项是否被改过。 */
+private fun optionChangedValue(meta: OptionMeta, parsed: Map<String, String>): Boolean {
+    val current = (parsed[meta.key] ?: "").trim()
+    return when {
+        QUIRK_KEYS.contains(meta.key) -> changedQuirk(current, meta.default)
+        meta.isText -> changedText(current, meta.default)
+        meta.default.startsWith("开") || meta.default.startsWith("关") -> changedToggle(current, meta.default)
+        else -> changedText(current, meta.default)
+    }
+}
+
+/** 顶部概览：总项数、已改动数、当前后端。 */
+@Composable
+private fun OverviewStrip(total: Int, changed: Int, backend: String, sfpewOn: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainer),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                OverviewStat(Modifier.weight(1f), total.toString(), "配置项")
+                OverviewStat(Modifier.weight(1f), changed.toString(), "已改动", highlight = changed > 0)
+                OverviewStat(Modifier.weight(1.5f), backend, "渲染后端", mono = false, compact = true)
+            }
+            Text(
+                if (changed == 0) {
+                    "全部与官方默认一致" + (if (sfpewOn) " · SFPEW 已启用" else "")
+                } else {
+                    "有 " + changed + " 项与官方默认不同，行首带圆点的就是改过的" +
+                        (if (sfpewOn) " · SFPEW 已启用" else "")
+                },
+                modifier = Modifier.padding(top = 10.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverviewStat(
+    modifier: Modifier,
+    value: String,
+    label: String,
+    highlight: Boolean = false,
+    mono: Boolean = true,
+    compact: Boolean = false,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(modifier) {
+        Text(
+            value,
+            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+            fontSize = if (compact) 15.sp else 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (highlight) scheme.primary else scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+/** 常驻底部的保存条：滚动时也够得着保存，顺带显示已改动项数。 */
+@Composable
+private fun SaveBar(modifier: Modifier, busy: Boolean, changed: Int, onSave: () -> Unit) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primary,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !busy, onClick = onSave)
+                .padding(vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                when {
+                    busy -> "保存中…"
+                    changed > 0 -> "保存配置 · " + changed + " 项已改"
+                    else -> "保存配置"
+                },
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+    }
+}
