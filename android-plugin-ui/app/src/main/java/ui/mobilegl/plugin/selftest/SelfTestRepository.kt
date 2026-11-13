@@ -4,7 +4,6 @@ package ui.mobilegl.plugin.selftest
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import ui.mobilegl.plugin.NativeEnv
 import top.mobilegl.plugin.PostActivity
@@ -94,8 +93,6 @@ class SelfTestRepository(private val context: Context) {
         save(raw)
         result
     }
-
-    fun rawShareText(): String = cached()?.rawJson ?: ""
 
     /** 人类可读的自检报告，用于分享。 */
     fun readableReport(): String = readableReportOf(cached())

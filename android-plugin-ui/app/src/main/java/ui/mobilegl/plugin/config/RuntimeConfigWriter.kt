@@ -88,22 +88,6 @@ class RuntimeConfigWriter(private val context: Context) {
         return runCatching { if (shared.isFile) shared.readText() else null }.getOrNull()
     }
 
-    fun writeRaw(text: String): Status {
-        var sharedWritten = false
-        var reason: String? = null
-        val shared = File("/sdcard/MobileGL/runtime.conf")
-        try {
-            shared.parentFile?.mkdirs()
-            shared.writeText(text)
-            sharedWritten = true
-        } catch (t: Throwable) {
-            reason = if (!hasAllFilesAccess()) "未授予“所有文件访问权限”，共享路径不可写" else t.message
-        }
-        val privateFile = File(context.filesDir, "plugin/runtime.conf")
-        val privateWritten = runCatching { privateFile.parentFile?.mkdirs(); privateFile.writeText(text); true }.getOrDefault(false)
-        return Status(shared.absolutePath, sharedWritten, privateFile.absolutePath, privateWritten, reason)
-    }
-
     fun hasAllFilesAccess(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()

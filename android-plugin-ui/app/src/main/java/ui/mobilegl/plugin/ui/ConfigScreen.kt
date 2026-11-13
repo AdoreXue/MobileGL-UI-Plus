@@ -766,13 +766,6 @@ private fun parseKeyValues(text: String): Map<String, String> {
     return out
 }
 
-private fun readKey(text: String, key: String, fallback: String): String =
-    text.lineSequence()
-        .map { it.trim() }
-        .filter { it.isNotEmpty() && !it.startsWith("#") && it.contains('=') }
-        .map { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
-        .firstOrNull { it.first == key }?.second ?: fallback
-
 private fun setKey(text: String, key: String, value: String): String {
     val lines = text.lines().toMutableList()
     var replaced = false

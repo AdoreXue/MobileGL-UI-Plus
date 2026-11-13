@@ -34,7 +34,6 @@ class ExternalLibraryRepository(private val context: Context) {
     private val root = File(context.filesDir, "libraries")
     private val sharedRoot = File("/sdcard/MobileGL/libs")
 
-    fun sharedDir(): File = sharedRoot
 
     fun list(): List<ExternalLibrary> {
         root.mkdirs()

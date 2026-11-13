@@ -45,11 +45,6 @@ class ConfigStore(private val context: Context) {
         }
     }
 
-    fun configFile(): File {
-        dir.mkdirs()
-        return file
-    }
-
     fun defaultBackend(): String = runCatching {
         context.getString(R.string.mobilegl_default_backend)
     }.getOrDefault("DirectGLES")

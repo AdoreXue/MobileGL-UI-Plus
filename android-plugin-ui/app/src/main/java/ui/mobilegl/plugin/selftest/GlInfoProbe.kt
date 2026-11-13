@@ -19,8 +19,6 @@ object GlInfoProbe {
         val vendor: String,
         val version: String,
     ) {
-        val glesShort: String
-            get() = Regex("OpenGL ES [0-9.]+").find(version)?.value ?: version
     }
 
     fun query(): Info? {

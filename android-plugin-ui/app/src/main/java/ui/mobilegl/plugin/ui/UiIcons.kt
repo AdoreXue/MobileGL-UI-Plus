@@ -129,13 +129,6 @@ object UiIcons {
         }
     }
 
-    /** 勾选。 */
-    val Check: ImageVector by lazy {
-        build("Check") {
-            moveTo(5f, 13f); lineTo(10f, 18f); lineTo(19f, 7f)
-        }
-    }
-
     /** 箭头展开/收起。 */
     val Chevron: ImageVector by lazy {
         build("Chevron") {
