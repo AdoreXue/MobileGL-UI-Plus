@@ -50,8 +50,13 @@ def mobileGlAbiFilters = {
 // the plugin's real nativeLibraryDir at launch time.
 // Launcher-facing renderer name is intentionally backend-agnostic.
 def mobileGlRendererDisplayName = { String backendType -> 'MobileGL' }
-def mobileGlMinMCVer = null
-def mobileGlMaxMCVer = null
+
+// 实际加载的渲染库文件名：预编译/官方 .so 走代理，否则按是否内置 SFPEW 选。
+def mobileGlRendererLib = { String prefix ->
+    if (!mobileGlPrebuiltLibsDir.isEmpty()) return prefix + 'libRendererProxy.so'
+    if (mobileGlUseSfpew) return prefix + 'libSimpleFPEWrapper.so'
+    return prefix + 'libMobileGL.so'
+}
 def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
     def env = [
@@ -72,9 +77,7 @@ def mobileGlRendererConfig = { String backendType ->
             [type: 'ToggleableEnv', key: 'MOBILEGL_COHERENT_AS_FLUSH', value: '1', toggle: false],
             [type: 'ToggleableEnv', key: 'MOBILEGL_RELAXED_SEMANTICS', value: '1', toggle: false],
     ]
-    def glLib = !mobileGlPrebuiltLibsDir.isEmpty()
-            ? '**|libRendererProxy.so'
-            : (mobileGlUseSfpew ? '**|libSimpleFPEWrapper.so' : '**|libMobileGL.so')
+    def glLib = mobileGlRendererLib('**|')
     def config = [
             displayName    : mobileGlRendererDisplayName(backendType),
             rendererId     : 'opengles3',
@@ -82,10 +85,29 @@ def mobileGlRendererConfig = { String backendType ->
             rendererEGLPath: glLib,
             dlopenLibPaths : [],
             env            : env,
-            minMCVer       : mobileGlMinMCVer,
-            maxMCVer       : mobileGlMaxMCVer,
+            minMCVer       : '',
+            maxMCVer       : '',
     ]
     groovy.json.JsonOutput.toJson(config).replace('"', '\\"')
+}
+
+// 后端 flavor 的公共配置：占位符、环境变量与 resValue 只写一份。
+def mobileGlBackendFlavor = { flavor, String backend, String appId ->
+    def env = mobileGlEnvString(backend)
+    def lib = mobileGlRendererLib('lib')
+    flavor.dimension 'backend'
+    flavor.applicationId = appId
+    flavor.resValue 'string', 'mobilegl_default_backend', backend
+    flavor.resValue 'string', 'config', mobileGlRendererConfig(backend)
+    flavor.manifestPlaceholders = [
+            appLabel: 'MobileGL_UI_Plus',
+            des     : '来自 MobileGL_UI',
+            renderer: mobileGlRendererDisplayName(backend) + ':' + lib + ':/' + lib,
+            minMCVer: '',
+            maxMCVer: '',
+            boatEnv : env,
+            pojavEnv: env,
+    ]
 }
 
 // Calendar versioning: major = two-digit year, minor = month, taken from the
@@ -205,39 +227,9 @@ android {
     flavorDimensions 'backend', 'profile'
 
     productFlavors {
-        espryt {
-            dimension 'backend'
-            applicationId 'ui.mobilegl.plugin.espryt'
-            def env = mobileGlEnvString('DirectGLES')
-            resValue 'string', 'mobilegl_default_backend', 'DirectGLES'
-            resValue 'string', 'config', mobileGlRendererConfig('DirectGLES')
-            manifestPlaceholders = [
-                    appLabel: 'MobileGL_UI_Plus',
-                    des     : '来自 MobileGL_UI',
-                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectGLES') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectGLES') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectGLES') + ':libMobileGL.so:/libMobileGL.so'),
-                    minMCVer: mobileGlMinMCVer ?: '',
-                    maxMCVer: mobileGlMaxMCVer ?: '',
-                    boatEnv : env,
-                    pojavEnv: env,
-            ]
-        }
-        magma {
-            dimension 'backend'
-            // .plus 后缀：与上游/官方插件共存（同一设备可并存安装），呼应仓库名 MobileGL-UI-Plus
-            applicationId 'ui.mobilegl.plugin.plus'
-            def env = mobileGlEnvString('DirectVulkan')
-            resValue 'string', 'mobilegl_default_backend', 'DirectVulkan'
-            resValue 'string', 'config', mobileGlRendererConfig('DirectVulkan')
-            manifestPlaceholders = [
-                    appLabel: 'MobileGL_UI_Plus',
-                    des     : '来自 MobileGL_UI',
-                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectVulkan') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectVulkan') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectVulkan') + ':libMobileGL.so:/libMobileGL.so'),
-                    minMCVer: mobileGlMinMCVer ?: '',
-                    maxMCVer: mobileGlMaxMCVer ?: '',
-                    boatEnv : env,
-                    pojavEnv: env,
-            ]
-        }
+        // 两个后端 flavor 只差名字与 applicationId，公共部分在下面统一配置。
+        espryt { }
+        magma { }
         plugin {
             dimension 'profile'
         }
@@ -247,6 +239,9 @@ android {
             versionNameSuffix '-trace'
         }
     }
+
+    mobileGlBackendFlavor(productFlavors.espryt, 'DirectGLES', 'ui.mobilegl.plugin.espryt')
+    mobileGlBackendFlavor(productFlavors.magma, 'DirectVulkan', 'ui.mobilegl.plugin.plus')
 
     def fixedDebugKeystore = file('../debug.keystore')
     if (fixedDebugKeystore.exists()) {
