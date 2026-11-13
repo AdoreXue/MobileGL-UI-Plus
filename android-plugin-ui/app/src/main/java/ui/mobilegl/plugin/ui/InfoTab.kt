@@ -98,6 +98,11 @@ internal fun InfoTab(
     val kernelText = if (device.coreVersion.isBlank()) "未知" else "v" + device.coreVersion +
         (device.coreCommit?.take(7)?.let { " · " + it } ?: "")
     val busy = device.socExtra.gpuBusy
+    val batteryText = device.battery.ifBlank { "未知" }
+    // 电池温度与当前频率是可选行，缺了就不占位置，标题里的计数也跟着变。
+    val stateCount = 3 +
+        (if (device.batteryTemp.isNotBlank()) 1 else 0) +
+        (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
 
     LazyColumn(
         state = listState,
@@ -170,7 +175,8 @@ internal fun InfoTab(
                             icon = UiIcons.Chip,
                             label = "核心",
                             value = coreCountText(device.socDetail),
-                            caption = coreCaption(device.socDetail),
+                            // 分簇直接写进这一格：小屏上比单独一行更省位置。
+                            caption = clusterSummary(clusterText).ifBlank { coreCaption(device.socDetail) },
                             mono = false,
                             onClick = { copy("核心", clusterText) },
                         )
@@ -186,7 +192,6 @@ internal fun InfoTab(
                         InfoLine(UiIcons.Code, "厂商", device.socVendor, mono = false) { copy("厂商", device.socVendor) }
                         DividerLine()
                     }
-                    InfoLine(UiIcons.Speed, "分簇", clusterText, mono = false) { copy("分簇", clusterText) }
                     // SoC 编号对普通用户没意义，已经去掉；只有调度器可读时才留折叠入口。
                     if (device.socExtra.governor.isNotBlank()) {
                         MoreToggle(chipMore, "更多芯片信息") { chipMore = it }
@@ -196,6 +201,8 @@ internal fun InfoTab(
                             exit = fadeOut() + shrinkVertically(),
                         ) {
                             Column {
+                                DividerLine()
+                                InfoLine(UiIcons.Chip, "分簇", clusterText, mono = false) { copy("分簇", clusterText) }
                                 DividerLine()
                                 InfoLine(UiIcons.Speed, "调度", device.socExtra.governor, mono = true) { copy("调度", device.socExtra.governor) }
                             }
@@ -255,6 +262,28 @@ internal fun InfoTab(
                         if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本",
                         mono = false,
                     ) { }
+                }
+            }
+            item { SectionLabel("设备状态", stateCount) }
+            item {
+                InfoCard {
+                    InfoLine(UiIcons.Bolt, "电池", batteryText, mono = false) { copy("电池", batteryText) }
+                    if (device.batteryTemp.isNotBlank()) {
+                        DividerLine()
+                        InfoLine(UiIcons.Speed, "电池温度", device.batteryTemp, mono = false) {
+                            copy("电池温度", device.batteryTemp)
+                        }
+                    }
+                    DividerLine()
+                    InfoLine(UiIcons.Layers, "屏幕", device.screen, mono = false) { copy("屏幕", device.screen) }
+                    DividerLine()
+                    InfoLine(UiIcons.Memory, "存储", device.storage, mono = false) { copy("存储", device.storage) }
+                    if (device.socExtra.curFreq.isNotBlank()) {
+                        DividerLine()
+                        InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
+                            copy("当前频率", device.socExtra.curFreq)
+                        }
+                    }
                 }
             }
             item { SectionLabel("链接") }
@@ -600,6 +629,15 @@ internal fun healthShort(report: SelfTestResult?): String = when (reportHealth(r
 private fun coreCountText(detail: String): String {
     val count = Regex("([0-9]+) 核").find(detail)?.groupValues?.getOrNull(1)
     return if (count == null) detail else count + " 核"
+}
+
+/** 分簇缩写：把「A520×2 0.36–2.27」压成「A520×2」。 */
+private fun clusterSummary(clusters: String): String {
+    if (clusters.isBlank()) return ""
+    return clusters.split(" · ")
+        .map { it.trim().substringBefore(' ').trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString(" · ")
 }
 
 /** 核数格子下面那行小字：去掉「N 核」前缀后剩下的说明。 */

@@ -12,6 +12,7 @@ import java.util.Locale
 data class SocExtra(
     val socId: String = "",
     val clusters: String = "",
+    val curFreq: String = "",
     val gpuBusy: String = "",
     val governor: String = "",
     val features: String = "",
@@ -82,9 +83,21 @@ private fun cpuParts(): Map<Int, String> {
     return out
 }
 
-private data class Cluster(val cpus: List<Int>, val name: String, val minKhz: Long, val maxKhz: Long)
+private data class Cluster(
+    val cpus: List<Int>,
+    val name: String,
+    val minKhz: Long,
+    val maxKhz: Long,
+    val curKhz: Long,
+)
 
-private data class NamedCluster(val name: String, val cores: Int, val minKhz: Long, val maxKhz: Long)
+private data class NamedCluster(
+    val name: String,
+    val cores: Int,
+    val minKhz: Long,
+    val maxKhz: Long,
+    val curKhz: Long,
+)
 
 private fun readClusters(parts: Map<Int, String>): List<Cluster> {
     val groups = LinkedHashMap<String, List<Int>>()
@@ -96,14 +109,19 @@ private fun readClusters(parts: Map<Int, String>): List<Cluster> {
         if (cpus.isEmpty()) return@mapNotNull null
         var minKhz = Long.MAX_VALUE
         var maxKhz = 0L
+        var curKhz = 0L
         for (c in cpus) {
             val dir = "/sys/devices/system/cpu/cpu" + c + "/cpufreq/"
             readNode(dir + "cpuinfo_min_freq")?.toLongOrNull()?.let { if (it < minKhz) minKhz = it }
             readNode(dir + "cpuinfo_max_freq")?.toLongOrNull()?.let { if (it > maxKhz) maxKhz = it }
+            // 当前频率随负载变化：同一簇里取最大的那个，代表这一簇正在跑多快。
+            val cur = readNode(dir + "scaling_cur_freq")?.toLongOrNull()
+                ?: readNode(dir + "cpuinfo_cur_freq")?.toLongOrNull()
+            if (cur != null && cur > curKhz) curKhz = cur
         }
         if (maxKhz == 0L) return@mapNotNull null
         val part = parts[cpus.first()] ?: ""
-        Cluster(cpus, CPU_PARTS[part] ?: "", if (minKhz == Long.MAX_VALUE) maxKhz else minKhz, maxKhz)
+        Cluster(cpus, CPU_PARTS[part] ?: "", if (minKhz == Long.MAX_VALUE) maxKhz else minKhz, maxKhz, curKhz)
     }.sortedBy { it.maxKhz }
 }
 
@@ -111,10 +129,8 @@ private fun readClusters(parts: Map<Int, String>): List<Cluster> {
  * 三到四簇的核心构成，形如「A520×2 0.36–2.27 · A720×3 0.50–3.15 · X4×1 0.48–3.30 GHz」。
  * 认不出代号时退回簇序号，不影响频率显示。
  */
-private fun clusterText(parts: Map<Int, String>): String {
-    val clusters = readClusters(parts)
-    if (clusters.isEmpty()) return ""
-    // 同名核心（例如两个 A720 簇）合并成一段，避免小屏上占三行。
+/** 同名核心（例如两个 A720 簇）合并成一段，避免小屏上占三行。 */
+private fun mergedClusters(clusters: List<Cluster>): List<NamedCluster> {
     val merged = ArrayList<NamedCluster>()
     for (c in clusters) {
         val name = c.name.ifBlank { "簇" + (merged.size + 1) }
@@ -125,14 +141,28 @@ private fun clusterText(parts: Map<Int, String>): String {
                 cores = old.cores + c.cpus.size,
                 minKhz = minOf(old.minKhz, c.minKhz),
                 maxKhz = maxOf(old.maxKhz, c.maxKhz),
+                curKhz = maxOf(old.curKhz, c.curKhz),
             )
         } else {
-            merged.add(NamedCluster(name, c.cpus.size, c.minKhz, c.maxKhz))
+            merged.add(NamedCluster(name, c.cpus.size, c.minKhz, c.maxKhz, c.curKhz))
         }
     }
+    return merged
+}
+
+private fun clusterText(parts: Map<Int, String>): String {
+    val merged = mergedClusters(readClusters(parts))
+    if (merged.isEmpty()) return ""
     return merged.joinToString(" · ") { c ->
         c.name + "×" + c.cores + " " + mhz(c.minKhz) + "–" + mhz(c.maxKhz)
     } + " GHz"
+}
+
+/** 各簇此刻的工作频率，形如「A520 0.79 / A720 1.32 / X4 2.30 GHz」。 */
+private fun currentFreqText(parts: Map<Int, String>): String {
+    val merged = mergedClusters(readClusters(parts)).filter { it.curKhz > 0 }
+    if (merged.isEmpty()) return ""
+    return merged.joinToString(" / ") { c -> c.name + " " + mhz(c.curKhz) } + " GHz"
 }
 
 /** 高通 kgsl 的占用：两个数是「忙时长 总时长」，单位毫秒。 */
@@ -170,6 +200,7 @@ fun readSocExtra(): SocExtra {
             else -> id + " · " + named
         },
         clusters = clusterText(parts),
+        curFreq = currentFreqText(parts),
         gpuBusy = gpuBusyText(),
         governor = readNode("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor") ?: "",
         features = featuresText(),
