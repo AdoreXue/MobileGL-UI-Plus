@@ -180,6 +180,8 @@ fun MobileGlPluginApp() {
         var lastTab by remember { mutableIntStateOf(0) }
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
+        // 上次自检耗时：渲染页显示「用时 x 秒」，null 表示还没在本次会话跑过。
+        var lastProbeMs by remember { mutableStateOf<Long?>(null) }
         var socExtra by remember { mutableStateOf(SocExtra()) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
         val deviceContext = LocalContext.current
@@ -368,9 +370,11 @@ fun MobileGlPluginApp() {
                             onRunSelfTest = {
                                 scope.launch {
                                     probing = true
+                                    val probeStarted = System.currentTimeMillis()
                                     report = withContext(Dispatchers.IO) {
                                         selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
                                     }
+                                    lastProbeMs = System.currentTimeMillis() - probeStarted
                                     probing = false
                                 }
                             },
@@ -383,8 +387,10 @@ fun MobileGlPluginApp() {
                             pendingRestart = pendingRestart,
                             report = report,
                             probing = probing,
+                            lastProbeMs = lastProbeMs,
                             driverCount = drivers.size,
                             externalCount = externalLibraries.size,
+                            activeDriverName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置",
                             onSave = { persist(it) },
                             onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
@@ -392,9 +398,11 @@ fun MobileGlPluginApp() {
                             onRunSelfTest = {
                                 scope.launch {
                                     probing = true
+                                    val probeStarted = System.currentTimeMillis()
                                     report = withContext(Dispatchers.IO) {
                                         selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
                                     }
+                                    lastProbeMs = System.currentTimeMillis() - probeStarted
                                     probing = false
                                 }
                             },
