@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -710,6 +711,19 @@ private fun HomeTab(
             PermissionPill(authorized) {
                 openAllFilesAccessSettings(context)
             }
+            // 状态胶囊行：后端、包装器、自检结论一次看全，不用翻到别的页。
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusPill(
+                    if (config.backend == "DirectVulkan") "Vulkan" else "GLES",
+                    MaterialTheme.colorScheme.primary,
+                )
+                StatusPill(
+                    if (sfpewActive) "SFPEW" else "无包装器",
+                    MaterialTheme.colorScheme.tertiary,
+                )
+                StatusPill(healthShort(report), healthColor(report))
+            }
         }
 
         // 其余内容统一左右 20dp 边距（Hero 保持通栏，避免渐变出现"边边"）
@@ -728,19 +742,24 @@ private fun HomeTab(
         // ③ 渲染器卡片 + 状态徽标
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
+            shape = CardCorner,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            border = subtleBorder(),
             onClick = onOpenRender,
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (probing) "正在检测驱动信息…" else summary,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    if (probing) {
+                        Text(
+                            "正在检测驱动信息…",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    } else {
+                        MonoValue(summary, size = 17.sp, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                    }
                     Spacer(Modifier.width(8.dp))
                     StatusPill(if (config.backend == "DirectVulkan") "Vulkan" else "GLES", MaterialTheme.colorScheme.primary)
                 }
@@ -868,8 +887,9 @@ fun SectionLabel(text: String, count: Int? = null) {
 fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = CardCorner,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = subtleBorder(),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { content() }
     }

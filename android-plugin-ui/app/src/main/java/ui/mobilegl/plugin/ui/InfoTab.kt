@@ -541,6 +541,7 @@ private fun SpecCell(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surfaceContainer)
+            .cardStroke()
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
@@ -554,16 +555,19 @@ private fun SpecCell(
                 maxLines = 1,
             )
         }
-        Text(
-            value,
-            modifier = Modifier.padding(top = 8.dp),
-            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = scheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (mono) {
+            MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 15.sp, maxLines = 2)
+        } else {
+            Text(
+                value,
+                modifier = Modifier.padding(top = 8.dp),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Text(
             if (caption.isBlank()) " " else caption,
             modifier = Modifier.padding(top = 2.dp),

@@ -2,14 +2,18 @@
 package ui.mobilegl.plugin.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -205,15 +210,19 @@ private fun RenderHero(
                 if (pendingRestart) scheme.tertiary else scheme.primary,
             )
         }
-        Text(
-            solutionName,
-            modifier = Modifier.padding(top = 8.dp),
-            fontSize = 23.sp,
-            fontWeight = FontWeight.Bold,
-            color = scheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(Modifier.padding(top = 8.dp)) {
+            // 方案名会随后端/ANGLE/包装器变化，用淡入切换代替突然跳字。
+            Crossfade(targetState = solutionName, animationSpec = tween(180), label = "solution") { name ->
+                Text(
+                    name,
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Row(
             modifier = Modifier.padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -223,11 +232,10 @@ private fun RenderHero(
             if (backend == "DirectGLES") StatusPill(if (angleOn) "ANGLE" else "原生 GLES", scheme.secondary)
             StatusPill(if (sfpewActive) "SFPEW" else "无包装器", scheme.onSurfaceVariant)
         }
-        Text(
+        MonoValue(
             "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
             modifier = Modifier.padding(top = 10.dp),
-            fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.labelSmall,
+            size = 11.sp,
             color = scheme.onSurfaceVariant,
         )
     }
@@ -327,36 +335,48 @@ private fun BackendCard(
     }
 }
 
-/** 后端分段按钮：两段等宽，选中的一段用主色填充。 */
+/** 后端分段按钮：两段等宽，选中的一段用主色填充，切换时指示块滑动过去。 */
 @Composable
 private fun BackendSegment(selected: String, onSelect: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    val options = listOf("DirectVulkan", "DirectGLES")
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(scheme.surfaceVariant.copy(alpha = 0.45f))
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        listOf("DirectVulkan", "DirectGLES").forEach { option ->
-            val active = option == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (active) scheme.primary else Color.Transparent)
-                    .clickable { onSelect(option) }
-                    .padding(vertical = 9.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    option,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (active) scheme.onPrimary else scheme.onSurfaceVariant,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                )
+        val segmentWidth = (maxWidth - 4.dp) / 2
+        val targetX = if (selected == options.first()) 0.dp else segmentWidth + 4.dp
+        val offsetX by animateDpAsState(targetValue = targetX, animationSpec = tween(180), label = "segment")
+        Box(
+            modifier = Modifier
+                .offset(x = offsetX)
+                .width(segmentWidth)
+                .height(36.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(scheme.primary),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            options.forEach { option ->
+                val active = option == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .clickable { onSelect(option) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        option,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (active) scheme.onPrimary else scheme.onSurfaceVariant,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }
@@ -430,6 +450,7 @@ private fun TuneTile(modifier: Modifier, icon: ImageVector, label: String, value
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surfaceContainer)
+            .cardStroke()
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -442,16 +463,7 @@ private fun TuneTile(modifier: Modifier, icon: ImageVector, label: String, value
                 maxLines = 1,
             )
         }
-        Text(
-            value,
-            modifier = Modifier.padding(top = 8.dp),
-            fontFamily = FontFamily.Monospace,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = scheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 15.sp)
     }
 }
 
@@ -466,6 +478,11 @@ private fun SelfTestBlock(
 ) {
     val scheme = MaterialTheme.colorScheme
     val backends = report?.backends.orEmpty()
+    // 检查项三色统计：比一句结论更容易看出「差多少」。
+    val checks = backends.flatMap { it.checks }
+    val failed = checks.count { it.status.equals("fail", true) }
+    val warned = checks.count { it.status.contains("warn", true) || it.status.equals("degraded", true) }
+    val passed = (checks.size - failed - warned).coerceAtLeast(0)
     InfoCard {
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
@@ -484,6 +501,34 @@ private fun SelfTestBlock(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (checks.isNotEmpty()) {
+            DividerLine()
+            Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(scheme.surfaceVariant),
+                ) {
+                    if (passed > 0) {
+                        Box(Modifier.weight(passed.toFloat()).fillMaxHeight().background(scheme.primary))
+                    }
+                    if (warned > 0) {
+                        Box(Modifier.weight(warned.toFloat()).fillMaxHeight().background(scheme.tertiary))
+                    }
+                    if (failed > 0) {
+                        Box(Modifier.weight(failed.toFloat()).fillMaxHeight().background(scheme.error))
+                    }
+                }
+                Text(
+                    "检查项 " + checks.size + " · 通过 " + passed + " · 警告 " + warned + " · 失败 " + failed,
+                    modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
         }
         if (backends.isEmpty()) {
             DividerLine()
