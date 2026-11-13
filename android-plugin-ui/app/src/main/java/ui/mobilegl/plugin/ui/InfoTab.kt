@@ -187,18 +187,15 @@ internal fun InfoTab(
                         DividerLine()
                     }
                     InfoLine(UiIcons.Speed, "分簇", clusterText, mono = false) { copy("分簇", clusterText) }
-                    MoreToggle(chipMore, "更多芯片信息") { chipMore = it }
-                    AnimatedVisibility(
-                        visible = chipMore,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            if (device.socExtra.socId.isNotBlank()) {
-                                DividerLine()
-                                InfoLine(UiIcons.Chip, "编号", device.socExtra.socId, mono = true) { copy("编号", device.socExtra.socId) }
-                            }
-                            if (device.socExtra.governor.isNotBlank()) {
+                    // SoC 编号对普通用户没意义，已经去掉；只有调度器可读时才留折叠入口。
+                    if (device.socExtra.governor.isNotBlank()) {
+                        MoreToggle(chipMore, "更多芯片信息") { chipMore = it }
+                        AnimatedVisibility(
+                            visible = chipMore,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
                                 DividerLine()
                                 InfoLine(UiIcons.Speed, "调度", device.socExtra.governor, mono = true) { copy("调度", device.socExtra.governor) }
                             }
