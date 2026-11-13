@@ -5,8 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.Environment
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -782,8 +780,6 @@ private fun setKey(text: String, key: String, value: String): String {
     return lines.joinToString("\n")
 }
 
-private fun onOff(value: Boolean): String = if (value) "1" else "0"
-
 
 private data class OptionMeta(
     val label: String,
@@ -993,9 +989,6 @@ private fun removeKeys(text: String, keys: Set<String>): String =
         trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.contains('=') &&
             keys.contains(trimmed.substringBefore('=').trim())
     }.joinToString("\n")
-
-private fun hasAllFilesAccess(): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 
 private fun openAllFilesSettings(context: Context) = openAllFilesAccessSettings(context)
 

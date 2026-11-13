@@ -121,8 +121,8 @@ fun DriverScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))
-            InfoRow("SFPEW 包装器", if (sfpewBundled) "已内置" else "未内置（可用外部库页导入自检）")
-            InfoRow("后端库", "libMobileGL.so（APK 内置）")
+            InfoLine(null, "SFPEW 包装器", if (sfpewBundled) "已内置" else "未内置（可用外部库页导入自检）")
+            InfoLine(null, "后端库", "libMobileGL.so（APK 内置）")
             Text(
                 "说明：启用外部库后，libRendererProxy.so 会在启动游戏时按配置加载（memfd），驱动自检同样使用该库。",
                 style = MaterialTheme.typography.labelSmall,
@@ -136,8 +136,8 @@ fun DriverScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))
-            InfoRow("libMobileGL.so", "MobileGL 渲染器核心（Magma / Espryt）")
-            InfoRow("libSimpleFPEWrapper.so", "SFPEW 包装器，旧版本固定管线兼容层")
+            InfoLine(null, "libMobileGL.so", "MobileGL 渲染器核心（Magma / Espryt）")
+            InfoLine(null, "libSimpleFPEWrapper.so", "SFPEW 包装器，旧版本固定管线兼容层")
             Spacer(Modifier.height(6.dp))
             Text(
                 "导入要求：AArch64 64 位小端 ELF，体积不超过 128 MiB，且包含 MobileGL 的 Driver POST 与 EGL 符号。",
@@ -329,10 +329,10 @@ private fun DriverCard(
             if (active) StatusPill("已激活", verdictColor("PASS")) else StatusPill("未激活", MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(8.dp))
-        InfoRow("ABI", pack.abi)
-        InfoRow("类型", pack.kind)
-        if (pack.mesaVersion.isNotBlank()) InfoRow("Mesa", pack.mesaVersion)
-        InfoRow("路径", pack.dir.absolutePath)
+        InfoLine(null, "ABI", pack.abi)
+        InfoLine(null, "类型", pack.kind)
+        if (pack.mesaVersion.isNotBlank()) InfoLine(null, "Mesa", pack.mesaVersion)
+        InfoLine(null, "路径", pack.dir.absolutePath)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (active) OutlinedButton(onClick = onClearActive) { Text("取消激活") } else Button(onClick = onActivate) { Text("激活") }

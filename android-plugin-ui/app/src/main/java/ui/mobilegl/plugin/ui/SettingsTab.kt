@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
-import android.os.Build
-import android.os.Environment
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +17,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -87,12 +84,12 @@ fun SettingsTab(
         item {
             SectionLabel("配置状态")
             InfoCard {
-                InfoRow("运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）")
+                InfoLine(null, "运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）", mono = false)
                 DividerLine()
-                InfoRow("生效时机", if (pendingRestart) "有修改待生效，重启游戏后生效" else "与当前游戏进程一致")
+                InfoLine(null, "生效时机", if (pendingRestart) "有修改待生效，重启游戏后生效" else "与当前游戏进程一致", mono = false)
                 if (!hasAllFilesAccess()) {
                     DividerLine()
-                    LinkRow("授予“所有文件访问权限”", "写共享配置、让启动器读取", {
+                    EntryRow(null, "授予“所有文件访问权限”", "写共享配置、让启动器读取", {
                         openAllFilesAccessSettings(context)
                     })
                 }
@@ -170,11 +167,3 @@ internal fun ValueChoiceRow(title: String, options: List<String>, selected: Stri
         }
     }
 }
-
-@Composable
-internal fun DividerLine() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-}
-
-private fun hasAllFilesAccess(): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true

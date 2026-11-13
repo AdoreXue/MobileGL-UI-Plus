@@ -6,8 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -19,7 +17,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,7 +38,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -185,10 +181,10 @@ internal fun InfoTab(
             item {
                 InfoCard {
                     InfoLine(UiIcons.Chip, "SoC", device.soc, mono = false) { copy("SoC", device.soc) }
-                    ThinDivider()
+                    DividerLine()
                     if (device.socVendor.isNotBlank()) {
                         InfoLine(UiIcons.Code, "厂商", device.socVendor, mono = false) { copy("厂商", device.socVendor) }
-                        ThinDivider()
+                        DividerLine()
                     }
                     InfoLine(UiIcons.Speed, "分簇", clusterText, mono = false) { copy("分簇", clusterText) }
                     MoreToggle(chipMore, "更多芯片信息") { chipMore = it }
@@ -199,12 +195,12 @@ internal fun InfoTab(
                     ) {
                         Column {
                             if (device.socExtra.socId.isNotBlank()) {
-                                ThinDivider()
-                                InfoLine(UiIcons.Chip, "编号", device.socExtra.socId) { copy("编号", device.socExtra.socId) }
+                                DividerLine()
+                                InfoLine(UiIcons.Chip, "编号", device.socExtra.socId, mono = true) { copy("编号", device.socExtra.socId) }
                             }
                             if (device.socExtra.governor.isNotBlank()) {
-                                ThinDivider()
-                                InfoLine(UiIcons.Speed, "调度", device.socExtra.governor) { copy("调度", device.socExtra.governor) }
+                                DividerLine()
+                                InfoLine(UiIcons.Speed, "调度", device.socExtra.governor, mono = true) { copy("调度", device.socExtra.governor) }
                             }
                         }
                     }
@@ -214,7 +210,7 @@ internal fun InfoTab(
             item {
                 InfoCard {
                     InfoLine(UiIcons.Gpu, "OpenGL ES", device.gles, mono = false) { copy("OpenGL ES", device.gles) }
-                    ThinDivider()
+                    DividerLine()
                     InfoLine(UiIcons.Layers, "Vulkan", device.vulkan, mono = false) { copy("Vulkan", device.vulkan) }
                     if (device.socExtra.features.isNotBlank()) {
                         MoreToggle(glMore, "CPU 特性") { glMore = it }
@@ -237,8 +233,8 @@ internal fun InfoTab(
             item { SectionLabel("运行环境") }
             item {
                 InfoCard {
-                    InfoLine(UiIcons.Speed, "渲染后端", config.backend) { copy("渲染后端", config.backend) }
-                    ThinDivider()
+                    InfoLine(UiIcons.Speed, "渲染后端", config.backend, mono = true) { copy("渲染后端", config.backend) }
+                    DividerLine()
                     InfoLine(
                         UiIcons.Layers,
                         "SFPEW 包装器",
@@ -246,16 +242,16 @@ internal fun InfoTab(
                         else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置",
                         mono = false,
                     ) { }
-                    ThinDivider()
+                    DividerLine()
                     InfoLine(
                         UiIcons.Chip,
                         "激活驱动",
                         activeName,
                         mono = false,
                     ) { copy("激活驱动", activeName) }
-                    ThinDivider()
+                    DividerLine()
                     InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false) { }
-                    ThinDivider()
+                    DividerLine()
                     InfoLine(
                         UiIcons.Layers,
                         "共享配置",
@@ -267,7 +263,7 @@ internal fun InfoTab(
             item { SectionLabel("链接") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LinkCardRow(UiIcons.Code, "GitHub 仓库", "github.com/AdoreXue/MobileGL-UI-Plus") {
+                    EntryCardRow(UiIcons.Code, "GitHub 仓库", "github.com/AdoreXue/MobileGL-UI-Plus") {
                         context.startActivity(
                             Intent(
                                 Intent.ACTION_VIEW,
@@ -275,7 +271,7 @@ internal fun InfoTab(
                             ),
                         )
                     }
-                    LinkCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
+                    EntryCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")),
                         )
@@ -315,12 +311,12 @@ internal fun InfoTab(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    ThinDivider()
+                    DividerLine()
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
                         InfoLine(UiIcons.Code, "开发者", "AdoreXue", mono = false) { copy("开发者", "AdoreXue") }
-                        ThinDivider()
+                        DividerLine()
                         InfoLine(UiIcons.Chip, "内核版本", kernelText, mono = false) { copy("内核版本", kernelText) }
-                        ThinDivider()
+                        DividerLine()
                         InfoLine(UiIcons.Layers, "开源许可证", "GNU LGPL-3.0", mono = false) {
                             runCatching {
                                 context.startActivity(
@@ -379,11 +375,11 @@ internal fun InfoTab(
             item {
                 InfoCard {
                     CreditLine("MobileGL", "渲染核心，DirectGLES 与 DirectVulkan 后端")
-                    ThinDivider()
+                    DividerLine()
                     CreditLine("SimpleFPEWrapper", "MC 1.16.5 及以下的 FPE 包装层")
-                    ThinDivider()
+                    DividerLine()
                     CreditLine("Mesa PanVK", "部分驱动包使用的开源 Vulkan 实现")
-                    ThinDivider()
+                    DividerLine()
                     CreditLine("PojavLauncher 系启动器", "FCL、Zalith 等，经 RendererPlugin 加载")
                 }
             }
@@ -391,9 +387,9 @@ internal fun InfoTab(
             item {
                 InfoCard {
                     CreditLine("Jetpack Compose", "Apache-2.0")
-                    ThinDivider()
+                    DividerLine()
                     CreditLine("Kotlin 标准库与协程", "Apache-2.0")
-                    ThinDivider()
+                    DividerLine()
                     CreditLine("AndroidX Core", "Apache-2.0")
                 }
             }
@@ -484,48 +480,16 @@ private fun StatusStrip(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PillChip(
+        StatusPill(
             text = if (authorized) "已授权" else "未授权",
             color = if (authorized) scheme.primary else scheme.error,
             onClick = if (authorized) null else onAuthorize,
         )
-        PillChip(text = backend, color = scheme.tertiary)
-        PillChip(text = healthShort(lastReport), color = healthColor(lastReport))
+        StatusPill(text = backend, color = scheme.tertiary)
+        StatusPill(text = healthShort(lastReport), color = healthColor(lastReport))
     }
 }
 
-@Composable
-private fun PillChip(text: String, color: Color, onClick: (() -> Unit)? = null) {
-    Surface(
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(50),
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(6.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(color),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text,
-                color = color,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-/** 规格格子：图标 + 小标题，值单独一行用等宽字体。 */
 @Composable
 private fun SpecCell(
     modifier: Modifier,
@@ -581,60 +545,6 @@ private fun SpecCell(
 
 /** 明细行：图标 + 标签在左，值右对齐；可点按复制。 */
 @Composable
-private fun InfoLine(
-    icon: ImageVector?,
-    label: String,
-    value: String,
-    mono: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-        }
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            value,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.End,
-            maxLines = 3,
-        )
-    }
-}
-
-@Composable
-private fun ThinDivider() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-    )
-}
-
-/** 「更多」开关：右侧箭头随展开状态旋转。 */
-@Composable
 private fun MoreToggle(expanded: Boolean, label: String, onToggle: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
@@ -660,30 +570,6 @@ private fun MoreToggle(expanded: Boolean, label: String, onToggle: (Boolean) -> 
     }
 }
 
-@Composable
-private fun LinkCardRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        onClick = onClick,
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-/** 致谢与组件行：名称加一句说明，不带点击。 */
 @Composable
 private fun CreditLine(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
@@ -724,6 +610,3 @@ private fun coreCaption(detail: String): String {
     val match = Regex("([0-9]+ 核)( · )?").find(detail) ?: return ""
     return detail.removeRange(match.range).trim()
 }
-
-private fun hasAllFilesAccess(): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true

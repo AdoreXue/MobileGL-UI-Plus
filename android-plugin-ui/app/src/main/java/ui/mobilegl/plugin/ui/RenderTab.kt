@@ -45,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -94,13 +93,9 @@ fun RenderTab(
     }
     var detailsOpen by remember { mutableStateOf(false) }
     val reveal = rememberContentReveal(ready)
-    val angleOn = renderIsOn(env("MOBILEGL_ESPRYT_USE_ANGLE"))
-    val sfpewActive = config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED
-    val solutionName = when (config.backend) {
-        "DirectVulkan" -> if (sfpewActive) "MobileGL-Magma-SFPEW" else "MobileGL-Magma"
-        "DirectGLES" -> "MobileGL-Espryt" + (if (angleOn) "-angle" else "") + (if (sfpewActive) "-SFPEW" else "")
-        else -> "MobileGL"
-    }
+    val angleOn = isOn(env("MOBILEGL_ESPRYT_USE_ANGLE"))
+    val sfpewActive = sfpewEnabled(config)
+    val solutionName = rendererName(config)
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
@@ -140,7 +135,7 @@ fun RenderTab(
                 ),
                 onToggleDetails = { detailsOpen = it },
                 onSelectBackend = { setBackend(it) },
-                onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", renderOnOff(it)) },
+                onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) },
             )
         }
         item { SectionLabel("调优摘要", 5) }
@@ -620,39 +615,6 @@ private fun DriverCard(
         )
     }
 }
-
-@Composable
-private fun EntryRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    tint: Color = MaterialTheme.colorScheme.primary,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text("›", style = MaterialTheme.typography.titleMedium, color = scheme.onSurfaceVariant)
-    }
-}
-
-private fun renderIsOn(value: String): Boolean = value == "1" || value.equals("true", true)
-
-private fun renderOnOff(value: Boolean): String = if (value) "1" else "0"
 
 /** 「12 分钟前」这种相对时间，避免请求格式化库。 */
 private fun relativeTime(ms: Long): String {

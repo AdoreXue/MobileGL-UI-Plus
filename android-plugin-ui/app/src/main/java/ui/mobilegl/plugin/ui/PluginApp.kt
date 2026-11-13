@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -700,16 +699,8 @@ private fun HomeTab(
     val context = LocalContext.current
     val info = device
     val authorized = hasAllFilesAccess()
-    val sfpewActive = config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED
-    val summary = when (config.backend) {
-        "DirectVulkan" -> if (sfpewActive) "MobileGL-Magma-SFPEW" else "MobileGL-Magma"
-        "DirectGLES" -> buildString {
-            append("MobileGL-Espryt")
-            if (config.env["MOBILEGL_ESPRYT_USE_ANGLE"] == "1") append("-angle")
-            if (sfpewActive) append("-SFPEW")
-        }
-        else -> "MobileGL"
-    }
+    val sfpewActive = sfpewEnabled(config)
+    val summary = rendererName(config)
 
     Column(
         modifier = Modifier
@@ -925,69 +916,11 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-@Composable
-fun LinkRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
 /** 子页沿用的分组写法：与主 tab 一样是「卡外小标题 + 白卡」，避免两套视觉。 */
 @Composable
 fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     SectionLabel(title)
     InfoCard(content)
-}
-
-@Composable
-fun InfoRow(label: String, value: String) {
-    // 标签列固定 96dp，保证同一张卡里所有值都从同一条竖线开始；
-    // 标签本身比这个宽度还长时（如 libSimpleFPEWrapper.so）改成上下两行，
-    // 免得把值挤到右侧只剩一小条、折成好几行。
-    if (label.length > 10) {
-        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-    } else {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            Text(
-                label,
-                modifier = Modifier.width(96.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-fun StatusPill(text: String, color: Color) {
-    Surface(color = color.copy(alpha = 0.12f), shape = RoundedCornerShape(50)) {
-        Text(
-            text,
-            color = color,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-        )
-    }
 }
 
 @Composable
@@ -1007,8 +940,6 @@ internal fun openAllFilesAccessSettings(context: Context) {
     }
 }
 
-private fun hasAllFilesAccess(): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
 @Composable
 private fun HeroTitle() {
     Row {
