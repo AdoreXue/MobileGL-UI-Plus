@@ -67,8 +67,8 @@ import ui.mobilegl.plugin.selftest.SelfTestResult
 /**
  * 信息页：版本 Hero + 状态胶囊 + 规格网格 + 可点按复制的明细卡。
  *
- * 排版分三层：最上面是版本（一眼能读到、点一下能复制），中间是四个常用规格，
- * 剩下的明细按「芯片 / 图形与系统 / 运行环境」分组，冷门项折进「更多」。
+ * 排版分三层：最上面是版本（一眼能读到、点一下能复制），接着是四个常用规格与
+ * 芯片型号，然后是「系统与设备 / 运行环境」，冷门项折进「更多」。
  */
 @Composable
 internal fun InfoTab(
@@ -103,6 +103,7 @@ internal fun InfoTab(
     val stateCount = 3 +
         (if (device.batteryTemp.isNotBlank()) 1 else 0) +
         (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
+    val glCount = 2 + stateCount + (if (device.socExtra.features.isNotBlank()) 1 else 0)
 
     LazyColumn(
         state = listState,
@@ -183,7 +184,8 @@ internal fun InfoTab(
                     }
                 }
             }
-            item { SectionLabel("芯片") }
+            // 规格网格与下面这张卡之间留一点空气，没有小标题也要看得出是两块。
+            item { Spacer(Modifier.height(10.dp)) }
             item {
                 InfoCard {
                     InfoLine(UiIcons.Chip, "SoC", device.soc, mono = false) { copy("SoC", device.soc) }
@@ -210,7 +212,7 @@ internal fun InfoTab(
                     }
                 }
             }
-            item { SectionLabel("图形与系统") }
+            item { SectionLabel("系统与设备", glCount) }
             item {
                 InfoCard {
                     InfoLine(UiIcons.Gpu, "OpenGL ES", device.gles, mono = false) { copy("OpenGL ES", device.gles) }
@@ -230,6 +232,25 @@ internal fun InfoTab(
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                    // 设备实时状态跟着图形信息放在一张卡里，少一个标题、少一次滚动。
+                    DividerLine()
+                    InfoLine(UiIcons.Bolt, "电池", batteryText, mono = false) { copy("电池", batteryText) }
+                    if (device.batteryTemp.isNotBlank()) {
+                        DividerLine()
+                        InfoLine(UiIcons.Speed, "电池温度", device.batteryTemp, mono = false) {
+                            copy("电池温度", device.batteryTemp)
+                        }
+                    }
+                    DividerLine()
+                    InfoLine(UiIcons.Layers, "屏幕", device.screen, mono = false) { copy("屏幕", device.screen) }
+                    DividerLine()
+                    InfoLine(UiIcons.Memory, "存储", device.storage, mono = false) { copy("存储", device.storage) }
+                    if (device.socExtra.curFreq.isNotBlank()) {
+                        DividerLine()
+                        InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
+                            copy("当前频率", device.socExtra.curFreq)
                         }
                     }
                 }
@@ -262,28 +283,6 @@ internal fun InfoTab(
                         if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本",
                         mono = false,
                     ) { }
-                }
-            }
-            item { SectionLabel("设备状态", stateCount) }
-            item {
-                InfoCard {
-                    InfoLine(UiIcons.Bolt, "电池", batteryText, mono = false) { copy("电池", batteryText) }
-                    if (device.batteryTemp.isNotBlank()) {
-                        DividerLine()
-                        InfoLine(UiIcons.Speed, "电池温度", device.batteryTemp, mono = false) {
-                            copy("电池温度", device.batteryTemp)
-                        }
-                    }
-                    DividerLine()
-                    InfoLine(UiIcons.Layers, "屏幕", device.screen, mono = false) { copy("屏幕", device.screen) }
-                    DividerLine()
-                    InfoLine(UiIcons.Memory, "存储", device.storage, mono = false) { copy("存储", device.storage) }
-                    if (device.socExtra.curFreq.isNotBlank()) {
-                        DividerLine()
-                        InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
-                            copy("当前频率", device.socExtra.curFreq)
-                        }
-                    }
                 }
             }
             item { SectionLabel("链接") }
