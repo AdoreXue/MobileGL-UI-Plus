@@ -11,13 +11,16 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -136,22 +139,49 @@ private val TABS = listOf(
 )
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
-private const val PAGE_MOVE_MS = 200
+private const val PAGE_MOVE_MS = 220
 private const val PAGE_FADE_IN_MS = 150
 private const val PAGE_FADE_OUT_MS = 110
 
-/** 新页从下方微微上移并淡入，旧页略微上移淡出：不横移，切换安静。 */
-private fun pageTransition(): ContentTransform {
+/** 二级页（驱动 / 启动配置 / 自检）比四个标签页深一层。 */
+private fun Dest.isSecondary(): Boolean = when (this) {
+    Dest.Drivers, Dest.ConfigFile, Dest.SelfTest -> true
+    else -> false
+}
+
+/**
+ * 三种转场：
+ * - 进二级页：新页从右侧轻滑入，旧页左移一点并淡出，方向表示"进入下一层"。
+ * - 返回：完全反向。
+ * - 标签之间：仍是从下微微上移淡入，保持安静。
+ */
+@OptIn(ExperimentalAnimationApi::class)
+private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransform {
     val fadeInSpec = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
     val fadeOutSpec = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
     val move = tween<IntOffset>(durationMillis = PAGE_MOVE_MS, easing = FastOutSlowInEasing)
+    val fromDepth = if (initialState.isSecondary()) 1 else 0
+    val toDepth = if (targetState.isSecondary()) 1 else 0
 
-    return ContentTransform(
-        targetContentEnter = slideInVertically(move) { it / 20 } + fadeIn(fadeInSpec),
-        initialContentExit = slideOutVertically(move) { -it / 40 } + fadeOut(fadeOutSpec),
-        // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
-        sizeTransform = SizeTransform(clip = true),
-    )
+    return when {
+        toDepth > fromDepth -> ContentTransform(
+            targetContentEnter = slideInHorizontally(move) { it / 5 } + fadeIn(fadeInSpec),
+            initialContentExit = slideOutHorizontally(move) { -it / 14 } + fadeOut(fadeOutSpec),
+            // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
+            sizeTransform = SizeTransform(clip = true),
+        ).apply { targetContentZIndex = 1f }
+        toDepth < fromDepth -> ContentTransform(
+            targetContentEnter = slideInHorizontally(move) { -it / 14 } + fadeIn(fadeInSpec),
+            initialContentExit = slideOutHorizontally(move) { it / 5 } + fadeOut(fadeOutSpec),
+            sizeTransform = SizeTransform(clip = true),
+            // 返回时二级页要盖在下面那层之上滑走，父页放低一层。
+        ).apply { targetContentZIndex = -1f }
+        else -> ContentTransform(
+            targetContentEnter = slideInVertically(move) { it / 20 } + fadeIn(fadeInSpec),
+            initialContentExit = slideOutVertically(move) { -it / 40 } + fadeOut(fadeOutSpec),
+            sizeTransform = SizeTransform(clip = true),
+        ).apply { targetContentZIndex = 1f }
+    }
 }
 
 @OptIn(ExperimentalAnimationApi::class)
