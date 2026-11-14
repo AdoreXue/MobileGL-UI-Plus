@@ -6,6 +6,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +28,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -131,8 +137,18 @@ fun ConfigScreen(
             }
         }
     }
-    // 与官方默认不同的项数：概览条与常驻保存条都用它。
+    // 与官方默认不同的项数：概览条和保存条都用它。
     val changedTotal = remember(parsed) { OPTION_INDEX.count { optionChangedValue(it, parsed) } }
+    // 「只看已修改」：只留下跟官方默认不一样的项，改完自查一遍用。
+    var onlyChanged by remember { mutableStateOf(false) }
+    val changedKeySet = remember(parsed) {
+        OPTION_INDEX.filter { optionChangedValue(it, parsed) }.map { it.key }.toSet()
+    }
+    fun visible(keys: List<String>): List<String> = if (onlyChanged) keys.filter { it in changedKeySet } else keys
+    // 原始文件区默认收起：整份配置很长，平时用不到全文编辑。
+    var rawOpen by remember { mutableStateOf(false) }
+    // 没有改动时不占位，保存条只在需要时浮出来。
+    val showSaveBar = changedTotal > 0 || busy
     // 骨架持续到 runtime.conf 读取完成：一步显示真实内容，不经过模板中间态。
     val ready = loaded
     val reveal = rememberContentReveal(ready)
@@ -140,21 +156,13 @@ fun ConfigScreen(
     // 保留旧滚动位置会落在内容区中间，看起来像"进了半个页面"。
     LaunchedEffect(Unit) { listState.scrollToItem(0) }
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer {
-            alpha = reveal.alpha
-            translationY = reveal.rise.toPx()
-        },
-        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 96.dp),
-    ) {
-        item { BigTitle("启动配置") }
-        // 搜索框放在最前：配置项多，找东西不用先滑过整张说明卡。
-        item {
+    // 搜索与筛选常驻在列表上方：滑到几十项以后也能直接换词、切筛选。
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 6.dp)) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 label = { Text("搜索配置项") },
                 placeholder = { Text("中文名或英文键名，如 帧在途 / FRAMES_IN_FLIGHT") },
                 singleLine = true,
@@ -164,7 +172,42 @@ fun ConfigScreen(
                     }
                 },
             )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = onlyChanged,
+                    onClick = { onlyChanged = !onlyChanged },
+                    label = {
+                        Text(
+                            if (changedTotal > 0) "只看已修改 · " + changedTotal else "只看已修改",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    },
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "共 " + OPTION_INDEX.size + " 项",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxWidth().weight(1f).graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = 0.dp,
+            end = 20.dp,
+            bottom = if (showSaveBar) 96.dp else 24.dp,
+        ),
+    ) {
+        item { BigTitle("启动配置") }
         item {
             Spacer(Modifier.height(10.dp))
             OverviewStrip(
@@ -175,7 +218,9 @@ fun ConfigScreen(
             )
         }
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
-        item {
+        // 「只看已修改」时，这张说明卡也只在 SFPEW 相关项确实改过时才留下。
+        val sfpewDirty = "SFPEW_ENABLED" in changedKeySet || SFPEW_TAIL_KEYS.any { it in changedKeySet }
+        if (!onlyChanged || sfpewDirty) item {
             Spacer(Modifier.height(4.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -272,6 +317,17 @@ fun ConfigScreen(
                 FillSkeleton(cards = 5)
             }
         } else if (query.isBlank()) {
+            if (onlyChanged && changedTotal == 0) {
+                item {
+                    InfoCard {
+                        Text(
+                            "当前没有任何改动：所有配置项都还是官方默认值。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             item {
                 SectionLabel("渲染后端", 1)
                 InfoCard {
@@ -293,56 +349,36 @@ fun ConfigScreen(
                     )
                 }
             }
-            item {
-                SectionLabel("通用配置", 11)
-                InfoCard {
-                    Text(
-                        "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OptionRows(COMMON_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
-                }
-            }
-            item {
-                SectionLabel("管线", 5)
-                InfoCard {
-                    Text(
-                        "前后端命令传递相关的进阶选项。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OptionRows(PIPE_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
-                }
-            }
-            item {
-                SectionLabel("兼容性", 5)
-                InfoCard {
-                    Text(
-                        "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OptionRows(COMPAT_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
-                }
-            }
-            item {
-                SectionLabel("诊断", 5)
-                InfoCard {
-                    Text(
-                        "输出日志与内部校验，用于定位问题。日常开启会产生额外开销。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OptionRows(DIAG_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
-                }
-            }
-            item {
-                SectionLabel("DirectVulkan / Magma 专用", 18)
+            optionGroup(
+                title = "通用配置",
+                note = "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
+                keys = visible(COMMON_KEYS),
+                text = text,
+                parsed = parsed,
+            ) { key, value -> text = setKey(text, key, value) }
+            optionGroup(
+                title = "管线",
+                note = "前后端命令传递相关的进阶选项。",
+                keys = visible(PIPE_KEYS),
+                text = text,
+                parsed = parsed,
+            ) { key, value -> text = setKey(text, key, value) }
+            optionGroup(
+                title = "兼容性",
+                note = "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
+                keys = visible(COMPAT_KEYS),
+                text = text,
+                parsed = parsed,
+            ) { key, value -> text = setKey(text, key, value) }
+            optionGroup(
+                title = "诊断",
+                note = "输出日志与内部校验，用于定位问题。日常开启会产生额外开销。",
+                keys = visible(DIAG_KEYS),
+                text = text,
+                parsed = parsed,
+            ) { key, value -> text = setKey(text, key, value) }
+            if (visible(MAGMA_KEYS).isNotEmpty()) item {
+                SectionLabel("DirectVulkan / Magma 专用", visible(MAGMA_KEYS).size)
                 InfoCard {
                     Text(
                         "仅在渲染后端为 DirectVulkan 时生效。已按官方默认值配置，通常无需改动。",
@@ -353,15 +389,15 @@ fun ConfigScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { showMagma = !showMagma },
-                    ) { Text(if (showMagma) "收起 18 项" else "展开 18 项") }
-                    if (showMagma) {
+                    ) { Text(if (showMagma || onlyChanged) "收起" else "展开 " + visible(MAGMA_KEYS).size + " 项") }
+                    if (showMagma || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
-                        OptionRows(MAGMA_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
+                        OptionRows(visible(MAGMA_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
                     }
                 }
             }
-            item {
-                SectionLabel("DirectGLES / Espryt 专用", 17)
+            if (visible(ESPRYT_KEYS).isNotEmpty()) item {
+                SectionLabel("DirectGLES / Espryt 专用", visible(ESPRYT_KEYS).size)
                 InfoCard {
                     Text(
                         "仅在渲染后端为 DirectGLES 时生效。已按官方默认值配置，通常无需改动。",
@@ -372,10 +408,10 @@ fun ConfigScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { showEspryt = !showEspryt },
-                    ) { Text(if (showEspryt) "收起 17 项" else "展开 17 项") }
-                    if (showEspryt) {
+                    ) { Text(if (showEspryt || onlyChanged) "收起" else "展开 " + visible(ESPRYT_KEYS).size + " 项") }
+                    if (showEspryt || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
-                        OptionRows(ESPRYT_KEYS, text, parsed) { key, value -> text = setKey(text, key, value) }
+                        OptionRows(visible(ESPRYT_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
                     }
                 }
             }
@@ -418,6 +454,23 @@ fun ConfigScreen(
             }
             item {
                 SectionLabel("原始文件")
+                InfoCard {
+                    // 全文编辑器默认收起：平时用不到，展开时也不容易被误触。
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { rawOpen = !rawOpen }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (rawOpen) "收起全文" else "展开编辑全文（" + (text.count { it == '\n' } + 1) + " 行）",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        ChevronIcon(expanded = rawOpen, tint = MaterialTheme.colorScheme.primary, size = 16.dp)
+                    }
+                }
+            }
+            if (rawOpen) item {
                 InfoCard {
                     OutlinedTextField(
                         value = text,
@@ -469,12 +522,16 @@ fun ConfigScreen(
             }
         }
     }
-    SaveBar(
+    }
+    // 没有改动时保存条不占位；一有改动就滑出来，并写明改了几项。
+    AnimatedVisibility(
+        visible = showSaveBar,
         modifier = Modifier.align(Alignment.BottomCenter),
-        busy = busy,
-        changed = changedTotal,
-        onSave = { save() },
-    )
+        enter = slideInVertically { it } + fadeIn(tween(Motion.Fast, easing = Motion.Decelerate)),
+        exit = slideOutVertically { it } + fadeOut(tween(Motion.Fast, easing = Motion.Accelerate)),
+    ) {
+        SaveBar(modifier = Modifier, busy = busy, changed = changedTotal, onSave = { save() })
+    }
     }
     if (confirmTemplate) {
         AlertDialog(
@@ -1116,6 +1173,30 @@ private val ESPRYT_KEYS = listOf(
     "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE",
     "MOBILEGL_ESPRYT_MULTIDRAW_MODE", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH",
 )
+
+/** 一组配置项：标题上的数字跟着「只看已修改」一起变，筛完没剩项就整组不画。 */
+private fun LazyListScope.optionGroup(
+    title: String,
+    note: String,
+    keys: List<String>,
+    text: String,
+    parsed: Map<String, String>,
+    onEdit: (String, String) -> Unit,
+) {
+    if (keys.isEmpty()) return
+    item {
+        SectionLabel(title, keys.size)
+        InfoCard {
+            Text(
+                note,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            OptionRows(keys, text, parsed, onEdit)
+        }
+    }
+}
 
 /** 按索引里的定义渲染一组选项：标题、说明、默认值、控件类型都取自 OPTION_INDEX。 */
 @Composable
