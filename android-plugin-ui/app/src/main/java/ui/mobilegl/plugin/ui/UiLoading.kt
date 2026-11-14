@@ -3,6 +3,7 @@ package ui.mobilegl.plugin.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,8 +22,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -80,6 +83,37 @@ fun rememberContentReveal(ready: Boolean, durationMs: Int = Motion.Slow): Conten
         alpha = 0.35f + 0.65f * progress.value,
         rise = ((1f - progress.value) * 6f).dp,
     )
+}
+
+/**
+ * 二级页分段入场：序号越大，入场越晚，最多错开 5 档。
+ *
+ * 只用于打开页面时的那一次：卡片从下方 8dp 淡入并上移到位，读起来像「一层层放上去」。
+ * 上限 5 档是为了长列表不至于最后几块等太久。
+ */
+@Composable
+fun rememberStaggerReveal(index: Int, stepMs: Int = 40, maxSteps: Int = 5): ContentReveal {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val delayMs = index.coerceIn(0, maxSteps) * stepMs
+        if (delayMs > 0) delay(delayMs.toLong())
+        progress.animateTo(1f, tween(durationMillis = Motion.Base, easing = Motion.Decelerate))
+    }
+    return ContentReveal(alpha = progress.value, rise = ((1f - progress.value) * 8f).dp)
+}
+
+/** 包一层错峰入场，二级页里按顺序给 index 即可。 */
+@Composable
+fun StaggeredEntry(index: Int, content: @Composable () -> Unit) {
+    val reveal = rememberStaggerReveal(index)
+    Box(
+        Modifier.graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
+    ) {
+        content()
+    }
 }
 
 /** 内容就位前的占位卡片，形状、颜色与真实卡片一致，避免闪白。 */

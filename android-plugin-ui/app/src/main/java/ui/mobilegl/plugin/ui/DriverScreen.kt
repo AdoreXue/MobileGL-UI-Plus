@@ -118,7 +118,7 @@ fun DriverScreen(
             SkeletonCard(4)
             return@Column
         }
-        SectionCard("渲染器组件") {
+        SectionCard("渲染器组件", stagger = 0) {
             Text(
                 "本 APK 的渲染链：启动器 → libRendererProxy.so →（SFPEW 包装器 或 直连）→ libMobileGL.so。",
                 style = MaterialTheme.typography.bodySmall,
@@ -133,7 +133,7 @@ fun DriverScreen(
             )
         }
 
-        SectionCard("外部库（单个 .so）") {
+        SectionCard("外部库（单个 .so）", stagger = 1) {
             Text(
                 "用于单独替换渲染链中的某个库，无需重新安装 APK。仅接受以下两种文件：",
                 style = MaterialTheme.typography.bodySmall,
@@ -195,7 +195,7 @@ fun DriverScreen(
             }
         }
 
-        SectionCard("驱动包（Vulkan 驱动 · 未完善）") {
+        SectionCard("驱动包（Vulkan 驱动 · 未完善）", stagger = 2) {
             Text(
                 "该包为 zip 格式，根目录含 driver.json 清单，内容为第三方 Vulkan 驱动，主要为适用于 Mali GPU 的 " +
                     "Mesa PanVK。系统驱动存在问题时，可替换为他人编译的版本。",
@@ -230,7 +230,8 @@ fun DriverScreen(
                 OutlinedButton(onClick = onRefresh) { Text("刷新") }
             }
         }
-        drivers.forEach { pack ->
+        drivers.forEachIndexed { index, pack ->
+            StaggeredEntry(index = 3 + index) {
             DriverCard(
                 pack = pack,
                 active = pack.id == config.activeDriverId,
@@ -241,6 +242,7 @@ fun DriverScreen(
                 onMessage = { message = it },
                 onRefresh = onRefresh,
             )
+            }
         }
     }
 

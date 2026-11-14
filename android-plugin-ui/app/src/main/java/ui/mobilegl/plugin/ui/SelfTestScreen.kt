@@ -74,7 +74,7 @@ fun SelfTestScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            SectionCard("驱动自检") {
+            SectionCard("驱动自检", stagger = 0) {
                 Text(
                     "与官方 MobileGL Action APK 使用同一套 Driver POST（DirectGLES + DirectVulkan），" +
                         "展示原生 checks、Known driver bugs 与 Format capabilities 完整报告。",
@@ -145,7 +145,7 @@ fun SelfTestScreen(
             return@LazyColumn
         }
 
-        item { SelfTestSummary(report) }
+        item { StaggeredEntry(1) { SelfTestSummary(report) } }
 
         items(report.backends, key = { it.backend + "|" + it.renderer }) { backend ->
             BackendCard(

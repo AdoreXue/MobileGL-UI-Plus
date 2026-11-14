@@ -42,6 +42,12 @@ internal object Motion {
     val Decelerate: Easing = LinearOutSlowInEasing
     val Accelerate: Easing = FastOutSlowInEasing
 
+    /** Material 3 的 emphasized decelerate：进入类动作，开头快、尾巴长。 */
+    val EmphasizedDecelerate: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+
+    /** Material 3 的 emphasized accelerate：离开类动作，尾巴收得干脆。 */
+    val EmphasizedAccelerate: Easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
     /** 折叠区展开：高度与透明度一起走，比默认稍快一点，点开立刻有反馈。 */
     fun foldEnter(): EnterTransition =
         fadeIn(tween(durationMillis = 140, easing = Decelerate)) +

@@ -147,6 +147,9 @@ private val TABS = listOf(
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
 
+/** 二级页转场时长：Material 的 shared-axis 用 300ms 一档。 */
+private const val ShuffleAxisMs = 300
+
 /** 二级页（驱动 / 启动配置 / 自检）比四个标签页深一层。 */
 private fun Dest.isSecondary(): Boolean = when (this) {
     Dest.Drivers, Dest.ConfigFile, Dest.SelfTest -> true
@@ -161,23 +164,26 @@ private fun Dest.isSecondary(): Boolean = when (this) {
  */
 @OptIn(ExperimentalAnimationApi::class)
 private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransform {
-    val move = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
+    // 二级页 300ms 的 shared-axis：新页用 emphasized decelerate 滑入，
+    // 旧页用 emphasized accelerate 退场，淡出比新页慢一档，看起来是「被盖住」而不是同时消失。
+    val move = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedDecelerate)
+    val exitMove = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedAccelerate)
     val quickMove = tween<IntOffset>(durationMillis = 180, easing = Motion.Standard)
-    val enterFade = tween<Float>(durationMillis = 190, easing = Motion.Decelerate)
-    val exitFade = tween<Float>(durationMillis = 140, easing = Motion.Accelerate)
+    val enterFade = tween<Float>(durationMillis = 210, easing = Motion.EmphasizedDecelerate)
+    val exitFade = tween<Float>(durationMillis = 260, easing = Motion.EmphasizedAccelerate)
     val fromDepth = if (initialState.isSecondary()) 1 else 0
     val toDepth = if (targetState.isSecondary()) 1 else 0
 
     return when {
         toDepth > fromDepth -> ContentTransform(
             targetContentEnter = slideInHorizontally(move) { it / 5 } + fadeIn(enterFade),
-            initialContentExit = slideOutHorizontally(move) { -it / 12 } + fadeOut(exitFade),
+            initialContentExit = slideOutHorizontally(exitMove) { -it / 12 } + fadeOut(exitFade),
             // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
             sizeTransform = SizeTransform(clip = true),
         ).apply { targetContentZIndex = 1f }
         toDepth < fromDepth -> ContentTransform(
             targetContentEnter = slideInHorizontally(move) { -it / 12 } + fadeIn(enterFade),
-            initialContentExit = slideOutHorizontally(move) { it / 5 } + fadeOut(exitFade),
+            initialContentExit = slideOutHorizontally(exitMove) { it / 5 } + fadeOut(exitFade),
             sizeTransform = SizeTransform(clip = true),
             // 返回时二级页要盖在下面那层之上滑走，父页放低一层。
         ).apply { targetContentZIndex = -1f }
@@ -1040,9 +1046,19 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
 
 /** 子页沿用的分组写法：与主 tab 一样是「卡外小标题 + 白卡」，避免两套视觉。 */
 @Composable
-fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    SectionLabel(title)
-    InfoCard(content)
+fun SectionCard(title: String, stagger: Int? = null, content: @Composable ColumnScope.() -> Unit) {
+    // 二级页传 stagger 时按序号错峰入场；主 tab 不传，保持原样。
+    if (stagger == null) {
+        SectionLabel(title)
+        InfoCard(content)
+    } else {
+        StaggeredEntry(stagger) {
+            Column {
+                SectionLabel(title)
+                InfoCard(content)
+            }
+        }
+    }
 }
 
 @Composable
