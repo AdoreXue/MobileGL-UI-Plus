@@ -7,12 +7,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,10 +34,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -60,6 +65,33 @@ internal fun subtleBorder(): BorderStroke =
 @Composable
 internal fun Modifier.cardStroke(shape: RoundedCornerShape = CardCorner): Modifier =
     border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), shape)
+
+/**
+ * 长按复制：点按不再触发复制，避免滑动列表时误触；长按时给一次触感反馈。
+ *
+ * 用 pointerInput 而不是 combinedClickable：后者会给整行加「可点」语义和波纹，
+ * 而我们并不想要点按行为。读屏通过 semantics 暴露成长按操作。
+ */
+@Composable
+internal fun Modifier.copyOnLongPress(onCopy: (() -> Unit)?): Modifier {
+    if (onCopy == null) return this
+    val haptics = LocalHapticFeedback.current
+    return this
+        .pointerInput(onCopy) {
+            detectTapGestures(
+                onLongPress = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCopy()
+                },
+            )
+        }
+        .semantics {
+            onLongClick(label = "复制") {
+                onCopy()
+                true
+            }
+        }
+}
 
 /** 等宽数值：版本号、频率、掩码统一走这里，字重与字距一致。 */
 @Composable
@@ -235,7 +267,7 @@ private fun EntryListItem(
 }
 
 /**
- * 标签-值行：图标可选、值右对齐、可点复制。
+ * 标签-值行：图标可选、值右对齐、长按复制。
  * 标签超过 10 个字符时改成上下两行，免得把值挤成一小条。
  */
 @Composable
@@ -244,18 +276,12 @@ internal fun InfoLine(
     label: String,
     value: String,
     mono: Boolean = false,
-    onClick: (() -> Unit)? = null,
+    onCopy: (() -> Unit)? = null,
 ) {
     val rowModifier = Modifier
         .fillMaxWidth()
-        // 可点的信息行整行都要有 48dp 触控高度，纯展示行保持紧凑。
-        .then(
-            if (onClick == null) {
-                Modifier
-            } else {
-                Modifier.clickable(onClick = onClick).heightIn(min = 48.dp)
-            },
-        )
+        // 长按复制，点按不做事；整行保持 48dp 触控高度，纯展示行不受影响。
+        .copyOnLongPress(onCopy)
 
     if (label.length > 10) {
         Column(rowModifier.padding(vertical = 8.dp)) {

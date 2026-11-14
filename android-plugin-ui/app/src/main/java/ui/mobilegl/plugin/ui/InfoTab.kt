@@ -66,9 +66,9 @@ import ui.mobilegl.plugin.driver.DriverPack
 import ui.mobilegl.plugin.selftest.SelfTestResult
 
 /**
- * 信息页：版本 Hero + 状态胶囊 + 规格网格 + 可点按复制的明细卡。
+ * 信息页：版本 Hero + 状态胶囊 + 规格网格 + 可长按复制的明细卡。
  *
- * 排版分三层：最上面是版本（一眼能读到、点一下能复制），接着是四个常用规格与
+ * 排版分三层：最上面是版本（一眼能读到、长按能复制），接着是四个常用规格与
  * 芯片型号，然后是「系统与设备 / 运行环境」，冷门项折进「更多」。
  */
 @Composable
@@ -128,7 +128,7 @@ internal fun InfoTab(
                 VersionHero(
                     version = BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
                     internal = BuildConfig.FULL_VERSION_NAME,
-                    onClick = { copy("版本号", BuildConfig.FULL_VERSION_NAME) },
+                    onLongPress = { copy("版本号", BuildConfig.FULL_VERSION_NAME) },
                 )
             }
             item {
@@ -153,7 +153,7 @@ internal fun InfoTab(
                             label = "GPU",
                             value = device.gpu,
                             caption = if (busy.isBlank()) "" else "占用 " + busy,
-                            onClick = { copy("GPU", device.gpu) },
+                            onLongPress = { copy("GPU", device.gpu) },
                         )
                         SpecCell(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -161,7 +161,7 @@ internal fun InfoTab(
                             label = "内存",
                             value = device.memory,
                             caption = device.memoryAvail,
-                            onClick = { copy("内存", device.memory + " · " + device.memoryAvail) },
+                            onLongPress = { copy("内存", device.memory + " · " + device.memoryAvail) },
                         )
                     }
                     Row(
@@ -174,7 +174,7 @@ internal fun InfoTab(
                             label = "系统",
                             value = device.android,
                             caption = "",
-                            onClick = { copy("系统", device.android) },
+                            onLongPress = { copy("系统", device.android) },
                         )
                         SpecCell(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -184,7 +184,7 @@ internal fun InfoTab(
                             // 分簇直接写进这一格：小屏上比单独一行更省位置。
                             caption = clusterSummary(clusterText).ifBlank { coreCaption(device.socDetail) },
                             mono = false,
-                            onClick = { copy("核心", clusterText) },
+                            onLongPress = { copy("核心", clusterText) },
                         )
                     }
                     // 第三行：屏幕与存储原来挤在下面的卡里，挪上来每格都有值和小字。
@@ -199,7 +199,7 @@ internal fun InfoTab(
                             value = screenValue(device.screen),
                             caption = screenCaption(device.screen),
                             mono = false,
-                            onClick = { copy("屏幕", device.screen) },
+                            onLongPress = { copy("屏幕", device.screen) },
                         )
                         SpecCell(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -208,7 +208,7 @@ internal fun InfoTab(
                             value = storageValue(device.storage),
                             caption = storageCaption(device.storage),
                             mono = false,
-                            onClick = { copy("存储", device.storage) },
+                            onLongPress = { copy("存储", device.storage) },
                         )
                     }
                 }
@@ -456,9 +456,9 @@ internal fun InfoTab(
     }
 }
 
-/** 版本 Hero：渐变底 + 等宽版本号，点按复制。 */
+/** 版本 Hero：渐变底 + 等宽版本号，长按复制。 */
 @Composable
-private fun VersionHero(version: String, internal: String, onClick: () -> Unit) {
+private fun VersionHero(version: String, internal: String, onLongPress: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val gradient = Brush.linearGradient(
         listOf(scheme.primary.copy(alpha = 0.36f), scheme.primary.copy(alpha = 0.10f), scheme.surfaceContainer),
@@ -468,7 +468,7 @@ private fun VersionHero(version: String, internal: String, onClick: () -> Unit) 
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(gradient)
-            .clickable(onClick = onClick)
+            .copyOnLongPress(onLongPress)
             .padding(horizontal = 20.dp, vertical = 18.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -481,7 +481,7 @@ private fun VersionHero(version: String, internal: String, onClick: () -> Unit) 
                 modifier = Modifier.weight(1f),
             )
             Text(
-                "点按复制",
+                "长按复制",
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
             )
@@ -548,7 +548,7 @@ private fun SpecCell(
     value: String,
     caption: String,
     mono: Boolean = true,
-    onClick: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -556,7 +556,7 @@ private fun SpecCell(
             .clip(RoundedCornerShape(16.dp))
             .background(scheme.surfaceContainer)
             .cardStroke()
-            .clickable(onClick = onClick)
+            .copyOnLongPress(onLongPress)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
