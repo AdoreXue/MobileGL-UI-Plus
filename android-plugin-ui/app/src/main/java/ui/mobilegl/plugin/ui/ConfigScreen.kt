@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -33,10 +34,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
@@ -177,42 +183,88 @@ fun ConfigScreen(
     // 跳到某组后列表会重建，滚回顶部才看得到那组的标题。
     LaunchedEffect(jumpGroup) { if (jumpGroup != null) listState.scrollToItem(0) }
     Box(Modifier.fillMaxSize()) {
-    // 搜索与筛选常驻在列表上方：滑到几十项以后也能直接换词、切筛选。
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 6.dp)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("搜索配置项") },
-                placeholder = { Text("中文名或英文键名，如 帧在途 / FRAMES_IN_FLIGHT") },
-                singleLine = true,
-                trailingIcon = {
-                    if (query.isNotBlank()) {
-                        TextButton(onClick = { query = "" }) { Text("清除") }
-                    }
-                },
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FilterChip(
-                    selected = onlyChanged,
-                    onClick = { onlyChanged = !onlyChanged },
-                    label = {
-                        Text(
-                            if (changedTotal > 0) "只看已修改 · " + changedTotal else "只看已修改",
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    },
-                )
-                Spacer(Modifier.weight(1f))
+        // 顶部固定区（标题 + 搜索）和列表放在同一个纵向容器里，列表才能用 weight 吃掉剩余高度。
+        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 8.dp)) {
+            // 标题在最顶：搜索框不再压在页面标题上面。
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "共 " + OPTION_INDEX.size + " 项",
+                    "启动配置",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    if (onlyChanged) "已改 " + changedTotal + " / " + OPTION_INDEX.size else "共 " + OPTION_INDEX.size + " 项",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            Spacer(Modifier.height(10.dp))
+            // 一行搞定：搜索、清除、「只看已修改」。
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { inner ->
+                            if (query.isBlank()) {
+                                Text(
+                                    "搜索配置项或键名",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            inner()
+                        },
+                    )
+                    if (query.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            Icons.Filled.Clear,
+                            contentDescription = "清除",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp).clickable { query = "" },
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (changedTotal > 0) "改动 " + changedTotal else "只看改动",
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (onlyChanged) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surface,
+                            )
+                            .clickable(enabled = changedTotal > 0 || onlyChanged) { onlyChanged = !onlyChanged }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (onlyChanged) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
             }
         }
     LazyColumn(
@@ -228,7 +280,6 @@ fun ConfigScreen(
             bottom = if (showSaveBar) 96.dp else 24.dp,
         ),
     ) {
-        item { BigTitle("启动配置") }
         item {
             Spacer(Modifier.height(10.dp))
             OverviewStrip(
