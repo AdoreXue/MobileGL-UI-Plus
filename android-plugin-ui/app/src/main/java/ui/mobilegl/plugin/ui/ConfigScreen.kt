@@ -13,6 +13,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -56,8 +58,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -145,16 +152,30 @@ fun ConfigScreen(
         OPTION_INDEX.filter { optionChangedValue(it, parsed) }.map { it.key }.toSet()
     }
     fun visible(keys: List<String>): List<String> = if (onlyChanged) keys.filter { it in changedKeySet } else keys
+    // 搜索结果同样受「只看已修改」影响，两个入口的规则保持一致。
+    val resultMatches = if (onlyChanged) matches.filter { it.key in changedKeySet } else matches
     // 原始文件区默认收起：整份配置很长，平时用不到全文编辑。
     var rawOpen by remember { mutableStateOf(false) }
     // 没有改动时不占位，保存条只在需要时浮出来。
     val showSaveBar = changedTotal > 0 || busy
+    // 搜索结果里点「跳到该组」后只显示那一组，顶上一枚胶囊可以退回全部。
+    var jumpGroup by remember { mutableStateOf<String?>(null) }
+    fun groupShown(section: String): Boolean = jumpGroup == null || jumpGroup == section
+    fun jumpTo(section: String) {
+        if (section == "DirectVulkan / Magma 专用") showMagma = true
+        if (section == "DirectGLES / Espryt 专用") showEspryt = true
+        jumpGroup = section.ifBlank { null }
+        query = ""
+        onlyChanged = false
+    }
     // 骨架持续到 runtime.conf 读取完成：一步显示真实内容，不经过模板中间态。
     val ready = loaded
     val reveal = rememberContentReveal(ready)
     // 每次进入（重新组合）时列表回到顶部：骨架与内容高度差异大，
     // 保留旧滚动位置会落在内容区中间，看起来像"进了半个页面"。
     LaunchedEffect(Unit) { listState.scrollToItem(0) }
+    // 跳到某组后列表会重建，滚回顶部才看得到那组的标题。
+    LaunchedEffect(jumpGroup) { if (jumpGroup != null) listState.scrollToItem(0) }
     Box(Modifier.fillMaxSize()) {
     // 搜索与筛选常驻在列表上方：滑到几十项以后也能直接换词、切筛选。
     Column(Modifier.fillMaxSize()) {
@@ -220,7 +241,7 @@ fun ConfigScreen(
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
         // 「只看已修改」时，这张说明卡也只在 SFPEW 相关项确实改过时才留下。
         val sfpewDirty = "SFPEW_ENABLED" in changedKeySet || SFPEW_TAIL_KEYS.any { it in changedKeySet }
-        if (!onlyChanged || sfpewDirty) item {
+        if ((!onlyChanged || sfpewDirty) && groupShown("SFPEW")) item {
             Spacer(Modifier.height(4.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -300,13 +321,57 @@ fun ConfigScreen(
             ) {
                 Column {
                     Spacer(Modifier.height(8.dp))
-                    SectionLabel("搜索结果（" + matches.size + "）")
+                    SectionLabel("搜索结果（" + resultMatches.size + "）")
                     InfoCard {
-                        if (matches.isEmpty()) {
+                        if (resultMatches.isEmpty()) {
                             Text("没有匹配的配置项", style = MaterialTheme.typography.bodySmall)
+                            val hints = suggestOptions(query)
+                            if (hints.isNotEmpty()) {
+                                Text(
+                                    "试试这些：",
+                                    modifier = Modifier.padding(top = 10.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    hints.forEach { hint ->
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { query = hint.label },
+                                            label = { Text(hint.label, style = MaterialTheme.typography.labelMedium) },
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        OptionRows(matches.map { it.key }, text, parsed) { key, value ->
-                            text = setKey(text, key, value)
+                        resultMatches.forEachIndexed { index, meta ->
+                            val section = OPTION_SECTION[meta.key].orEmpty()
+                            if (index > 0) DividerLine()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    section.ifBlank { "其他" },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                if (section.isNotBlank()) {
+                                    Text(
+                                        "跳到该组 ›",
+                                        modifier = Modifier.clickable { jumpTo(section) },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            OptionRows(listOf(meta.key), text, parsed, highlight = query) { key, value ->
+                                text = setKey(text, key, value)
+                            }
                         }
                     }
                 }
@@ -317,6 +382,27 @@ fun ConfigScreen(
                 FillSkeleton(cards = 5)
             }
         } else if (query.isBlank()) {
+            if (jumpGroup != null) {
+                val group = jumpGroup
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { jumpGroup = null }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "← 全部配置",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            group ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             if (onlyChanged && changedTotal == 0) {
                 item {
                     InfoCard {
@@ -328,7 +414,7 @@ fun ConfigScreen(
                     }
                 }
             }
-            item {
+            if (groupShown("渲染后端")) item {
                 SectionLabel("渲染后端", 1)
                 InfoCard {
                     OptionSelect(
@@ -352,32 +438,32 @@ fun ConfigScreen(
             optionGroup(
                 title = "通用配置",
                 note = "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
-                keys = visible(COMMON_KEYS),
+                keys = if (groupShown("通用配置")) visible(COMMON_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 title = "管线",
                 note = "前后端命令传递相关的进阶选项。",
-                keys = visible(PIPE_KEYS),
+                keys = if (groupShown("管线")) visible(PIPE_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 title = "兼容性",
                 note = "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
-                keys = visible(COMPAT_KEYS),
+                keys = if (groupShown("兼容性")) visible(COMPAT_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 title = "诊断",
                 note = "输出日志与内部校验，用于定位问题。日常开启会产生额外开销。",
-                keys = visible(DIAG_KEYS),
+                keys = if (groupShown("诊断")) visible(DIAG_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
-            if (visible(MAGMA_KEYS).isNotEmpty()) item {
+            if (groupShown("DirectVulkan / Magma 专用") && visible(MAGMA_KEYS).isNotEmpty()) item {
                 SectionLabel("DirectVulkan / Magma 专用", visible(MAGMA_KEYS).size)
                 InfoCard {
                     Text(
@@ -396,7 +482,7 @@ fun ConfigScreen(
                     }
                 }
             }
-            if (visible(ESPRYT_KEYS).isNotEmpty()) item {
+            if (groupShown("DirectGLES / Espryt 专用") && visible(ESPRYT_KEYS).isNotEmpty()) item {
                 SectionLabel("DirectGLES / Espryt 专用", visible(ESPRYT_KEYS).size)
                 InfoCard {
                     Text(
@@ -567,11 +653,12 @@ fun ConfigScreen(
 
 /** 说明之后单独一行、用强调色标出官方默认值。 */
 @Composable
-private fun OptionDesc(desc: String, default: String) {
+private fun OptionDesc(desc: String, default: String, highlight: String = "") {
     if (desc.isNotBlank()) {
-        Text(
+        HighlightedText(
             desc,
-            style = MaterialTheme.typography.labelSmall,
+            highlight,
+            MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -595,12 +682,13 @@ private fun OptionSelect(
     desc: String = "",
     default: String = "",
     parsed: Map<String, String> = emptyMap(),
+    highlight: String = "",
     onSelect: (String) -> Unit,
 ) {
     val changed = changedSelect(value, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        OptionLabel(label, changed)
-        OptionDesc(desc, default)
+        OptionLabel(label, changed, highlight)
+        OptionDesc(desc, default, highlight)
         if (key.isNotBlank()) {
             Text(
                 key,
@@ -628,6 +716,7 @@ private fun OptionQuirk(
     desc: String = "",
     default: String = "",
     parsed: Map<String, String> = emptyMap(),
+    highlight: String = "",
     onChange: (String) -> Unit,
 ) {
     val current = (parsed[key] ?: "auto").lowercase()
@@ -638,8 +727,8 @@ private fun OptionQuirk(
     }
     val changed = changedQuirk(current, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        OptionLabel(label, changed)
-        OptionDesc(desc, default)
+        OptionLabel(label, changed, highlight)
+        OptionDesc(desc, default, highlight)
         Text(
             key,
             style = MaterialTheme.typography.labelSmall,
@@ -673,6 +762,7 @@ private fun OptionText(
     desc: String = "",
     default: String = "",
     parsed: Map<String, String> = emptyMap(),
+    highlight: String = "",
     onChange: (String) -> Unit,
 ) {
     var value by remember(key, text) { mutableStateOf(parsed[key] ?: "") }
@@ -682,10 +772,10 @@ private fun OptionText(
             value = value,
             onValueChange = { value = it; onChange(it) },
             modifier = Modifier.fillMaxWidth(),
-            label = { OptionLabel(label, changed) },
+            label = { OptionLabel(label, changed, highlight) },
             supportingText = {
                 Column {
-                    OptionDesc(desc, default)
+                    OptionDesc(desc, default, highlight)
                     Text(
                         key,
                         style = MaterialTheme.typography.labelSmall,
@@ -706,6 +796,7 @@ private fun OptionToggle(
     desc: String = "",
     default: String = "",
     parsed: Map<String, String> = emptyMap(),
+    highlight: String = "",
     onToggle: (Boolean) -> Unit,
 ) {
     val enabled = parsed[key] == "1"
@@ -715,8 +806,8 @@ private fun OptionToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            OptionLabel(label, changed)
-            OptionDesc(desc, default)
+            OptionLabel(label, changed, highlight)
+            OptionDesc(desc, default, highlight)
             Text(
                 key,
                 style = MaterialTheme.typography.labelSmall,
@@ -971,7 +1062,7 @@ private fun openAllFilesSettings(context: Context) = openAllFilesAccessSettings(
 
 /** 行首改动点：与官方默认不同时画一个小圆点。 */
 @Composable
-private fun OptionLabel(label: String, changed: Boolean) {
+private fun OptionLabel(label: String, changed: Boolean, highlight: String = "") {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (changed) {
             Box(
@@ -982,7 +1073,7 @@ private fun OptionLabel(label: String, changed: Boolean) {
             )
             Spacer(Modifier.width(6.dp))
         }
-        Text(label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        HighlightedText(label, highlight, MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1174,6 +1265,60 @@ private val ESPRYT_KEYS = listOf(
     "MOBILEGL_ESPRYT_MULTIDRAW_MODE", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH",
 )
 
+/** 每个配置项属于哪个分组：搜索结果里标出来，点一下能跳回去。 */
+private val OPTION_SECTION: Map<String, String> = buildMap {
+    COMMON_KEYS.forEach { put(it, "通用配置") }
+    PIPE_KEYS.forEach { put(it, "管线") }
+    COMPAT_KEYS.forEach { put(it, "兼容性") }
+    DIAG_KEYS.forEach { put(it, "诊断") }
+    MAGMA_KEYS.forEach { put(it, "DirectVulkan / Magma 专用") }
+    ESPRYT_KEYS.forEach { put(it, "DirectGLES / Espryt 专用") }
+    SFPEW_TAIL_KEYS.forEach { put(it, "SFPEW") }
+    put("SFPEW_ENABLED", "SFPEW")
+    put("SFPEW_EGL", "SFPEW")
+    put("MOBILEGL_BACKEND_TYPE", "渲染后端")
+}
+
+/** 搜不到时推荐的常用项。 */
+private val COMMON_PICKS = listOf(
+    "MOBILEGL_FRAMES_IN_FLIGHT", "MOBILEGL_BACKEND_TYPE", "SFPEW_ENABLED", "MOBILEGL_ASYNC_SHADER_COMPILE",
+)
+
+/** 搜不到时的兜底建议：先找名字相近的，再退到常用项。 */
+private fun suggestOptions(query: String): List<OptionMeta> {
+    val needle = query.trim()
+    if (needle.isEmpty()) return emptyList()
+    val head = needle.take(2)
+    val near = OPTION_INDEX.filter { it.label.contains(head, true) || it.key.contains(head, true) }.take(4)
+    return near.ifEmpty { OPTION_INDEX.filter { it.key in COMMON_PICKS } }
+}
+
+/** 把命中的那段字标出来，搜索结果里一眼看见为什么命中。 */
+@Composable
+private fun HighlightedText(
+    text: String,
+    highlight: String,
+    style: TextStyle,
+    color: Color = Color.Unspecified,
+    fontWeight: FontWeight? = null,
+) {
+    val needle = highlight.trim()
+    val start = if (needle.isEmpty()) -1 else text.indexOf(needle, ignoreCase = true)
+    if (start < 0) {
+        Text(text, style = style, color = color, fontWeight = fontWeight)
+        return
+    }
+    val accent = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val marked = buildAnnotatedString {
+        append(text.substring(0, start))
+        withStyle(SpanStyle(background = accent, fontWeight = FontWeight.SemiBold)) {
+            append(text.substring(start, start + needle.length))
+        }
+        append(text.substring(start + needle.length))
+    }
+    Text(marked, style = style, color = color, fontWeight = fontWeight)
+}
+
 /** 一组配置项：标题上的数字跟着「只看已修改」一起变，筛完没剩项就整组不画。 */
 private fun LazyListScope.optionGroup(
     title: String,
@@ -1193,7 +1338,7 @@ private fun LazyListScope.optionGroup(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            OptionRows(keys, text, parsed, onEdit)
+            OptionRows(keys, text, parsed, onChange = onEdit)
         }
     }
 }
@@ -1204,6 +1349,7 @@ private fun OptionRows(
     keys: List<String>,
     text: String,
     parsed: Map<String, String>,
+    highlight: String = "",
     onChange: (String, String) -> Unit,
 ) {
     val byKey = remember { OPTION_INDEX.associateBy { it.key } }
@@ -1217,6 +1363,7 @@ private fun OptionRows(
                 desc = meta.desc,
                 default = meta.default,
                 parsed = parsed,
+                highlight = highlight,
             ) { onChange(meta.key, it) }
             meta.isText -> OptionText(
                 label = meta.label,
@@ -1225,6 +1372,7 @@ private fun OptionRows(
                 desc = meta.desc,
                 default = meta.default,
                 parsed = parsed,
+                highlight = highlight,
             ) { onChange(meta.key, it) }
             else -> OptionToggle(
                 label = meta.label,
@@ -1233,6 +1381,7 @@ private fun OptionRows(
                 desc = meta.desc,
                 default = meta.default,
                 parsed = parsed,
+                highlight = highlight,
             ) { onChange(meta.key, onOff(it)) }
         }
     }
