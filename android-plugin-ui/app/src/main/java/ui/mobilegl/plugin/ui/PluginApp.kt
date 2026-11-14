@@ -661,7 +661,9 @@ fun MobileGlPluginApp() {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .graphicsLayer { translationX = backSign * backProgress * size.width },
+                            // 页面自己带底色：拖动和返回转场时，下层页面不会从内容缝隙里透出来。
+                            .graphicsLayer { translationX = backSign * backProgress * size.width }
+                            .background(MaterialTheme.colorScheme.background),
                     ) {
                         screenContent(target, outerPadding)
                     }
