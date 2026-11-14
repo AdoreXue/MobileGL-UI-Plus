@@ -55,7 +55,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 
@@ -1020,7 +1019,12 @@ private fun OverviewStat(
         Text(
             value,
             fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            fontSize = if (compact) 15.sp else 20.sp,
+            // 数字用 type scale 的 titleSmall / titleLarge 两档，不再各写 15/20sp。
+            style = if (compact) {
+                MaterialTheme.typography.titleSmall
+            } else {
+                MaterialTheme.typography.titleLarge
+            },
             fontWeight = FontWeight.Bold,
             color = if (highlight) scheme.primary else scheme.onSurface,
             maxLines = 1,

@@ -57,6 +57,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
@@ -66,6 +67,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -99,7 +101,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -559,7 +560,15 @@ private fun shareReport(context: Context, repository: SelfTestRepository) {
 @Composable
 private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
     TopAppBar(
-        title = { Text(title, fontWeight = FontWeight.SemiBold) },
+        title = {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        },
+        // M3 的次级页面顶栏必须带返回入口；之前只有标题，返回全靠系统手势。
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
     )
 }
@@ -861,7 +870,7 @@ private fun HomeTab(
                             fontWeight = FontWeight.SemiBold,
                         )
                     } else {
-                        MonoValue(summary, size = 17.sp, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                        MonoValue(summary, size = 16.sp, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
                     }
                     Spacer(Modifier.width(8.dp))
                     StatusPill(if (config.backend == "DirectVulkan") "Vulkan" else "GLES", MaterialTheme.colorScheme.primary)
@@ -952,7 +961,7 @@ fun BigTitle(text: String) {
     Text(
         text,
         modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
-        fontSize = 34.sp,
+        style = MaterialTheme.typography.headlineLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -1028,13 +1037,13 @@ private fun HeroTitle() {
         Text(
             "MobileGL_UI_",
             maxLines = 1,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             "Plus",
             maxLines = 1,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
         )
     }

@@ -41,7 +41,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import ui.mobilegl.plugin.config.PluginConfig
@@ -325,7 +324,7 @@ private fun TableCell(text: String, width: androidx.compose.ui.unit.Dp, backgrou
         modifier = Modifier.width(width).height(32.dp).padding(end = 1.dp, bottom = 1.dp).background(background),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = foreground, fontSize = 10.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+        Text(text, color = foreground, style = MaterialTheme.typography.labelSmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
     }
 }
 
@@ -341,7 +340,7 @@ private fun RawReportCard(report: SelfTestResult, expanded: Set<String>, onToggl
             color = MaterialTheme.colorScheme.primary,
         )
         if (open) {
-            Text(report.rawJson, fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(report.rawJson, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

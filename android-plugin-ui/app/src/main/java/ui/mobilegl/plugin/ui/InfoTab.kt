@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -316,13 +317,13 @@ internal fun InfoTab(
                         Row {
                             Text(
                                 "MobileGL_UI_",
-                                fontSize = 22.sp,
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 "Plus",
-                                fontSize = 22.sp,
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -473,7 +474,7 @@ private fun VersionHero(version: String, internal: String, onClick: () -> Unit) 
             "v" + version,
             modifier = Modifier.padding(top = 10.dp),
             fontFamily = FontFamily.Monospace,
-            fontSize = 30.sp,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = scheme.onSurface,
             maxLines = 1,
@@ -544,12 +545,12 @@ private fun SpecCell(
             )
         }
         if (mono) {
-            MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 15.sp, maxLines = 2)
+            MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 16.sp, maxLines = 2)
         } else {
             Text(
                 value,
                 modifier = Modifier.padding(top = 8.dp),
-                fontSize = 15.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = scheme.onSurface,
                 maxLines = 2,
@@ -574,6 +575,8 @@ private fun MoreToggle(expanded: Boolean, label: String, onToggle: (Boolean) -> 
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onToggle(!expanded) }
+            // 折叠行整行当按钮用，撑到 M3 要求的 48dp 最小触控高度。
+            .heightIn(min = 48.dp)
             .padding(vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

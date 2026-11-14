@@ -12,14 +12,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,7 +66,7 @@ internal fun Modifier.cardStroke(shape: RoundedCornerShape = CardCorner): Modifi
 internal fun MonoValue(
     text: String,
     modifier: Modifier = Modifier,
-    size: TextUnit = 15.sp,
+    size: TextUnit = 16.sp,
     color: Color = Color.Unspecified,
     maxLines: Int = 1,
     textAlign: TextAlign = TextAlign.Start,
@@ -85,7 +91,12 @@ internal fun DividerLine() {
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
-/** 全站唯一的胶囊：可带小圆点、可点击。 */
+/**
+ * 全站唯一的胶囊：可带小圆点、可点击。
+ *
+ * 可点击的走 M3 的 AssistChip（自带 48dp 触控区与波纹）；只做状态展示的没有点击语义，
+ * 用 M3 的 Surface + CircleShape，避免 AssistChip 被迫带上「可点」的读屏语义。
+ */
 @Composable
 internal fun StatusPill(
     text: String,
@@ -93,38 +104,53 @@ internal fun StatusPill(
     dot: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
-    Surface(
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(50),
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (dot) {
-                Box(
-                    Modifier
-                        .size(6.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(color),
-                )
-                Spacer(Modifier.width(6.dp))
+    val container = color.copy(alpha = 0.12f)
+    val label: @Composable () -> Unit = {
+        Text(
+            text,
+            color = color,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+        )
+    }
+    val leading: (@Composable () -> Unit)? = if (dot) {
+        {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(color))
+        }
+    } else {
+        null
+    }
+    if (onClick != null) {
+        AssistChip(
+            onClick = onClick,
+            label = label,
+            leadingIcon = leading,
+            shape = CircleShape,
+            colors = AssistChipDefaults.assistChipColors(containerColor = container, labelColor = color),
+        )
+    } else {
+        Surface(color = container, shape = CircleShape) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (dot) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(color),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                label()
             }
-            Text(
-                text,
-                color = color,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-            )
         }
     }
 }
 
-/** 卡片里的一行入口：图标 + 标题 + 说明 + 箭头。 */
+/** 卡片里的一行入口：图标 + 标题 + 说明 + 箭头，行高与触控区走 M3 的 ListItem。 */
 @Composable
 internal fun EntryRow(
     icon: ImageVector?,
@@ -133,26 +159,13 @@ internal fun EntryRow(
     onClick: () -> Unit,
     tint: Color = MaterialTheme.colorScheme.primary,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(12.dp))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    EntryListItem(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        tint = tint,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    )
 }
 
 /** 独立成卡的入口：一张卡只放一行时用它。 */
@@ -165,10 +178,49 @@ internal fun EntryCardRow(icon: ImageVector?, title: String, subtitle: String, o
         border = subtleBorder(),
         onClick = onClick,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            EntryRow(icon, title, subtitle, onClick)
-        }
+        EntryListItem(icon, title, subtitle, MaterialTheme.colorScheme.primary)
     }
+}
+
+@Composable
+private fun EntryListItem(
+    icon: ImageVector?,
+    title: String,
+    subtitle: String,
+    tint: Color,
+    modifier: Modifier = Modifier,
+) {
+    ListItem(
+        modifier = modifier,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        leadingContent = if (icon == null) {
+            null
+        } else {
+            {
+                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            }
+        },
+        headlineContent = {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        },
+        supportingContent = {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        trailingContent = {
+            Icon(
+                UiIcons.Chevron,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+    )
 }
 
 /**
@@ -185,7 +237,14 @@ internal fun InfoLine(
 ) {
     val rowModifier = Modifier
         .fillMaxWidth()
-        .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
+        // 可点的信息行整行都要有 48dp 触控高度，纯展示行保持紧凑。
+        .then(
+            if (onClick == null) {
+                Modifier
+            } else {
+                Modifier.clickable(onClick = onClick).heightIn(min = 48.dp)
+            },
+        )
 
     if (label.length > 10) {
         Column(rowModifier.padding(vertical = 8.dp)) {
@@ -206,7 +265,7 @@ internal fun InfoLine(
                 )
             }
             if (mono) {
-                MonoValue(value, modifier = Modifier.padding(top = 2.dp), size = 13.sp, maxLines = 3)
+                MonoValue(value, modifier = Modifier.padding(top = 2.dp), size = 14.sp, maxLines = 3)
             } else {
                 Text(
                     value,
@@ -238,7 +297,7 @@ internal fun InfoLine(
                 MonoValue(
                     value,
                     modifier = Modifier.weight(1f),
-                    size = 13.sp,
+                    size = 14.sp,
                     maxLines = 3,
                     textAlign = TextAlign.End,
                 )

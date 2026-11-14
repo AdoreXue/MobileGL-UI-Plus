@@ -7,14 +7,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,7 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +30,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -223,7 +225,7 @@ private fun RenderHero(
             ) { name ->
                 Text(
                     name,
-                    fontSize = 23.sp,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = scheme.onSurface,
                     maxLines = 2,
@@ -287,7 +289,12 @@ private fun BackendCard(
         }
         DividerLine()
         Row(
-            modifier = Modifier.fillMaxWidth().clickable { onToggleDetails(!detailsOpen) }.padding(vertical = 11.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleDetails(!detailsOpen) }
+                // 整行可点，撑到 48dp 触控高度。
+                .heightIn(min = 48.dp)
+                .padding(vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -343,48 +350,32 @@ private fun BackendCard(
     }
 }
 
-/** 后端分段按钮：两段等宽，选中的一段用主色填充，切换时指示块滑动过去。 */
+/** 后端分段按钮：直接用 M3 的 SegmentedButton，选中态交给官方配色。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BackendSegment(selected: String, onSelect: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val options = listOf("DirectVulkan", "DirectGLES")
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(scheme.surfaceVariant.copy(alpha = 0.45f))
-            .padding(4.dp),
-    ) {
-        val segmentWidth = (maxWidth - 4.dp) / 2
-        val targetX = if (selected == options.first()) 0.dp else segmentWidth + 4.dp
-        val offsetX by animateDpAsState(targetValue = targetX, animationSpec = Motion.glide(), label = "segment")
-        Box(
-            modifier = Modifier
-                .offset(x = offsetX)
-                .width(segmentWidth)
-                .height(36.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(scheme.primary),
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            options.forEach { option ->
-                val active = option == selected
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .clickable { onSelect(option) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        option,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (active) scheme.onPrimary else scheme.onSurfaceVariant,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1,
-                    )
-                }
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, option ->
+            val active = option == selected
+            SegmentedButton(
+                selected = active,
+                onClick = { onSelect(option) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = scheme.primary,
+                    activeContentColor = scheme.onPrimary,
+                ),
+                // 不要默认的对勾：两段都是长英文名，图标会把字挤没。
+                icon = {},
+            ) {
+                Text(
+                    option,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -471,7 +462,7 @@ private fun TuneTile(modifier: Modifier, icon: ImageVector, label: String, value
                 maxLines = 1,
             )
         }
-        MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 15.sp)
+        MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 16.sp)
     }
 }
 
