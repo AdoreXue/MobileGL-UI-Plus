@@ -108,7 +108,6 @@ internal fun InfoTab(
     val kernelText = if (device.coreVersion.isBlank()) "未知" else "v" + device.coreVersion +
         (device.coreCommit?.take(7)?.let { " · " + it } ?: "")
     val busy = device.socExtra.gpuBusy
-    val batteryText = device.battery.ifBlank { "未知" }
     // 一次性复制用：顺序跟页面一致，反馈问题时整段贴出来就够。
     val infoPairs = buildList {
         add("版本" to BuildConfig.FULL_VERSION_NAME)
@@ -131,8 +130,6 @@ internal fun InfoTab(
         add("OpenGL ES" to device.gles)
         add("Vulkan" to device.vulkan)
         if (device.socExtra.features.isNotBlank()) add("CPU 特性" to device.socExtra.features)
-        add("电池" to batteryText)
-        if (device.batteryTemp.isNotBlank()) add("电池温度" to device.batteryTemp)
         if (device.socExtra.curFreq.isNotBlank()) add("当前频率" to device.socExtra.curFreq)
         add("内核" to kernelText)
     }
@@ -140,9 +137,7 @@ internal fun InfoTab(
     // 系统与设备只剩静态信息：固定 7 行，加可选的 CPU 特性。
     val runCount = 7 + (if (device.socExtra.features.isNotBlank()) 1 else 0)
     // 实时刷新：电池/温度/频率单独一块，并标出这批数据是多久之前读的。
-    val liveCount = 1 +
-        (if (device.batteryTemp.isNotBlank()) 1 else 0) +
-        (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
+    val liveCount = 1 + (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
     val liveStamp = remember(device) { System.currentTimeMillis() }
     val liveAgeSec = ((System.currentTimeMillis() - liveStamp) / 1000).coerceAtLeast(0)
     val liveAgeText = if (liveAgeSec < 3) "刚刚" else liveAgeSec.toString() + " 秒前"
@@ -296,15 +291,7 @@ internal fun InfoTab(
             item {
                 // 电池、温度、频率这些每 5 秒会变的值单独一块，免得沉在长卡最底部看不见变化。
                 InfoCard {
-                    InfoLine(UiIcons.Bolt, "电池", batteryText, mono = false) { copy("电池", batteryText) }
-                    if (device.batteryTemp.isNotBlank()) {
-                        DividerLine()
-                        InfoLine(UiIcons.Speed, "电池温度", device.batteryTemp, mono = false) {
-                            copy("电池温度", device.batteryTemp)
-                        }
-                    }
                     if (device.socExtra.curFreq.isNotBlank()) {
-                        DividerLine()
                         InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
                             copy("当前频率", device.socExtra.curFreq)
                         }

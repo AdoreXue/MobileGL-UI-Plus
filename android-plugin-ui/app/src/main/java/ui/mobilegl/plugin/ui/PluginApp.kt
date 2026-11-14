@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.net.Uri
-import android.os.BatteryManager
 import android.os.Environment
 import android.os.StatFs
 import android.view.Display
@@ -665,8 +664,6 @@ internal data class DeviceInfo(
     val coreVersion: String,
     val coreCommit: String?,
     val socExtra: SocExtra,
-    val battery: String,
-    val batteryTemp: String,
     val screen: String,
     val storage: String,
 )
@@ -712,38 +709,6 @@ private fun cleanRendererName(raw: String): String {
     // 去掉末尾裸露的版本号，如 " 1.3.280"
     s = s.replace(Regex("\\s+\\d+(?:\\.\\d+)+\\s*$"), "").trim()
     return s
-}
-
-/** 电量与充电状态；温度读不到时返回空串。 */
-private fun batteryText(context: Context): Pair<String, String> {
-    val intent = runCatching {
-        context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-    }.getOrNull() ?: return "" to ""
-    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-    val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-    val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-    val tempTenth = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
-    val percent = if (level >= 0 && scale > 0) level * 100 / scale else -1
-    val state = when (status) {
-        BatteryManager.BATTERY_STATUS_CHARGING -> "充电中"
-        BatteryManager.BATTERY_STATUS_FULL -> "已充满"
-        BatteryManager.BATTERY_STATUS_DISCHARGING -> "放电中"
-        BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "未充电"
-        else -> ""
-    }
-    val text = buildString {
-        if (percent >= 0) append(percent).append('%')
-        if (state.isNotEmpty()) {
-            if (isNotEmpty()) append(" · ")
-            append(state)
-        }
-    }
-    val temp = if (tempTenth != Int.MIN_VALUE && tempTenth > 0) {
-        String.format(Locale.US, "%.1f °C", tempTenth / 10.0)
-    } else {
-        ""
-    }
-    return text to temp
 }
 
 /** 屏幕分辨率与刷新率。 */
@@ -829,10 +794,9 @@ private fun deviceInfo(
     } ?: readFirstLine("/sys/devices/soc0/family") ?: ""
     val socDetail = socDetailText()
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
-    val (battery, batteryTemp) = batteryText(context)
     return DeviceInfo(
         gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android,
-        coreVersion, coreCommit, socExtra, battery, batteryTemp, screenText(context), storageText(),
+        coreVersion, coreCommit, socExtra, screenText(context), storageText(),
     )
 }
 
