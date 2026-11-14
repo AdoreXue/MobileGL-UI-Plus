@@ -130,17 +130,11 @@ internal fun InfoTab(
         add("OpenGL ES" to device.gles)
         add("Vulkan" to device.vulkan)
         if (device.socExtra.features.isNotBlank()) add("CPU 特性" to device.socExtra.features)
-        if (device.socExtra.curFreq.isNotBlank()) add("当前频率" to device.socExtra.curFreq)
         add("内核" to kernelText)
     }
     val dumpAllText = "MobileGL_UI_Plus 信息\n" + infoPairs.joinToString("\n") { (k, v) -> k + ": " + v }
     // 系统与设备只剩静态信息：固定 7 行，加可选的 CPU 特性。
     val runCount = 7 + (if (device.socExtra.features.isNotBlank()) 1 else 0)
-    // 实时刷新：电池/温度/频率单独一块，并标出这批数据是多久之前读的。
-    val liveCount = 1 + (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
-    val liveStamp = remember(device) { System.currentTimeMillis() }
-    val liveAgeSec = ((System.currentTimeMillis() - liveStamp) / 1000).coerceAtLeast(0)
-    val liveAgeText = if (liveAgeSec < 3) "刚刚" else liveAgeSec.toString() + " 秒前"
 
     // 下拉立即刷新；自动刷新的 5 秒定时器在 PluginApp 里跑，离开信息页就停。
     var refreshing by remember { mutableStateOf(false) }
@@ -285,24 +279,6 @@ internal fun InfoTab(
                             }
                         }
                     }
-                }
-            }
-            item { SectionLabel("实时状态", liveCount) }
-            item {
-                // 电池、温度、频率这些每 5 秒会变的值单独一块，免得沉在长卡最底部看不见变化。
-                InfoCard {
-                    if (device.socExtra.curFreq.isNotBlank()) {
-                        InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
-                            copy("当前频率", device.socExtra.curFreq)
-                        }
-                    }
-                    DividerLine()
-                    Text(
-                        "更新于 " + liveAgeText + " · 下拉可立即刷新",
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
             item { SectionLabel("系统与设备", runCount) }
