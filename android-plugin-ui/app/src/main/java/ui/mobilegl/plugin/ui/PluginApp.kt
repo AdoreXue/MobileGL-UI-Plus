@@ -16,6 +16,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
@@ -27,6 +29,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
@@ -85,12 +89,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.PredictiveBackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -100,6 +107,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -146,6 +154,10 @@ private val TABS = listOf(
 )
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
+
+/** 顶栏、底栏高度：跟手返回时父页面要按标签页的边距重新排版。 */
+private val TopBarHeight = 64.dp
+private val NavigationBarHeight = 80.dp
 
 /** 二级页转场时长：Material 的 shared-axis 用 300ms 一档。 */
 private const val ShuffleAxisMs = 300
@@ -197,7 +209,7 @@ private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransf
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun MobileGlPluginApp() {
     val rootContext = LocalContext.current
@@ -362,8 +374,37 @@ fun MobileGlPluginApp() {
         val barFadeIn = tween<Float>(durationMillis = 170, easing = Motion.Decelerate)
         val barFadeOut = tween<Float>(durationMillis = Motion.Fast, easing = Motion.Accelerate)
 
-        BackHandler(enabled = isSubPage) { dest = TABS[lastTab].dest }
+        // 跟手返回：二级页的返回手势由系统侧滑驱动，进度直接映射成水平位移。
+        var backProgress by remember { mutableFloatStateOf(0f) }
+        var skipTransition by remember { mutableStateOf(false) }
+        PredictiveBackHandler(enabled = isSubPage) { events ->
+            try {
+                // 旧版本系统只发一次「按下」，没有进度事件：直接返回到父页。
+                var sawGesture = false
+                events.collect { event ->
+                    sawGesture = true
+                    backProgress = event.progress
+                }
+                if (sawGesture) {
+                    animate(backProgress, 1f) { value, _ -> backProgress = value }
+                    skipTransition = true
+                }
+                dest = TABS[lastTab].dest
+            } catch (cancel: CancellationException) {
+                animate(backProgress, 0f) { value, _ -> backProgress = value }
+                throw cancel
+            } finally {
+                backProgress = 0f
+            }
+        }
         BackHandler(enabled = !isSubPage && dest != Dest.Home) { dest = Dest.Home }
+        // 手势提交后跳过标准转场，等切换完成再放开，避免两套动画叠加。
+        LaunchedEffect(dest) {
+            if (skipTransition) {
+                delay(60)
+                skipTransition = false
+            }
+        }
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -425,19 +466,8 @@ fun MobileGlPluginApp() {
                 animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
                 label = "padBottom",
             )
-            AnimatedContent(
-                targetState = dest,
-                transitionSpec = { pageTransition() },
-                label = "screen",
-            ) { target ->
-                // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
-                // 内边距按 target 算而不是按 dest 算，过渡中进出的两页各用各的，整页不会跳一下。
-                val outerPadding = PaddingValues(
-                    start = padding.calculateStartPadding(layoutDir),
-                    top = if (target == Dest.Home) 0.dp else padTop,
-                    end = padding.calculateEndPadding(layoutDir),
-                    bottom = padBottom,
-                )
+            // 一页的组合抽成 lambda：跟手返回时要同时画出「下面那页」和当前页。
+            val screenContent: @Composable (Dest, PaddingValues) -> Unit = { target, outerPadding ->
                 Box(Modifier.fillMaxSize().padding(outerPadding)) {
                     when (target) {
                         Dest.Home -> HomeTab(
@@ -567,6 +597,47 @@ fun MobileGlPluginApp() {
                             latest = report,
                             onResult = { report = it },
                         )
+                    }
+                }
+            }
+            Box(Modifier.fillMaxSize()) {
+                // 拖动时先把父页面铺在下面，当前页跟着手指右移，露出它来。
+                if (isSubPage && backProgress > 0f) {
+                    screenContent(
+                        TABS[lastTab].dest,
+                        PaddingValues(
+                            start = padding.calculateStartPadding(layoutDir),
+                            // 父页面是标签页，没有顶栏；底栏要补回来。
+                            top = (padTop - TopBarHeight).coerceAtLeast(0.dp),
+                            end = padding.calculateEndPadding(layoutDir),
+                            bottom = padBottom + NavigationBarHeight,
+                        ),
+                    )
+                }
+                AnimatedContent(
+                    targetState = dest,
+                    transitionSpec = {
+                        if (skipTransition) {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        } else {
+                            pageTransition()
+                        }
+                    },
+                    label = "screen",
+                ) { target ->
+                    // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
+                    val outerPadding = PaddingValues(
+                        start = padding.calculateStartPadding(layoutDir),
+                        top = if (target == Dest.Home) 0.dp else padTop,
+                        end = padding.calculateEndPadding(layoutDir),
+                        bottom = padBottom,
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { translationX = backProgress * size.width },
+                    ) {
+                        screenContent(target, outerPadding)
                     }
                 }
             }
