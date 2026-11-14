@@ -14,6 +14,7 @@ import android.view.Display
 import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.BackEventCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
@@ -87,6 +88,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
@@ -157,7 +159,6 @@ private val TABS = listOf(
 
 /** 顶栏、底栏高度：跟手返回时父页面要按标签页的边距重新排版。 */
 private val TopBarHeight = 64.dp
-private val NavigationBarHeight = 80.dp
 
 /** 二级页转场时长：Material 的 shared-axis 用 300ms 一档。 */
 private const val ShuffleAxisMs = 300
@@ -376,13 +377,18 @@ fun MobileGlPluginApp() {
 
         // 跟手返回：二级页的返回手势由系统侧滑驱动，进度直接映射成水平位移。
         var backProgress by remember { mutableFloatStateOf(0f) }
+        // 从左边缘滑进来页面往往右移，从右边缘滑进来往左移，方向和手指一致。
+        var backSign by remember { mutableFloatStateOf(1f) }
         var skipTransition by remember { mutableStateOf(false) }
+        // 用派生状态判断"是否在拖"：直接读 backProgress 会让整页每帧重组。
+        val dragging by remember { derivedStateOf { backProgress > 0f } }
         PredictiveBackHandler(enabled = isSubPage) { events ->
             try {
                 // 旧版本系统只发一次「按下」，没有进度事件：直接返回到父页。
                 var sawGesture = false
                 events.collect { event ->
                     sawGesture = true
+                    backSign = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
                     backProgress = event.progress
                 }
                 if (sawGesture) {
@@ -398,10 +404,11 @@ fun MobileGlPluginApp() {
             }
         }
         BackHandler(enabled = !isSubPage && dest != Dest.Home) { dest = Dest.Home }
-        // 手势提交后跳过标准转场，等切换完成再放开，避免两套动画叠加。
+        // 手势提交后跳过标准转场：页面已经跟手滑到位，再放一遍转场就是双份动画。
+        // 等转场时长过去再放开，中途被重新读取也不会补动画。
         LaunchedEffect(dest) {
             if (skipTransition) {
-                delay(60)
+                delay(ShuffleAxisMs.toLong() + 80L)
                 skipTransition = false
             }
         }
@@ -412,8 +419,17 @@ fun MobileGlPluginApp() {
             topBar = {
                 AnimatedVisibility(
                     visible = isSubPage,
-                    enter = slideInVertically(barMove) { -it / 4 } + fadeIn(barFadeIn),
-                    exit = slideOutVertically(barMove) { -it / 4 } + fadeOut(barFadeOut),
+                    // 手势返回提交时页面已经滑到位，顶栏再滑一遍就是第二套动画。
+                    enter = if (skipTransition) {
+                        EnterTransition.None
+                    } else {
+                        slideInVertically(barMove) { -it / 4 } + fadeIn(barFadeIn)
+                    },
+                    exit = if (skipTransition) {
+                        ExitTransition.None
+                    } else {
+                        slideOutVertically(barMove) { -it / 4 } + fadeOut(barFadeOut)
+                    },
                 ) {
                     MobileGlTopBar(
                         title = when (dest) {
@@ -423,33 +439,36 @@ fun MobileGlPluginApp() {
                             else -> ""
                         },
                         onBack = { dest = TABS[lastTab].dest },
+                        // 拖动时顶栏跟着内容一起走，否则标题会浮在原地。
+                        modifier = Modifier.graphicsLayer {
+                            translationX = backSign * backProgress * size.width * 0.35f
+                            alpha = (1f - backProgress).coerceIn(0f, 1f)
+                        },
                     )
                 }
             },
             bottomBar = {
                 AnimatedVisibility(
                     visible = !isSubPage,
-                    enter = slideInVertically(barMove) { it / 4 } + fadeIn(barFadeIn),
-                    exit = slideOutVertically(barMove) { it / 4 } + fadeOut(barFadeOut),
+                    // 拖动时底栏已经跟着父页画出来了，这里直接接上，不再弹一下。
+                    enter = if (skipTransition) {
+                        EnterTransition.None
+                    } else {
+                        slideInVertically(barMove) { it / 4 } + fadeIn(barFadeIn)
+                    },
+                    exit = if (skipTransition) {
+                        ExitTransition.None
+                    } else {
+                        slideOutVertically(barMove) { it / 4 } + fadeOut(barFadeOut)
+                    },
                 ) {
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                        TABS.forEachIndexed { index, tab ->
-                            NavigationBarItem(
-                                selected = tabIndex == index,
-                                onClick = {
-                                    lastTab = index
-                                    dest = tab.dest
-                                },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                ),
-                            )
-                        }
-                    }
+                    MobileGlBottomBar(
+                        selected = tabIndex,
+                        onSelect = { index ->
+                            lastTab = index
+                            dest = TABS[index].dest
+                        },
+                    )
                 }
             },
         ) { padding ->
@@ -602,17 +621,24 @@ fun MobileGlPluginApp() {
             }
             Box(Modifier.fillMaxSize()) {
                 // 拖动时先把父页面铺在下面，当前页跟着手指右移，露出它来。
-                if (isSubPage && backProgress > 0f) {
-                    screenContent(
-                        TABS[lastTab].dest,
-                        PaddingValues(
-                            start = padding.calculateStartPadding(layoutDir),
-                            // 父页面是标签页，没有顶栏；底栏要补回来。
-                            top = (padTop - TopBarHeight).coerceAtLeast(0.dp),
-                            end = padding.calculateEndPadding(layoutDir),
-                            bottom = padBottom + NavigationBarHeight,
-                        ),
-                    )
+                if (isSubPage && dragging) {
+                    val parent = TABS[lastTab].dest
+                    // 父页面连同底栏一起铺开：只画内容会在底部留一条空白，松手后底栏才弹出来。
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            screenContent(
+                                parent,
+                                PaddingValues(
+                                    start = padding.calculateStartPadding(layoutDir),
+                                    // 父页面是标签页：Home 贴顶，其余页去掉顶栏高度。
+                                    top = if (parent == Dest.Home) 0.dp else (padTop - TopBarHeight).coerceAtLeast(0.dp),
+                                    end = padding.calculateEndPadding(layoutDir),
+                                    bottom = 0.dp,
+                                ),
+                            )
+                        }
+                        MobileGlBottomBar(selected = lastTab, onSelect = {})
+                    }
                 }
                 AnimatedContent(
                     targetState = dest,
@@ -635,7 +661,7 @@ fun MobileGlPluginApp() {
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .graphicsLayer { translationX = backProgress * size.width },
+                            .graphicsLayer { translationX = backSign * backProgress * size.width },
                     ) {
                         screenContent(target, outerPadding)
                     }
@@ -659,10 +685,31 @@ private fun shareReport(context: Context, repository: SelfTestRepository) {
     context.startActivity(Intent.createChooser(intent, "分享自检报告"))
 }
 
+/** 底部标签栏；跟手返回时父页要连着底栏一起露出来，所以单独抽出来。 */
+@Composable
+private fun MobileGlBottomBar(selected: Int, onSelect: (Int) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        TABS.forEachIndexed { index, tab ->
+            NavigationBarItem(
+                selected = selected == index,
+                onClick = { onSelect(index) },
+                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                label = { Text(tab.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                ),
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
+private fun MobileGlTopBar(title: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
     TopAppBar(
+        modifier = modifier,
         title = {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         },
