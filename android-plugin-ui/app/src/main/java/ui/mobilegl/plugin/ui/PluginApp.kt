@@ -14,7 +14,6 @@ import android.view.Display
 import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.ExperimentalActivityApi
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
@@ -210,7 +209,7 @@ private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransf
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class, ExperimentalActivityApi::class)
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MobileGlPluginApp() {
     val rootContext = LocalContext.current
