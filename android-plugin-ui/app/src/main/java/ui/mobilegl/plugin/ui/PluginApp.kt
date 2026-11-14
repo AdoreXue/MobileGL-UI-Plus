@@ -34,11 +34,13 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
@@ -57,6 +59,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -157,57 +162,23 @@ private val TABS = listOf(
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
 
-/** 顶栏、底栏高度：跟手返回时父页面要按标签页的边距重新排版。 */
-private val TopBarHeight = 64.dp
-
 /** 二级页转场时长：Material 的 shared-axis 用 300ms 一档，直接跟 [Motion.Slow] 同源。 */
 private val ShuffleAxisMs = Motion.Slow
 
-/** 二级页（驱动 / 启动配置 / 自检）比四个标签页深一层。 */
-private fun Dest.isSecondary(): Boolean = when (this) {
-    Dest.Drivers, Dest.ConfigFile, Dest.SelfTest -> true
-    else -> false
-}
-
 /**
- * 三种转场，参数统一从 [Motion] 取：
- * - 进二级页：新页从右侧滑入，旧页左移一点后淡出，方向表达「下一层」；
- * - 返回：完全反向。整页不做缩放：满屏页面一缩，看起来就是"弹了一下"；
- * - 标签之间：只做很短的上移淡入，不缩放，避免四个平级页面来回看像在「翻牌」。
+ * 标签页之间的转场：短距离上移 + 淡化，平级页面不做缩放，避免来回看像在「翻牌」。
+ * 二级页不走这里——它是整层盖在底座上，由自己的位移动画负责。
  */
 @OptIn(ExperimentalAnimationApi::class)
-private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransform {
-    // 二级页 300ms 的 shared-axis：新页用 emphasized decelerate 滑入，
-    // 旧页用 emphasized accelerate 退场，淡出比新页慢一档，看起来是「被盖住」而不是同时消失。
-    val move = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedDecelerate)
-    val exitMove = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedAccelerate)
-    val quickMove = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
-    val enterFade = tween<Float>(durationMillis = Motion.Base, easing = Motion.EmphasizedDecelerate)
-    val exitFade = tween<Float>(durationMillis = Motion.Slow, easing = Motion.EmphasizedAccelerate)
-    val fromDepth = if (initialState.isSecondary()) 1 else 0
-    val toDepth = if (targetState.isSecondary()) 1 else 0
-
-    return when {
-        toDepth > fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { it / 5 } + fadeIn(enterFade),
-            initialContentExit = slideOutHorizontally(exitMove) { -it / 12 } + fadeOut(exitFade),
-            // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
-            sizeTransform = SizeTransform(clip = true),
-        ).apply { targetContentZIndex = 1f }
-        toDepth < fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { -it / 12 } + fadeIn(enterFade),
-            initialContentExit = slideOutHorizontally(exitMove) { it / 5 } + fadeOut(exitFade),
-            sizeTransform = SizeTransform(clip = true),
-            // 返回时二级页要盖在下面那层之上滑走，父页放低一层。
-        ).apply { targetContentZIndex = -1f }
-        else -> ContentTransform(
-            targetContentEnter = slideInVertically(quickMove) { it / 24 } +
-                fadeIn(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)),
-            initialContentExit = slideOutVertically(quickMove) { -it / 48 } +
-                fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)),
-            sizeTransform = SizeTransform(clip = true),
-        ).apply { targetContentZIndex = 1f }
-    }
+private fun AnimatedContentTransitionScope<Int>.tabSwitch(): ContentTransform {
+    val move = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
+    return ContentTransform(
+        targetContentEnter = slideInVertically(move) { it / 24 } +
+            fadeIn(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)),
+        initialContentExit = slideOutVertically(move) { -it / 48 } +
+            fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)),
+        sizeTransform = SizeTransform(clip = true),
+    ).apply { targetContentZIndex = 1f }
 }
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -233,8 +204,12 @@ fun MobileGlPluginApp() {
         var drivers by remember { mutableStateOf<List<DriverPack>>(emptyList()) }
         var externalLibraries by remember { mutableStateOf<List<ExternalLibrary>>(emptyList()) }
         var runtimeStatus by remember { mutableStateOf(runtimeWriter.initialStatus()) }
-        var dest by remember { mutableStateOf<Dest>(Dest.Home) }
+        // 导航只有两层：lastTab 是底座标签页，subDest 非空时二级页盖在上面。
         var lastTab by remember { mutableIntStateOf(0) }
+        var subDest by remember { mutableStateOf<Dest?>(null) }
+        val dest: Dest = subDest ?: TABS[lastTab].dest
+        // 二级页露出多少：0 = 完全移出，1 = 完全盖住。跟手返回直接改这个值。
+        val subProgress = remember { Animatable(0f) }
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
         // 上次自检耗时：渲染页显示「用时 x 秒」，null 表示还没在本次会话跑过。
@@ -367,124 +342,55 @@ fun MobileGlPluginApp() {
             )
         }
 
-        val tabIndex = TABS.indexOfFirst { it.dest == dest }
-        val isSubPage = tabIndex < 0
+        val isSubPage = subDest != null
 
-        // 顶栏、底栏是"抽屉"式的整块显隐，用弹簧滑出更接近系统自带的手感。
-        val barMove = Motion.glide<IntOffset>()
-        val barFadeIn = tween<Float>(durationMillis = Motion.Base, easing = Motion.Decelerate)
-        val barFadeOut = tween<Float>(durationMillis = Motion.Fast, easing = Motion.Accelerate)
-
-        // 跟手返回：二级页的返回手势由系统侧滑驱动，进度直接映射成水平位移。
-        var backProgress by remember { mutableFloatStateOf(0f) }
-        // 从左边缘滑进来页面往往右移，从右边缘滑进来往左移，方向和手指一致。
+        // 二级页整层滑入；关的时候滑出，再丢掉这一层。
         var backSign by remember { mutableFloatStateOf(1f) }
-        var skipTransition by remember { mutableStateOf(false) }
-        // 用派生状态判断"是否在拖"：直接读 backProgress 会让整页每帧重组。
-        val dragging by remember { derivedStateOf { backProgress > 0f } }
+        fun openSub(target: Dest) {
+            if (subDest != null) return
+            backSign = 1f
+            subDest = target
+            scope.launch {
+                subProgress.snapTo(0f)
+                subProgress.animateTo(1f, tween(ShuffleAxisMs, easing = Motion.EmphasizedDecelerate))
+            }
+        }
+
+        suspend fun dismissSub(durationMs: Int = ShuffleAxisMs) {
+            subProgress.animateTo(0f, tween(durationMs, easing = Motion.EmphasizedAccelerate))
+            subDest = null
+        }
+
+        // 跟手返回：系统把手指进度交过来，直接映射成这一层的水平偏移，松手再决定滑走还是回位。
         PredictiveBackHandler(enabled = isSubPage) { events ->
+            var sawGesture = false
             try {
-                // 旧版本系统只发一次「按下」，没有进度事件：直接返回到父页。
-                var sawGesture = false
                 events.collect { event ->
                     sawGesture = true
                     backSign = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
-                    backProgress = event.progress
+                    subProgress.snapTo((1f - event.progress).coerceIn(0f, 1f))
                 }
                 if (sawGesture) {
-                    animate(backProgress, 1f) { value, _ -> backProgress = value }
-                    skipTransition = true
+                    dismissSub(Motion.Base)
+                } else {
+                    // 旧系统只发一次「按下」，没有进度事件：直接收掉这一层。
+                    subDest = null
+                    subProgress.snapTo(0f)
                 }
-                dest = TABS[lastTab].dest
             } catch (cancel: CancellationException) {
-                animate(backProgress, 0f) { value, _ -> backProgress = value }
+                subProgress.animateTo(1f, tween(Motion.Base, easing = Motion.Decelerate))
                 throw cancel
-            } finally {
-                backProgress = 0f
             }
         }
-        BackHandler(enabled = !isSubPage && dest != Dest.Home) { dest = Dest.Home }
-        // 手势提交后跳过标准转场：页面已经跟手滑到位，再放一遍转场就是双份动画。
-        // 等转场时长过去再放开，中途被重新读取也不会补动画。
-        LaunchedEffect(dest) {
-            if (skipTransition) {
-                delay(ShuffleAxisMs.toLong() + 80L)
-                skipTransition = false
-            }
-        }
+        // 标签页之间按返回先回首页，首页再按才交给系统。
+        BackHandler(enabled = !isSubPage && lastTab != 0) { lastTab = 0 }
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets.safeDrawing,
-            topBar = {
-                AnimatedVisibility(
-                    visible = isSubPage,
-                    // 手势返回提交时页面已经滑到位，顶栏再滑一遍就是第二套动画。
-                    enter = if (skipTransition) {
-                        EnterTransition.None
-                    } else {
-                        slideInVertically(barMove) { -it / 4 } + fadeIn(barFadeIn)
-                    },
-                    exit = if (skipTransition) {
-                        ExitTransition.None
-                    } else {
-                        slideOutVertically(barMove) { -it / 4 } + fadeOut(barFadeOut)
-                    },
-                ) {
-                    MobileGlTopBar(
-                        title = when (dest) {
-                            Dest.Drivers -> "驱动管理"
-                            Dest.ConfigFile -> "启动配置"
-                            Dest.SelfTest -> "驱动自检"
-                            else -> ""
-                        },
-                        onBack = { dest = TABS[lastTab].dest },
-                        // 拖动时顶栏跟着内容一起走，否则标题会浮在原地。
-                        modifier = Modifier.graphicsLayer {
-                            translationX = backSign * backProgress * size.width * 0.35f
-                            alpha = (1f - backProgress).coerceIn(0f, 1f)
-                        },
-                    )
-                }
-            },
-            bottomBar = {
-                AnimatedVisibility(
-                    visible = !isSubPage,
-                    // 拖动时底栏已经跟着父页画出来了，这里直接接上，不再弹一下。
-                    enter = if (skipTransition) {
-                        EnterTransition.None
-                    } else {
-                        slideInVertically(barMove) { it / 4 } + fadeIn(barFadeIn)
-                    },
-                    exit = if (skipTransition) {
-                        ExitTransition.None
-                    } else {
-                        slideOutVertically(barMove) { it / 4 } + fadeOut(barFadeOut)
-                    },
-                ) {
-                    MobileGlBottomBar(
-                        selected = tabIndex,
-                        onSelect = { index ->
-                            lastTab = index
-                            dest = TABS[index].dest
-                        },
-                    )
-                }
-            },
-        ) { padding ->
-            val layoutDir = LocalLayoutDirection.current
-            // 顶栏、底栏进出时 Scaffold 的内边距是瞬间变化的：内容会"啪"地挪 64dp。
-            // 这里把两端的值做成动画，让内容跟着栏一起滑，而不是跳。
-            val padTop by animateDpAsState(
-                targetValue = padding.calculateTopPadding(),
-                animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
-                label = "padTop",
-            )
-            val padBottom by animateDpAsState(
-                targetValue = padding.calculateBottomPadding(),
-                animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
-                label = "padBottom",
-            )
+            contentWindowInsets = WindowInsets(0),
+        ) { _ ->
+            // 标签页顶部让出状态栏；Home 的渐变要贴到状态栏后面，所以按页决定。
+            val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             // 一页的组合抽成 lambda：跟手返回时要同时画出「下面那页」和当前页。
             val screenContent: @Composable (Dest, PaddingValues) -> Unit = { target, outerPadding ->
                 Box(Modifier.fillMaxSize().padding(outerPadding)) {
@@ -494,7 +400,7 @@ fun MobileGlPluginApp() {
                             report = report,
                             probing = probing,
                             device = device,
-                            onOpenRender = { lastTab = 1; dest = Dest.Render },
+                            onOpenRender = { lastTab = 1 },
                             onRunSelfTest = {
                                 scope.launch {
                                     probing = true
@@ -506,7 +412,7 @@ fun MobileGlPluginApp() {
                                     probing = false
                                 }
                             },
-                            onOpenSelfTest = { lastTab = 0; dest = Dest.SelfTest },
+                            onOpenSelfTest = { openSub(Dest.SelfTest) },
                             scrollState = homeScroll,
                         )
                         Dest.Render -> RenderTab(
@@ -520,9 +426,9 @@ fun MobileGlPluginApp() {
                             externalCount = externalLibraries.size,
                             activeDriverName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置",
                             onSave = { persist(it) },
-                            onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
-                            onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
-                            onOpenSelfTest = { lastTab = 1; dest = Dest.SelfTest },
+                            onOpenConfigFile = { openSub(Dest.ConfigFile) },
+                            onOpenDrivers = { openSub(Dest.Drivers) },
+                            onOpenSelfTest = { openSub(Dest.SelfTest) },
                             onRunSelfTest = {
                                 scope.launch {
                                     probing = true
@@ -619,53 +525,56 @@ fun MobileGlPluginApp() {
                     }
                 }
             }
+            // 底座（当前标签页 + 底栏）和二级页层分开画：底座一直在组合里，
+            // 二级页只是盖上和滑走，切换时不会再牵动底座的内边距。
             Box(Modifier.fillMaxSize()) {
-                // 拖动时先把父页面铺在下面，当前页跟着手指右移，露出它来。
-                if (isSubPage && dragging) {
-                    val parent = TABS[lastTab].dest
-                    // 父页面连同底栏一起铺开：只画内容会在底部留一条空白，松手后底栏才弹出来。
-                    Column(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
-                            screenContent(
-                                parent,
-                                PaddingValues(
-                                    start = padding.calculateStartPadding(layoutDir),
-                                    // 父页面是标签页：Home 贴顶，其余页去掉顶栏高度。
-                                    top = if (parent == Dest.Home) 0.dp else (padTop - TopBarHeight).coerceAtLeast(0.dp),
-                                    end = padding.calculateEndPadding(layoutDir),
-                                    bottom = 0.dp,
-                                ),
-                            )
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        AnimatedContent(
+                            targetState = lastTab,
+                            transitionSpec = { tabSwitch() },
+                            label = "tab",
+                        ) { index ->
+                            val target = TABS[index].dest
+                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                                screenContent(
+                                    target,
+                                    PaddingValues(top = if (target == Dest.Home) 0.dp else statusTop),
+                                )
+                            }
                         }
-                        MobileGlBottomBar(selected = lastTab, onSelect = {})
                     }
+                    MobileGlBottomBar(selected = lastTab, onSelect = { index -> lastTab = index })
                 }
-                AnimatedContent(
-                    targetState = dest,
-                    transitionSpec = {
-                        if (skipTransition) {
-                            EnterTransition.None togetherWith ExitTransition.None
-                        } else {
-                            pageTransition()
-                        }
-                    },
-                    label = "screen",
-                ) { target ->
-                    // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
-                    val outerPadding = PaddingValues(
-                        start = padding.calculateStartPadding(layoutDir),
-                        top = if (target == Dest.Home) 0.dp else padTop,
-                        end = padding.calculateEndPadding(layoutDir),
-                        bottom = padBottom,
-                    )
+
+                subDest?.let { target ->
                     Box(
                         Modifier
                             .fillMaxSize()
-                            // 页面自己带底色：拖动和返回转场时，下层页面不会从内容缝隙里透出来。
-                            .graphicsLayer { translationX = backSign * backProgress * size.width }
-                            .background(MaterialTheme.colorScheme.background),
+                            .background(MaterialTheme.colorScheme.background)
+                            // 整层连顶栏一起滑：跟手返回时下面那页本来就是热的，不用临时去铺。
+                            .graphicsLayer { translationX = backSign * (1f - subProgress.value) * size.width }
+                            // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {},
+                            ),
                     ) {
-                        screenContent(target, outerPadding)
+                        Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+                            MobileGlTopBar(
+                                title = when (target) {
+                                    Dest.Drivers -> "驱动管理"
+                                    Dest.ConfigFile -> "启动配置"
+                                    Dest.SelfTest -> "驱动自检"
+                                    else -> ""
+                                },
+                                onBack = { scope.launch { dismissSub() } },
+                            )
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                screenContent(target, PaddingValues())
+                            }
+                        }
                     }
                 }
             }
@@ -709,9 +618,8 @@ private fun MobileGlBottomBar(selected: Int, onSelect: (Int) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MobileGlTopBar(title: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
     TopAppBar(
-        modifier = modifier,
         title = {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         },
