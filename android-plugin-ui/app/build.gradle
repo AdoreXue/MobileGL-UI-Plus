@@ -332,7 +332,7 @@ dependencies {
     // Compose configuration UI (Material 3). Versions are pinned so the APK build is reproducible.
     // Compose 1.6.8 is the last line that builds with compileSdk 34 (the plugin module
     // still targets 34); it is sufficient for all APIs used here.
-    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation platform('androidx.compose:compose-bom:2024.10.01')
     implementation 'androidx.activity:activity-compose:1.9.0'
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'

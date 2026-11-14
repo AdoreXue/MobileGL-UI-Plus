@@ -42,8 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -65,6 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
@@ -116,17 +115,18 @@ internal fun InfoTab(
         (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
 
     // 下拉立即刷新；自动刷新的 5 秒定时器在 PluginApp 里跑，离开信息页就停。
-    val pullState = rememberPullToRefreshState()
-    LaunchedEffect(pullState.isRefreshing) {
-        if (pullState.isRefreshing) {
+    var refreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
             onRefresh()
-            pullState.endRefresh()
+            delay(400)
+            refreshing = false
         }
     }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(pullState.nestedScrollConnection),
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { refreshing = true },
+        modifier = Modifier.fillMaxSize(),
     ) {
     LazyColumn(
         state = listState,
@@ -475,10 +475,6 @@ internal fun InfoTab(
             }
         }
     }
-        PullToRefreshContainer(
-            state = pullState,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
     }
 }
 
