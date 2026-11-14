@@ -138,12 +138,7 @@ internal fun InfoTab(
     ) {
         item { BigTitle("信息") }
         if (!ready) {
-            item {
-                Spacer(Modifier.height(4.dp))
-                SkeletonCard(4)
-                Spacer(Modifier.height(18.dp))
-                SkeletonCard(3)
-            }
+            item { FillSkeleton(cards = 6) }
         } else {
             item {
                 VersionHero(
