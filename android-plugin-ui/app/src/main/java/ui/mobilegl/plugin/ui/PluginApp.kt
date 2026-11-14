@@ -870,7 +870,12 @@ private fun HomeTab(
                             fontWeight = FontWeight.SemiBold,
                         )
                     } else {
-                        MonoValue(summary, size = 16.sp, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                        MonoValue(
+                            summary,
+                            size = MaterialTheme.typography.bodyLarge.fontSize,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                     }
                     Spacer(Modifier.width(8.dp))
                     StatusPill(if (config.backend == "DirectVulkan") "Vulkan" else "GLES", MaterialTheme.colorScheme.primary)
