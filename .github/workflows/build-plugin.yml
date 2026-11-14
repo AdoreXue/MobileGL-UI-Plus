@@ -47,8 +47,11 @@ jobs:
             echo "base version: $BASE"
             # DevN 按本工作流在本分支上的成功构建次数递增（含本次运行），不依赖发 release
             WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id')
-            DEVN=$(gh api "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
-              --jq '.workflow_runs | length' | tr -d '[]')
+            # runs 接口一页最多 100 条：只数第一页的话，成功次数过百后 DevN 就永远停在 100。
+            # --paginate 会逐页输出各自的长度，按页求和得到此前的成功次数，再 +1 就是本次的编号。
+            DEVN=$(gh api --paginate \
+              "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
+              --jq '.workflow_runs | length' | awk '{ total += $1 } END { print total + 1 }')
             [ -z "$DEVN" ] && DEVN=1
             echo "DevN: $DEVN"
             echo "DISPLAY_VERSION=$BASE-Dev.$DEVN" >> "$GITHUB_ENV"
