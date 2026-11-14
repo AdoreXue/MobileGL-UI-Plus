@@ -23,12 +23,11 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -155,8 +154,8 @@ private fun Dest.isSecondary(): Boolean = when (this) {
 
 /**
  * 三种转场，参数统一从 [Motion] 取：
- * - 进二级页：新页从右侧滑入并轻微放大到 100%，旧页左移、缩到 98% 后淡出，方向表达「下一层」；
- * - 返回：完全反向，旧页滑走时略微放大，像被推回去；
+ * - 进二级页：新页从右侧滑入，旧页左移一点后淡出，方向表达「下一层」；
+ * - 返回：完全反向。整页不做缩放：满屏页面一缩，看起来就是"弹了一下"；
  * - 标签之间：只做很短的上移淡入，不缩放，避免四个平级页面来回看像在「翻牌」。
  */
 @OptIn(ExperimentalAnimationApi::class)
@@ -165,28 +164,19 @@ private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransf
     val quickMove = tween<IntOffset>(durationMillis = 180, easing = Motion.Standard)
     val enterFade = tween<Float>(durationMillis = 190, easing = Motion.Decelerate)
     val exitFade = tween<Float>(durationMillis = 140, easing = Motion.Accelerate)
-    val scale = tween<Float>(durationMillis = Motion.Base, easing = Motion.Standard)
     val fromDepth = if (initialState.isSecondary()) 1 else 0
     val toDepth = if (targetState.isSecondary()) 1 else 0
 
     return when {
         toDepth > fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { it / 4 } +
-                fadeIn(enterFade) +
-                scaleIn(scale, initialScale = 0.97f),
-            initialContentExit = slideOutHorizontally(move) { -it / 12 } +
-                fadeOut(exitFade) +
-                scaleOut(scale, targetScale = 0.985f),
+            targetContentEnter = slideInHorizontally(move) { it / 5 } + fadeIn(enterFade),
+            initialContentExit = slideOutHorizontally(move) { -it / 12 } + fadeOut(exitFade),
             // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
             sizeTransform = SizeTransform(clip = true),
         ).apply { targetContentZIndex = 1f }
         toDepth < fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { -it / 12 } +
-                fadeIn(enterFade) +
-                scaleIn(scale, initialScale = 0.985f),
-            initialContentExit = slideOutHorizontally(move) { it / 4 } +
-                fadeOut(exitFade) +
-                scaleOut(scale, targetScale = 0.97f),
+            targetContentEnter = slideInHorizontally(move) { -it / 12 } + fadeIn(enterFade),
+            initialContentExit = slideOutHorizontally(move) { it / 5 } + fadeOut(exitFade),
             sizeTransform = SizeTransform(clip = true),
             // 返回时二级页要盖在下面那层之上滑走，父页放低一层。
         ).apply { targetContentZIndex = -1f }
@@ -390,6 +380,18 @@ fun MobileGlPluginApp() {
             },
         ) { padding ->
             val layoutDir = LocalLayoutDirection.current
+            // 顶栏、底栏进出时 Scaffold 的内边距是瞬间变化的：内容会"啪"地挪 64dp。
+            // 这里把两端的值做成动画，让内容跟着栏一起滑，而不是跳。
+            val padTop by animateDpAsState(
+                targetValue = padding.calculateTopPadding(),
+                animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
+                label = "padTop",
+            )
+            val padBottom by animateDpAsState(
+                targetValue = padding.calculateBottomPadding(),
+                animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
+                label = "padBottom",
+            )
             AnimatedContent(
                 targetState = dest,
                 transitionSpec = { pageTransition() },
@@ -397,16 +399,12 @@ fun MobileGlPluginApp() {
             ) { target ->
                 // 每个目标页用自己的内边距：Home 让渐变贴到状态栏，其余页吃 Scaffold 内边距。
                 // 内边距按 target 算而不是按 dest 算，过渡中进出的两页各用各的，整页不会跳一下。
-                val outerPadding = if (target == Dest.Home) {
-                    PaddingValues(
-                        start = padding.calculateStartPadding(layoutDir),
-                        top = 0.dp,
-                        end = padding.calculateEndPadding(layoutDir),
-                        bottom = padding.calculateBottomPadding(),
-                    )
-                } else {
-                    padding
-                }
+                val outerPadding = PaddingValues(
+                    start = padding.calculateStartPadding(layoutDir),
+                    top = if (target == Dest.Home) 0.dp else padTop,
+                    end = padding.calculateEndPadding(layoutDir),
+                    bottom = padBottom,
+                )
                 Box(Modifier.fillMaxSize().padding(outerPadding)) {
                     when (target) {
                         Dest.Home -> HomeTab(
