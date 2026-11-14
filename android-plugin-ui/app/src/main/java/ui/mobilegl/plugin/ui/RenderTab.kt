@@ -29,6 +29,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SegmentedButton
@@ -97,10 +101,16 @@ fun RenderTab(
         onSave(config.copy(backend = choice, env = updated))
     }
     var detailsOpen by remember { mutableStateOf(false) }
+    // 调优摘要平时只用一行概括，点开才看每项的作用。
+    var tuneOpen by remember { mutableStateOf(false) }
     val reveal = rememberContentReveal(ready)
     val angleOn = isOn(env("MOBILEGL_ESPRYT_USE_ANGLE"))
     val sfpewActive = sfpewEnabled(config)
     val solutionName = rendererName(config)
+    val framesInFlight = env("MOBILEGL_FRAMES_IN_FLIGHT", "3")
+    val pipePush = env("MOBILEGL_PIPE_PUSH", "0x3fff")
+    val indexMirror = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64")
+    val tuneSummary = "帧在途 " + framesInFlight + " · 推送 " + pipePush + " · 镜像 " + indexMirror + " MiB"
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -148,39 +158,39 @@ fun RenderTab(
         }
         item { SectionLabel("调优摘要", 3) }
         item {
-            // 每行写清"这是什么、什么时候该动"，点一下直接去启动配置改。
+            // 平时只占一行；点开才展开三项，每一项写清"这是什么、什么时候该动"。
             InfoCard {
-                TuneRow(
-                    label = "帧在途",
-                    explain = "预留给 GPU 的渲染帧数，调大更稳、更吃内存",
-                    value = env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
-                    onClick = onOpenConfigFile,
-                )
-                DividerLine()
-                TuneRow(
-                    label = "命令推送",
-                    explain = "管道指令的推送掩码，除非明确要排除某位否则不用改",
-                    value = env("MOBILEGL_PIPE_PUSH", "0x3fff"),
-                    onClick = onOpenConfigFile,
-                )
-                DividerLine()
-                TuneRow(
-                    label = "索引镜像",
-                    explain = "索引缓冲的镜像上限，显存紧张的机型可调小",
-                    value = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64") + " MiB",
-                    onClick = onOpenConfigFile,
-                )
+                TuneSummaryRow(summary = tuneSummary, expanded = tuneOpen) { tuneOpen = !tuneOpen }
+                AnimatedVisibility(
+                    visible = tuneOpen,
+                    enter = Motion.foldEnter(),
+                    exit = Motion.foldExit(),
+                ) {
+                    Column {
+                        DividerLine()
+                        TuneRow(
+                            label = "帧在途",
+                            explain = "预留给 GPU 的渲染帧数，调大更稳、更吃内存",
+                            value = framesInFlight,
+                            onClick = onOpenConfigFile,
+                        )
+                        DividerLine()
+                        TuneRow(
+                            label = "命令推送",
+                            explain = "管道指令的推送掩码，除非明确要排除某位否则不用改",
+                            value = pipePush,
+                            onClick = onOpenConfigFile,
+                        )
+                        DividerLine()
+                        TuneRow(
+                            label = "索引镜像",
+                            explain = "索引缓冲的镜像上限，显存紧张的机型可调小",
+                            value = indexMirror + " MiB",
+                            onClick = onOpenConfigFile,
+                        )
+                    }
+                }
             }
-        }
-        item { SectionLabel("驱动自检") }
-        item {
-            SelfTestBlock(
-                report = report,
-                probing = probing,
-                lastProbeMs = lastProbeMs,
-                onRunSelfTest = onRunSelfTest,
-                onOpenSelfTest = onOpenSelfTest,
-            )
         }
         item { SectionLabel("驱动与组件") }
         item {
@@ -191,6 +201,16 @@ fun RenderTab(
                 externalCount = externalCount,
                 onOpenDrivers = onOpenDrivers,
                 onOpenConfigFile = onOpenConfigFile,
+            )
+        }
+        item { SectionLabel("驱动自检") }
+        item {
+            SelfTestBlock(
+                report = report,
+                probing = probing,
+                lastProbeMs = lastProbeMs,
+                onRunSelfTest = onRunSelfTest,
+                onOpenSelfTest = onOpenSelfTest,
             )
         }
     }
@@ -206,8 +226,9 @@ private fun RenderHero(
     pendingRestart: Boolean,
 ) {
     val scheme = MaterialTheme.colorScheme
+    // 渐变更实一点：主色 0.36 起，到卡片底色收，文字对比度仍够。
     val gradient = Brush.linearGradient(
-        listOf(scheme.primary.copy(alpha = 0.26f), scheme.primary.copy(alpha = 0.08f), scheme.surfaceContainer),
+        listOf(scheme.primary.copy(alpha = 0.36f), scheme.primary.copy(alpha = 0.10f), scheme.surfaceContainer),
     )
     Column(
         modifier = Modifier
@@ -227,6 +248,7 @@ private fun RenderHero(
             StatusPill(
                 if (pendingRestart) "待生效" else "已生效",
                 if (pendingRestart) scheme.tertiary else scheme.primary,
+                icon = if (pendingRestart) Icons.Filled.Refresh else Icons.Filled.Check,
             )
         }
         Column(Modifier.padding(top = 8.dp)) {
@@ -243,7 +265,7 @@ private fun RenderHero(
             ) { name ->
                 Text(
                     name,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = scheme.onSurface,
                     maxLines = 2,
@@ -431,6 +453,28 @@ private fun IconSwitchRow(
     }
 }
 
+/** 调优摘要的标题行：平时只占一行，点一下展开或收起三项。 */
+@Composable
+private fun TuneSummaryRow(summary: String, expanded: Boolean, onToggle: () -> Unit) {
+    ListItem(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        headlineContent = {
+            Text(summary, style = MaterialTheme.typography.bodyMedium)
+        },
+        trailingContent = {
+            Icon(
+                UiIcons.Chevron,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(18.dp)
+                    .graphicsLayer { rotationZ = if (expanded) 90f else 0f },
+            )
+        },
+    )
+}
+
 /** 调优摘要的一行：名称 + 一句解释 + 当前值，整行点按进配置页。 */
 @Composable
 private fun TuneRow(label: String, explain: String, value: String, onClick: () -> Unit) {
@@ -474,7 +518,15 @@ private fun SelfTestBlock(
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusPill(healthShort(report), healthColor(report))
+            StatusPill(
+                healthShort(report),
+                healthColor(report),
+                icon = when (reportHealth(report)) {
+                    ReportHealth.Ok -> Icons.Filled.Check
+                    ReportHealth.None -> null
+                    else -> Icons.Filled.Warning
+                },
+            )
             Spacer(Modifier.width(10.dp))
             Text(
                 when {

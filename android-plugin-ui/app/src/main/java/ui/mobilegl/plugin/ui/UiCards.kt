@@ -103,6 +103,7 @@ internal fun StatusPill(
     color: Color,
     dot: Boolean = false,
     onClick: (() -> Unit)? = null,
+    icon: ImageVector? = null,
 ) {
     val container = color.copy(alpha = 0.12f)
     val label: @Composable () -> Unit = {
@@ -114,12 +115,19 @@ internal fun StatusPill(
             maxLines = 1,
         )
     }
-    val leading: (@Composable () -> Unit)? = if (dot) {
-        {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(color))
+    // 有图标就优先用图标，没有圆点也没有图标时首部留空。
+    val leading: (@Composable () -> Unit)? = when {
+        icon != null -> {
+            {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+            }
         }
-    } else {
-        null
+        dot -> {
+            {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(color))
+            }
+        }
+        else -> null
     }
     if (onClick != null) {
         AssistChip(
@@ -135,7 +143,10 @@ internal fun StatusPill(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (dot) {
+                if (icon != null) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                } else if (dot) {
                     Box(
                         Modifier
                             .size(6.dp)
