@@ -8,10 +8,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,7 +103,10 @@ internal fun InfoTab(
 
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("信息") }
@@ -199,8 +198,8 @@ internal fun InfoTab(
                         MoreToggle(chipMore, "更多芯片信息") { chipMore = it }
                         AnimatedVisibility(
                             visible = chipMore,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
+                            enter = Motion.foldEnter(),
+                            exit = Motion.foldExit(),
                         ) {
                             Column {
                                 DividerLine()
@@ -222,8 +221,8 @@ internal fun InfoTab(
                         MoreToggle(glMore, "CPU 特性") { glMore = it }
                         AnimatedVisibility(
                             visible = glMore,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
+                            enter = Motion.foldEnter(),
+                            exit = Motion.foldExit(),
                         ) {
                             Text(
                                 device.socExtra.features,

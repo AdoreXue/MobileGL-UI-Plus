@@ -6,11 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -148,7 +143,10 @@ fun ConfigScreen(
     Box(Modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 96.dp),
     ) {
         item { BigTitle("启动配置") }
@@ -253,8 +251,8 @@ fun ConfigScreen(
         item {
             AnimatedVisibility(
                 visible = query.isNotBlank(),
-                enter = fadeIn(tween(110)) + expandVertically(tween(160)),
-                exit = fadeOut(tween(90)) + shrinkVertically(tween(140)),
+                enter = Motion.foldEnter(),
+                exit = Motion.foldExit(),
             ) {
                 Column {
                     Spacer(Modifier.height(8.dp))

@@ -104,7 +104,10 @@ fun DriverScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = reveal }
+            .graphicsLayer {
+                alpha = reveal.alpha
+                translationY = reveal.rise.toPx()
+            }
             .verticalScroll(scrollState)
             .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),

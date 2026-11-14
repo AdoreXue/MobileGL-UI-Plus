@@ -2,13 +2,14 @@
 package ui.mobilegl.plugin.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -98,7 +99,10 @@ fun RenderTab(
     val solutionName = rendererName(config)
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("渲染") }
@@ -206,8 +210,17 @@ private fun RenderHero(
             )
         }
         Column(Modifier.padding(top = 8.dp)) {
-            // 方案名会随后端/ANGLE/包装器变化，用淡入切换代替突然跳字。
-            Crossfade(targetState = solutionName, animationSpec = tween(180), label = "solution") { name ->
+            // 方案名会随后端/ANGLE/包装器变化：淡入淡出再叠一点上移，字不会「跳」。
+            AnimatedContent(
+                targetState = solutionName,
+                transitionSpec = {
+                    fadeIn(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)) +
+                        slideInVertically(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)) { it / 6 } togetherWith
+                        fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)) +
+                        slideOutVertically(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)) { -it / 6 }
+                },
+                label = "solution",
+            ) { name ->
                 Text(
                     name,
                     fontSize = 23.sp,
@@ -294,8 +307,8 @@ private fun BackendCard(
         }
         AnimatedVisibility(
             visible = detailsOpen,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
+            enter = Motion.foldEnter(),
+            exit = Motion.foldExit(),
         ) {
             Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                 detailLines.forEach { (key, value) ->
@@ -344,7 +357,7 @@ private fun BackendSegment(selected: String, onSelect: (String) -> Unit) {
     ) {
         val segmentWidth = (maxWidth - 4.dp) / 2
         val targetX = if (selected == options.first()) 0.dp else segmentWidth + 4.dp
-        val offsetX by animateDpAsState(targetValue = targetX, animationSpec = tween(180), label = "segment")
+        val offsetX by animateDpAsState(targetValue = targetX, animationSpec = Motion.glide(), label = "segment")
         Box(
             modifier = Modifier
                 .offset(x = offsetX)

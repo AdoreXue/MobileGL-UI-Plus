@@ -23,6 +23,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** 本进程里已经铺过内容的页面；第二次进入不再走骨架，避免每次切换都闪一下。 */
@@ -49,16 +50,20 @@ fun rememberContentReady(tag: String = "", warm: Boolean = true): Boolean {
     return ready
 }
 
+/** 骨架换内容时的入场状态：透明度与上移量，直接喂给 graphicsLayer。 */
+data class ContentReveal(val alpha: Float, val rise: Dp)
+
 /**
- * 骨架换成真实内容时的淡入 alpha。
+ * 骨架换成真实内容时的入场。
  *
- * 只在内容第一次就位时从 0.35 升到 1：整块列表用 graphicsLayer 做，纯合成层，不触发重排。
- * 之后切回该页（ready 一直为 true）不再重放，避免每次进页面都淡一次。
+ * 只在内容第一次就位时播一次：从 0.35 淡入到 1，同时从下往上挪 6dp，整块列表用
+ * graphicsLayer 做，纯合成层，不触发重排。加了这一小段位移后，内容像是「落位」而不是
+ * 突然出现。之后切回该页（ready 一直为 true）不再重放，避免每次进页面都淡一次。
  */
 @Composable
-fun rememberContentReveal(ready: Boolean, durationMs: Int = 140): Float {
-    val alpha = remember { Animatable(1f) }
-    // 只有「本页从骨架过渡到内容」才淡入；暖启动一进来就有内容时不动，
+fun rememberContentReveal(ready: Boolean, durationMs: Int = Motion.Slow): ContentReveal {
+    val progress = remember { Animatable(1f) }
+    // 只有「本页从骨架过渡到内容」才播入场；暖启动一进来就有内容时不动，
     // 否则会和页面转场本身的淡入叠在一起，整页显得发灰。
     var seenComposition by remember { mutableStateOf(false) }
     LaunchedEffect(ready) {
@@ -67,11 +72,14 @@ fun rememberContentReveal(ready: Boolean, durationMs: Int = 140): Float {
             if (ready) return@LaunchedEffect
         }
         if (ready) {
-            alpha.snapTo(0.35f)
-            alpha.animateTo(1f, tween(durationMs))
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(durationMs, easing = Motion.Decelerate))
         }
     }
-    return alpha.value
+    return ContentReveal(
+        alpha = 0.35f + 0.65f * progress.value,
+        rise = ((1f - progress.value) * 6f).dp,
+    )
 }
 
 /** 内容就位前的占位卡片，形状、颜色与真实卡片一致，避免闪白。 */

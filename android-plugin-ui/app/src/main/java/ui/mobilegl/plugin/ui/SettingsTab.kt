@@ -53,7 +53,10 @@ fun SettingsTab(
     val reveal = rememberContentReveal(ready)
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = reveal },
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            alpha = reveal.alpha
+            translationY = reveal.rise.toPx()
+        },
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
         item { BigTitle("设置") }

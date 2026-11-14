@@ -23,11 +23,12 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -144,9 +145,6 @@ private val TABS = listOf(
 )
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
-private const val PAGE_MOVE_MS = 220
-private const val PAGE_FADE_IN_MS = 150
-private const val PAGE_FADE_OUT_MS = 110
 
 /** 二级页（驱动 / 启动配置 / 自检）比四个标签页深一层。 */
 private fun Dest.isSecondary(): Boolean = when (this) {
@@ -155,35 +153,47 @@ private fun Dest.isSecondary(): Boolean = when (this) {
 }
 
 /**
- * 三种转场：
- * - 进二级页：新页从右侧轻滑入，旧页左移一点并淡出，方向表示"进入下一层"。
- * - 返回：完全反向。
- * - 标签之间：仍是从下微微上移淡入，保持安静。
+ * 三种转场，参数统一从 [Motion] 取：
+ * - 进二级页：新页从右侧滑入并轻微放大到 100%，旧页左移、缩到 98% 后淡出，方向表达「下一层」；
+ * - 返回：完全反向，旧页滑走时略微放大，像被推回去；
+ * - 标签之间：只做很短的上移淡入，不缩放，避免四个平级页面来回看像在「翻牌」。
  */
 @OptIn(ExperimentalAnimationApi::class)
 private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransform {
-    val fadeInSpec = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
-    val fadeOutSpec = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
-    val move = tween<IntOffset>(durationMillis = PAGE_MOVE_MS, easing = FastOutSlowInEasing)
+    val move = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
+    val quickMove = tween<IntOffset>(durationMillis = 180, easing = Motion.Standard)
+    val enterFade = tween<Float>(durationMillis = 190, easing = Motion.Decelerate)
+    val exitFade = tween<Float>(durationMillis = 140, easing = Motion.Accelerate)
+    val scale = tween<Float>(durationMillis = Motion.Base, easing = Motion.Standard)
     val fromDepth = if (initialState.isSecondary()) 1 else 0
     val toDepth = if (targetState.isSecondary()) 1 else 0
 
     return when {
         toDepth > fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { it / 5 } + fadeIn(fadeInSpec),
-            initialContentExit = slideOutHorizontally(move) { -it / 14 } + fadeOut(fadeOutSpec),
+            targetContentEnter = slideInHorizontally(move) { it / 4 } +
+                fadeIn(enterFade) +
+                scaleIn(scale, initialScale = 0.97f),
+            initialContentExit = slideOutHorizontally(move) { -it / 12 } +
+                fadeOut(exitFade) +
+                scaleOut(scale, targetScale = 0.985f),
             // 进出两页同时在场：打开裁剪，避免边缘内容在转场中露出。
             sizeTransform = SizeTransform(clip = true),
         ).apply { targetContentZIndex = 1f }
         toDepth < fromDepth -> ContentTransform(
-            targetContentEnter = slideInHorizontally(move) { -it / 14 } + fadeIn(fadeInSpec),
-            initialContentExit = slideOutHorizontally(move) { it / 5 } + fadeOut(fadeOutSpec),
+            targetContentEnter = slideInHorizontally(move) { -it / 12 } +
+                fadeIn(enterFade) +
+                scaleIn(scale, initialScale = 0.985f),
+            initialContentExit = slideOutHorizontally(move) { it / 4 } +
+                fadeOut(exitFade) +
+                scaleOut(scale, targetScale = 0.97f),
             sizeTransform = SizeTransform(clip = true),
             // 返回时二级页要盖在下面那层之上滑走，父页放低一层。
         ).apply { targetContentZIndex = -1f }
         else -> ContentTransform(
-            targetContentEnter = slideInVertically(move) { it / 20 } + fadeIn(fadeInSpec),
-            initialContentExit = slideOutVertically(move) { -it / 40 } + fadeOut(fadeOutSpec),
+            targetContentEnter = slideInVertically(quickMove) { it / 24 } +
+                fadeIn(tween(durationMillis = 170, easing = Motion.Decelerate)),
+            initialContentExit = slideOutVertically(quickMove) { -it / 48 } +
+                fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)),
             sizeTransform = SizeTransform(clip = true),
         ).apply { targetContentZIndex = 1f }
     }
@@ -323,9 +333,10 @@ fun MobileGlPluginApp() {
         val tabIndex = TABS.indexOfFirst { it.dest == dest }
         val isSubPage = tabIndex < 0
 
-        val barMove = tween<IntOffset>(durationMillis = PAGE_MOVE_MS, easing = FastOutSlowInEasing)
-        val barFadeIn = tween<Float>(durationMillis = PAGE_FADE_IN_MS, easing = FastOutSlowInEasing)
-        val barFadeOut = tween<Float>(durationMillis = PAGE_FADE_OUT_MS, easing = FastOutSlowInEasing)
+        // 顶栏、底栏是"抽屉"式的整块显隐，用弹簧滑出更接近系统自带的手感。
+        val barMove = Motion.glide<IntOffset>()
+        val barFadeIn = tween<Float>(durationMillis = 170, easing = Motion.Decelerate)
+        val barFadeOut = tween<Float>(durationMillis = Motion.Fast, easing = Motion.Accelerate)
 
         BackHandler(enabled = isSubPage) { dest = TABS[lastTab].dest }
         BackHandler(enabled = !isSubPage && dest != Dest.Home) { dest = Dest.Home }
