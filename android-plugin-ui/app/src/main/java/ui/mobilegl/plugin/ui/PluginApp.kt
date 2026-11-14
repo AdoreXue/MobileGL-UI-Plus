@@ -101,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ui.mobilegl.plugin.BuildConfig
@@ -220,6 +221,8 @@ fun MobileGlPluginApp() {
         // 上次自检耗时：渲染页显示「用时 x 秒」，null 表示还没在本次会话跑过。
         var lastProbeMs by remember { mutableStateOf<Long?>(null) }
         var socExtra by remember { mutableStateOf(SocExtra()) }
+        // 每刷一次加一：电量、可用存储、当前频率、GPU 占用这些会变的值靠它重读。
+        var deviceTick by remember { mutableIntStateOf(0) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
         val deviceContext = LocalContext.current
         var pendingRestart by remember { mutableStateOf(false) }
@@ -257,9 +260,33 @@ fun MobileGlPluginApp() {
             probing = io.report == null
         }
 
-        val device = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit, socExtra) {
+        val device = remember(
+            report,
+            glInfo,
+            config.activeRendererVersion,
+            config.activeRendererCommit,
+            socExtra,
+            deviceTick,
+        ) {
             deviceInfo(deviceContext, report, glInfo, config, socExtra)
         }
+        // 电量、可用存储、当前频率、GPU 占用这些会变的值：重读一次即触发重组。
+        fun refreshDeviceState() {
+            scope.launch {
+                socExtra = withContext(Dispatchers.IO) { readSocExtra() }
+                deviceTick++
+            }
+        }
+
+        // 停在信息页时每 5 秒自动刷一次，离开就停；下拉刷新直接调用 refreshDeviceState。
+        LaunchedEffect(dest) {
+            if (dest != Dest.Info) return@LaunchedEffect
+            while (true) {
+                delay(5000)
+                refreshDeviceState()
+            }
+        }
+
         LaunchedEffect(Unit) {
             // sysfs 与 /proc/cpuinfo 是多次小文件读，放到 IO 线程，装配期不阻塞
             socExtra = withContext(Dispatchers.IO) { readSocExtra() }
@@ -474,6 +501,7 @@ fun MobileGlPluginApp() {
                             externalCount = externalLibraries.size,
                             runtime = runtimeStatus,
                             onShareReport = { shareReport(context, selfTestRepository) },
+                            onRefresh = { refreshDeviceState() },
                         )
                         Dest.Drivers -> DriverScreen(
                             scrollState = driversScroll,

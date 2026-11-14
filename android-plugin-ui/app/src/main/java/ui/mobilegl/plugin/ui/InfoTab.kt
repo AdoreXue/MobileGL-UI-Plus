@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,10 +38,14 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -71,6 +77,7 @@ import ui.mobilegl.plugin.selftest.SelfTestResult
  * 排版分三层：最上面是版本（一眼能读到、长按能复制），接着是四个常用规格与
  * 芯片型号，然后是「系统与设备 / 运行环境」，冷门项折进「更多」。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InfoTab(
     config: PluginConfig,
@@ -80,6 +87,7 @@ internal fun InfoTab(
     externalCount: Int,
     runtime: RuntimeConfigWriter.Status,
     onShareReport: () -> Unit,
+    onRefresh: () -> Unit,
     listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
@@ -107,6 +115,19 @@ internal fun InfoTab(
         (if (device.batteryTemp.isNotBlank()) 1 else 0) +
         (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
 
+    // 下拉立即刷新；自动刷新的 5 秒定时器在 PluginApp 里跑，离开信息页就停。
+    val pullState = rememberPullToRefreshState()
+    LaunchedEffect(pullState.isRefreshing) {
+        if (pullState.isRefreshing) {
+            onRefresh()
+            pullState.endRefresh()
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(pullState.nestedScrollConnection),
+    ) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -453,6 +474,11 @@ internal fun InfoTab(
                 }
             }
         }
+    }
+        PullToRefreshContainer(
+            state = pullState,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 
