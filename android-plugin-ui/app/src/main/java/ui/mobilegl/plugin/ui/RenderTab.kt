@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -144,15 +146,31 @@ fun RenderTab(
                 onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) },
             )
         }
-        item { SectionLabel("调优摘要", 5) }
+        item { SectionLabel("调优摘要", 3) }
         item {
-            TuneGrid(
-                framesInFlight = env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
-                pipePush = env("MOBILEGL_PIPE_PUSH", "0x3fff"),
-                indexMirror = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64") + " MiB",
-                angle = if (config.backend == "DirectGLES") (if (angleOn) "开" else "关") else "—",
-                sfpew = if (sfpewActive) "已启用" else "未启用",
-            )
+            // 每行写清"这是什么、什么时候该动"，点一下直接去启动配置改。
+            InfoCard {
+                TuneRow(
+                    label = "帧在途",
+                    explain = "预留给 GPU 的渲染帧数，调大更稳、更吃内存",
+                    value = env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
+                    onClick = onOpenConfigFile,
+                )
+                DividerLine()
+                TuneRow(
+                    label = "命令推送",
+                    explain = "管道指令的推送掩码，除非明确要排除某位否则不用改",
+                    value = env("MOBILEGL_PIPE_PUSH", "0x3fff"),
+                    onClick = onOpenConfigFile,
+                )
+                DividerLine()
+                TuneRow(
+                    label = "索引镜像",
+                    explain = "索引缓冲的镜像上限，显存紧张的机型可调小",
+                    value = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64") + " MiB",
+                    onClick = onOpenConfigFile,
+                )
+            }
         }
         item { SectionLabel("驱动自检") }
         item {
@@ -413,57 +431,26 @@ private fun IconSwitchRow(
     }
 }
 
-/** 调优摘要：三格 + 两格，值用等宽字体。 */
+/** 调优摘要的一行：名称 + 一句解释 + 当前值，整行点按进配置页。 */
 @Composable
-private fun TuneGrid(
-    framesInFlight: String,
-    pipePush: String,
-    indexMirror: String,
-    angle: String,
-    sfpew: String,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(
-            modifier = Modifier.height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            TuneTile(Modifier.weight(1f).fillMaxHeight(), UiIcons.Speed, "帧在途", framesInFlight)
-            TuneTile(Modifier.weight(1f).fillMaxHeight(), UiIcons.Bolt, "命令推送", pipePush)
-            TuneTile(Modifier.weight(1f).fillMaxHeight(), UiIcons.Memory, "索引镜像", indexMirror)
-        }
-        Row(
-            modifier = Modifier.height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            TuneTile(Modifier.weight(1f).fillMaxHeight(), UiIcons.Layers, "ANGLE", angle)
-            TuneTile(Modifier.weight(1f).fillMaxHeight(), UiIcons.Chip, "SFPEW", sfpew)
-            Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun TuneTile(modifier: Modifier, icon: ImageVector, label: String, value: String) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surfaceContainer)
-            .cardStroke()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(5.dp))
+private fun TuneRow(label: String, explain: String, value: String, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        headlineContent = {
+            Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        },
+        supportingContent = {
             Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
+                explain,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-        MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 16.sp)
-    }
+        },
+        trailingContent = { MonoValue(value) },
+    )
 }
 
 /** 自检结论：整体结论 + 每个后端各一行 + 时间与用时。 */
@@ -588,32 +575,20 @@ private fun DriverCard(
     onOpenConfigFile: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    // 之前四行里三行都跳同一个页面，ICD 状态又和驱动包重复；收成两行，条件写进副标题。
     InfoCard {
         EntryRow(
             icon = UiIcons.Layers,
-            title = "激活驱动包",
-            subtitle = activeDriverName + " · 共 " + driverCount + " 个",
-            onClick = onOpenDrivers,
-        )
-        DividerLine()
-        EntryRow(
-            icon = UiIcons.Chip,
-            title = "Vulkan ICD",
-            subtitle = if (icdReady) "已生成，DirectVulkan 可用" else "未生成，切 DirectVulkan 前先选驱动包",
-            onClick = onOpenDrivers,
-        )
-        DividerLine()
-        EntryRow(
-            icon = UiIcons.Code,
-            title = "外部库",
-            subtitle = externalCount.toString() + " 个 · 导入 .so 用于自检与替换内核",
+            title = "驱动包",
+            subtitle = activeDriverName + " · 共 " + driverCount + " 个 · " +
+                if (icdReady) "ICD 已生成" else "ICD 未生成",
             onClick = onOpenDrivers,
         )
         DividerLine()
         EntryRow(
             icon = UiIcons.Globe,
             title = "启动配置",
-            subtitle = "runtime.conf 全部配置项与 SFPEW 细分项",
+            subtitle = "runtime.conf 全部配置项 · 外部库 " + externalCount + " 个",
             tint = scheme.onSurfaceVariant,
             onClick = onOpenConfigFile,
         )
