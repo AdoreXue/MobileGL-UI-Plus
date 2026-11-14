@@ -160,8 +160,8 @@ private val TABS = listOf(
 /** 顶栏、底栏高度：跟手返回时父页面要按标签页的边距重新排版。 */
 private val TopBarHeight = 64.dp
 
-/** 二级页转场时长：Material 的 shared-axis 用 300ms 一档。 */
-private const val ShuffleAxisMs = 300
+/** 二级页转场时长：Material 的 shared-axis 用 300ms 一档，直接跟 [Motion.Slow] 同源。 */
+private val ShuffleAxisMs = Motion.Slow
 
 /** 二级页（驱动 / 启动配置 / 自检）比四个标签页深一层。 */
 private fun Dest.isSecondary(): Boolean = when (this) {
@@ -181,9 +181,9 @@ private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransf
     // 旧页用 emphasized accelerate 退场，淡出比新页慢一档，看起来是「被盖住」而不是同时消失。
     val move = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedDecelerate)
     val exitMove = tween<IntOffset>(durationMillis = ShuffleAxisMs, easing = Motion.EmphasizedAccelerate)
-    val quickMove = tween<IntOffset>(durationMillis = 180, easing = Motion.Standard)
-    val enterFade = tween<Float>(durationMillis = 210, easing = Motion.EmphasizedDecelerate)
-    val exitFade = tween<Float>(durationMillis = 260, easing = Motion.EmphasizedAccelerate)
+    val quickMove = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
+    val enterFade = tween<Float>(durationMillis = Motion.Base, easing = Motion.EmphasizedDecelerate)
+    val exitFade = tween<Float>(durationMillis = Motion.Slow, easing = Motion.EmphasizedAccelerate)
     val fromDepth = if (initialState.isSecondary()) 1 else 0
     val toDepth = if (targetState.isSecondary()) 1 else 0
 
@@ -202,7 +202,7 @@ private fun AnimatedContentTransitionScope<Dest>.pageTransition(): ContentTransf
         ).apply { targetContentZIndex = -1f }
         else -> ContentTransform(
             targetContentEnter = slideInVertically(quickMove) { it / 24 } +
-                fadeIn(tween(durationMillis = 170, easing = Motion.Decelerate)),
+                fadeIn(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)),
             initialContentExit = slideOutVertically(quickMove) { -it / 48 } +
                 fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)),
             sizeTransform = SizeTransform(clip = true),
@@ -372,7 +372,7 @@ fun MobileGlPluginApp() {
 
         // 顶栏、底栏是"抽屉"式的整块显隐，用弹簧滑出更接近系统自带的手感。
         val barMove = Motion.glide<IntOffset>()
-        val barFadeIn = tween<Float>(durationMillis = 170, easing = Motion.Decelerate)
+        val barFadeIn = tween<Float>(durationMillis = Motion.Base, easing = Motion.Decelerate)
         val barFadeOut = tween<Float>(durationMillis = Motion.Fast, easing = Motion.Accelerate)
 
         // 跟手返回：二级页的返回手势由系统侧滑驱动，进度直接映射成水平位移。

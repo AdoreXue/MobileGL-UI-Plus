@@ -633,14 +633,7 @@ private fun MoreToggle(expanded: Boolean, label: String, onToggle: (Boolean) -> 
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
         )
-        Icon(
-            UiIcons.Chevron,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .size(16.dp)
-                .graphicsLayer { rotationZ = if (expanded) 90f else 0f },
-        )
+        ChevronIcon(expanded = expanded, tint = MaterialTheme.colorScheme.primary, size = 16.dp)
     }
 }
 

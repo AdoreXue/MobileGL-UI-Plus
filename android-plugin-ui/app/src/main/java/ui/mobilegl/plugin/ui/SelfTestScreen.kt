@@ -2,6 +2,7 @@
 package ui.mobilegl.plugin.ui
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -74,7 +75,7 @@ fun SelfTestScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            SectionCard("驱动自检", stagger = 0) {
+            SectionCard("驱动自检") {
                 Text(
                     "与官方 MobileGL Action APK 使用同一套 Driver POST（DirectGLES + DirectVulkan），" +
                         "展示原生 checks、Known driver bugs 与 Format capabilities 完整报告。",
@@ -145,7 +146,7 @@ fun SelfTestScreen(
             return@LazyColumn
         }
 
-        item { StaggeredEntry(1) { SelfTestSummary(report) } }
+        item { SelfTestSummary(report) }
 
         items(report.backends, key = { it.backend + "|" + it.renderer }) { backend ->
             BackendCard(
@@ -240,13 +241,21 @@ private fun BackendCard(
                     formats.targets.forEach { target ->
                         val key = backend.backend + "/format/" + target.name
                         val open = key in expanded
-                        Text(
-                            (if (open) "▾ " else "▸ ") + target.name + " (" + target.rows.size + " formats)",
+                        Row(
                             modifier = Modifier.fillMaxWidth().clickable { onToggle(key) }.padding(vertical = 8.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        if (open) FormatTable(capabilities = formats, rows = target.rows)
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                target.name + " (" + target.rows.size + " formats)",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            ChevronIcon(expanded = open, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
+                        }
+                        AnimatedVisibility(visible = open, enter = Motion.foldEnter(), exit = Motion.foldExit()) {
+                            FormatTable(capabilities = formats, rows = target.rows)
+                        }
                     }
                 }
             }
@@ -261,7 +270,7 @@ private fun CheckRow(check: CheckItem, open: Boolean, onClick: () -> Unit) {
             Text(check.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
             StatusPill(check.status, verdictColor(check.status))
         }
-        if (open && check.detail.isNotBlank()) {
+        AnimatedVisibility(visible = open && check.detail.isNotBlank(), enter = Motion.foldEnter(), exit = Motion.foldExit()) {
             Text(
                 check.detail,
                 style = MaterialTheme.typography.labelSmall,
@@ -280,7 +289,7 @@ private fun DriverBugRow(bug: DriverBug, open: Boolean, onClick: () -> Unit) {
             Text(bug.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
             StatusPill(bug.verdict, verdictColor(bug.verdict))
         }
-        if (open && bug.detail.isNotBlank()) {
+        AnimatedVisibility(visible = open && bug.detail.isNotBlank(), enter = Motion.foldEnter(), exit = Motion.foldExit()) {
             Text(bug.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
     }
@@ -333,13 +342,19 @@ private fun RawReportCard(report: SelfTestResult, expanded: Set<String>, onToggl
     val key = "raw"
     val open = key in expanded
     SectionCard("Raw report") {
-        Text(
-            if (open) "▾ Raw report (tap to collapse)" else "▸ Raw report (tap to expand)",
+        Row(
             modifier = Modifier.fillMaxWidth().clickable { onToggle(key) }.padding(vertical = 4.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        if (open) {
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (open) "Raw report（点一下收起）" else "Raw report（点一下展开）",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            ChevronIcon(expanded = open, tint = MaterialTheme.colorScheme.primary, size = 14.dp)
+        }
+        AnimatedVisibility(visible = open, enter = Motion.foldEnter(), exit = Motion.foldExit()) {
             Text(report.rawJson, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

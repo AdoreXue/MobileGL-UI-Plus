@@ -48,15 +48,15 @@ internal object Motion {
     /** Material 3 的 emphasized accelerate：离开类动作，尾巴收得干脆。 */
     val EmphasizedAccelerate: Easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
-    /** 折叠区展开：高度与透明度一起走，比默认稍快一点，点开立刻有反馈。 */
+    /** 折叠区展开：高度与透明度一起走，用 [Base] 一档，点开和页面转场同一节奏。 */
     fun foldEnter(): EnterTransition =
-        fadeIn(tween(durationMillis = 140, easing = Decelerate)) +
-            expandVertically(tween(durationMillis = 190, easing = Decelerate))
+        fadeIn(tween(durationMillis = Base, easing = Decelerate)) +
+            expandVertically(tween(durationMillis = Base, easing = Decelerate))
 
-    /** 收起比展开快一档，避免「关不掉」的错觉。 */
+    /** 收起比展开快一档，避免「关不掉」的错觉；高度仍走 [Base]，不然收得太急。 */
     fun foldExit(): ExitTransition =
-        fadeOut(tween(durationMillis = 90, easing = Accelerate)) +
-            shrinkVertically(tween(durationMillis = 150, easing = Accelerate))
+        fadeOut(tween(durationMillis = Fast, easing = Accelerate)) +
+            shrinkVertically(tween(durationMillis = Base, easing = Accelerate))
 
     /** 会「滑过去」的东西（分段指示块、底栏）用弹簧，比分段线性更接近真实手感。 */
     fun <T> glide(): SpringSpec<T> = spring(

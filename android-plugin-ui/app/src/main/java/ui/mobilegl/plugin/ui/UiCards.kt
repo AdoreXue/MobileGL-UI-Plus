@@ -30,13 +30,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -263,6 +268,24 @@ private fun EntryListItem(
                 modifier = Modifier.size(18.dp),
             )
         },
+    )
+}
+
+/**
+ * 折叠箭头：展开时转 90°，和折叠区的高度动画同步，不会硬跳一下。
+ */
+@Composable
+internal fun ChevronIcon(expanded: Boolean, tint: Color, size: Dp) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 90f else 0f,
+        animationSpec = tween(durationMillis = Motion.Base, easing = Motion.Standard),
+        label = "chevron",
+    )
+    Icon(
+        UiIcons.Chevron,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(size).graphicsLayer { rotationZ = rotation },
     )
 }
 

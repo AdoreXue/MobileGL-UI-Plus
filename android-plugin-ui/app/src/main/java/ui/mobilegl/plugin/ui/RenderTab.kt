@@ -343,14 +343,7 @@ private fun BackendCard(
                 color = scheme.primary,
                 modifier = Modifier.weight(1f),
             )
-            Icon(
-                UiIcons.Chevron,
-                contentDescription = null,
-                tint = scheme.primary,
-                modifier = Modifier
-                    .size(16.dp)
-                    .graphicsLayer { rotationZ = if (detailsOpen) 90f else 0f },
-            )
+            ChevronIcon(expanded = detailsOpen, tint = scheme.primary, size = 16.dp)
         }
         AnimatedVisibility(
             visible = detailsOpen,
@@ -463,14 +456,7 @@ private fun TuneSummaryRow(summary: String, expanded: Boolean, onToggle: () -> U
             Text(summary, style = MaterialTheme.typography.bodyMedium)
         },
         trailingContent = {
-            Icon(
-                UiIcons.Chevron,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(18.dp)
-                    .graphicsLayer { rotationZ = if (expanded) 90f else 0f },
-            )
+            ChevronIcon(expanded = expanded, tint = MaterialTheme.colorScheme.primary, size = 18.dp)
         },
     )
 }
