@@ -113,9 +113,7 @@ fun DriverScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         if (!ready) {
-            SkeletonCard(4)
-            SkeletonCard(3)
-            SkeletonCard(4)
+            FillSkeleton(cards = 5)
             return@Column
         }
         SectionCard("渲染器组件", stagger = 0) {

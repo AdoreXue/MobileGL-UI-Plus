@@ -80,8 +80,8 @@ fun rememberContentReveal(ready: Boolean, durationMs: Int = Motion.Slow): Conten
         }
     }
     return ContentReveal(
-        alpha = 0.35f + 0.65f * progress.value,
-        rise = ((1f - progress.value) * 6f).dp,
+        alpha = 0.75f + 0.25f * progress.value,
+        rise = ((1f - progress.value) * 4f).dp,
     )
 }
 
@@ -92,14 +92,15 @@ fun rememberContentReveal(ready: Boolean, durationMs: Int = Motion.Slow): Conten
  * 上限 5 档是为了长列表不至于最后几块等太久。
  */
 @Composable
-fun rememberStaggerReveal(index: Int, stepMs: Int = 40, maxSteps: Int = 5): ContentReveal {
+fun rememberStaggerReveal(index: Int, stepMs: Int = 30, maxSteps: Int = 4): ContentReveal {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         val delayMs = index.coerceIn(0, maxSteps) * stepMs
         if (delayMs > 0) delay(delayMs.toLong())
-        progress.animateTo(1f, tween(durationMillis = Motion.Base, easing = Motion.Decelerate))
+        progress.animateTo(1f, tween(durationMillis = Motion.Fast + 80, easing = Motion.Decelerate))
     }
-    return ContentReveal(alpha = progress.value, rise = ((1f - progress.value) * 8f).dp)
+    // 起点留 0.7 不透明度：完全透明会让页面底下给人"空的"错觉，等它淡进来又像突然补齐。
+    return ContentReveal(alpha = 0.7f + 0.3f * progress.value, rise = ((1f - progress.value) * 6f).dp)
 }
 
 /** 包一层错峰入场，二级页里按顺序给 index 即可。 */
@@ -146,6 +147,24 @@ fun SkeletonCard(rows: Int = 3, modifier: Modifier = Modifier) {
                         .background(barColor.copy(alpha = 0.07f)),
                 )
             }
+        }
+    }
+}
+
+/**
+ * 整屏骨架：卡片铺满可视区。
+ *
+ * 只画两三张灰卡时，下面大片是空的，等真实内容一步铺开会像「页面掉了一截又补上」。
+ * 这里按屏幕高度多铺几张，骨架阶段和内容阶段看起来是同一个版式。
+ */
+@Composable
+fun FillSkeleton(cards: Int = 7) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        repeat(cards) { index ->
+            SkeletonCard(rows = if (index % 2 == 0) 4 else 3)
         }
     }
 }

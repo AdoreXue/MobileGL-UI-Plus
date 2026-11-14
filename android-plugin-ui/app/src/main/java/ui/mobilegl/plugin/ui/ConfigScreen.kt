@@ -269,12 +269,7 @@ fun ConfigScreen(
         }
         if (!ready) {
             item {
-                Spacer(Modifier.height(4.dp))
-                SkeletonCard(4)
-                Spacer(Modifier.height(18.dp))
-                SkeletonCard(3)
-                Spacer(Modifier.height(18.dp))
-                SkeletonCard(4)
+                FillSkeleton(cards = 5)
             }
         } else if (query.isBlank()) {
             item {
