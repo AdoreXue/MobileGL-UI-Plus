@@ -31,6 +31,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -97,10 +101,11 @@ internal fun InfoTab(
     val busy = device.socExtra.gpuBusy
     val batteryText = device.battery.ifBlank { "未知" }
     // 电池温度与当前频率是可选行，缺了就不占位置，标题里的计数也跟着变。
-    val stateCount = 3 +
+    // 合并后这张卡的行数：固定 8 行，加上可选的特性、电池温度、当前频率。
+    val runCount = 8 +
+        (if (device.socExtra.features.isNotBlank()) 1 else 0) +
         (if (device.batteryTemp.isNotBlank()) 1 else 0) +
         (if (device.socExtra.curFreq.isNotBlank()) 1 else 0)
-    val glCount = 2 + stateCount + (if (device.socExtra.features.isNotBlank()) 1 else 0)
 
     LazyColumn(
         state = listState,
@@ -182,6 +187,30 @@ internal fun InfoTab(
                             onClick = { copy("核心", clusterText) },
                         )
                     }
+                    // 第三行：屏幕与存储原来挤在下面的卡里，挪上来每格都有值和小字。
+                    Row(
+                        modifier = Modifier.height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        SpecCell(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            icon = UiIcons.Layers,
+                            label = "屏幕",
+                            value = screenValue(device.screen),
+                            caption = screenCaption(device.screen),
+                            mono = false,
+                            onClick = { copy("屏幕", device.screen) },
+                        )
+                        SpecCell(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            icon = UiIcons.Memory,
+                            label = "存储",
+                            value = storageValue(device.storage),
+                            caption = storageCaption(device.storage),
+                            mono = false,
+                            onClick = { copy("存储", device.storage) },
+                        )
+                    }
                 }
             }
             // 规格网格与下面这张卡之间留一点空气，没有小标题也要看得出是两块。
@@ -212,9 +241,31 @@ internal fun InfoTab(
                     }
                 }
             }
-            item { SectionLabel("系统与设备", glCount) }
+            item { SectionLabel("系统与设备", runCount) }
             item {
+                // 渲染配置、图形信息、实时状态本来就是同一类，合成一张卡后少一段标题。
                 InfoCard {
+                    InfoLine(UiIcons.Speed, "渲染后端", config.backend, mono = true) { copy("渲染后端", config.backend) }
+                    DividerLine()
+                    InfoLine(
+                        UiIcons.Layers,
+                        "SFPEW 包装器",
+                        if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) "已启用"
+                        else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置",
+                        mono = false,
+                    ) { }
+                    DividerLine()
+                    InfoLine(UiIcons.Chip, "激活驱动", activeName, mono = false) { copy("激活驱动", activeName) }
+                    DividerLine()
+                    InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false) { }
+                    DividerLine()
+                    InfoLine(
+                        UiIcons.Layers,
+                        "共享配置",
+                        if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本",
+                        mono = false,
+                    ) { }
+                    DividerLine()
                     InfoLine(UiIcons.Gpu, "OpenGL ES", device.gles, mono = false) { copy("OpenGL ES", device.gles) }
                     DividerLine()
                     InfoLine(UiIcons.Layers, "Vulkan", device.vulkan, mono = false) { copy("Vulkan", device.vulkan) }
@@ -234,7 +285,6 @@ internal fun InfoTab(
                             )
                         }
                     }
-                    // 设备实时状态跟着图形信息放在一张卡里，少一个标题、少一次滚动。
                     DividerLine()
                     InfoLine(UiIcons.Bolt, "电池", batteryText, mono = false) { copy("电池", batteryText) }
                     if (device.batteryTemp.isNotBlank()) {
@@ -243,46 +293,12 @@ internal fun InfoTab(
                             copy("电池温度", device.batteryTemp)
                         }
                     }
-                    DividerLine()
-                    InfoLine(UiIcons.Layers, "屏幕", device.screen, mono = false) { copy("屏幕", device.screen) }
-                    DividerLine()
-                    InfoLine(UiIcons.Memory, "存储", device.storage, mono = false) { copy("存储", device.storage) }
                     if (device.socExtra.curFreq.isNotBlank()) {
                         DividerLine()
                         InfoLine(UiIcons.Chip, "当前频率", device.socExtra.curFreq, mono = false) {
                             copy("当前频率", device.socExtra.curFreq)
                         }
                     }
-                }
-            }
-            item { SectionLabel("运行环境") }
-            item {
-                InfoCard {
-                    InfoLine(UiIcons.Speed, "渲染后端", config.backend, mono = true) { copy("渲染后端", config.backend) }
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Layers,
-                        "SFPEW 包装器",
-                        if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) "已启用"
-                        else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置",
-                        mono = false,
-                    ) { }
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Chip,
-                        "激活驱动",
-                        activeName,
-                        mono = false,
-                    ) { copy("激活驱动", activeName) }
-                    DividerLine()
-                    InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false) { }
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Layers,
-                        "共享配置",
-                        if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本",
-                        mono = false,
-                    ) { }
                 }
             }
             item { SectionLabel("链接") }
@@ -445,7 +461,7 @@ internal fun InfoTab(
 private fun VersionHero(version: String, internal: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val gradient = Brush.linearGradient(
-        listOf(scheme.primary.copy(alpha = 0.24f), scheme.primary.copy(alpha = 0.07f), scheme.surfaceContainer),
+        listOf(scheme.primary.copy(alpha = 0.36f), scheme.primary.copy(alpha = 0.10f), scheme.surfaceContainer),
     )
     Column(
         modifier = Modifier
@@ -474,7 +490,7 @@ private fun VersionHero(version: String, internal: String, onClick: () -> Unit) 
             "v" + version,
             modifier = Modifier.padding(top = 10.dp),
             fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = scheme.onSurface,
             maxLines = 1,
@@ -509,9 +525,18 @@ private fun StatusStrip(
             text = if (authorized) "已授权" else "未授权",
             color = if (authorized) scheme.primary else scheme.error,
             onClick = if (authorized) null else onAuthorize,
+            icon = if (authorized) Icons.Filled.Lock else Icons.Filled.Warning,
         )
-        StatusPill(text = backend, color = scheme.tertiary)
-        StatusPill(text = healthShort(lastReport), color = healthColor(lastReport))
+        StatusPill(text = backend, color = scheme.tertiary, icon = UiIcons.Gpu)
+        StatusPill(
+            text = healthShort(lastReport),
+            color = healthColor(lastReport),
+            icon = when (reportHealth(lastReport)) {
+                ReportHealth.Ok -> Icons.Filled.Check
+                ReportHealth.None -> null
+                else -> Icons.Filled.Warning
+            },
+        )
     }
 }
 
@@ -630,6 +655,23 @@ internal fun healthShort(report: SelfTestResult?): String = when (reportHealth(r
 private fun coreCountText(detail: String): String {
     val count = Regex("([0-9]+) 核").find(detail)?.groupValues?.getOrNull(1)
     return if (count == null) detail else count + " 核"
+}
+
+/** 「1080×2400 · 120 Hz」拆成值和小字。 */
+private fun screenValue(screen: String): String = screen.substringBefore(" · ").trim().ifBlank { "未知" }
+
+private fun screenCaption(screen: String): String {
+    val rate = screen.substringAfter(" · ", "").trim()
+    return if (rate.isBlank()) "" else rate
+}
+
+/** 「45.2 GB 可用 / 512 GB」拆成可用与总量。 */
+private fun storageValue(storage: String): String =
+    storage.substringBefore('/').trim().ifBlank { "未知" }
+
+private fun storageCaption(storage: String): String {
+    val total = storage.substringAfter('/', "").trim()
+    return if (total.isBlank()) "" else "共 " + total
 }
 
 /** 分簇缩写：把「A520×2 0.36–2.27」压成「A520×2」。 */
