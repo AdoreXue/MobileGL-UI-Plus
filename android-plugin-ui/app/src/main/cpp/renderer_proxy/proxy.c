@@ -36,22 +36,43 @@ static char g_lib_dir[PATH_MAX];
 // in its dynamic limits. MobileGL then returns 0 and the caller falls back to
 // 16384; keep the probe useful by clamping only the zero case.
 static void (*g_real_glGetIntegerv)(uint32_t pname, int32_t *data);
+static int (*g_real_glGetError)(void);
 static void proxy_glGetIntegerv(uint32_t pname, int32_t *data) {
-    if (g_real_glGetIntegerv) g_real_glGetIntegerv(pname, data);
-    if (data && pname == 0x0D33 /* GL_MAX_TEXTURE_SIZE */ && *data <= 0) {
-        *data = 16384;
-        LOGE("GL_MAX_TEXTURE_SIZE probe returned 0; clamped to 16384");
+    if (!g_real_glGetIntegerv) {
+        if (data) *data = 0;
+        return;
     }
+    g_real_glGetIntegerv(pname, data);
+    if (!data || pname != 0x0D33 /* GL_MAX_TEXTURE_SIZE */ || *data > 0) return;
+    // Without a current context the call raises an error and leaves the variable
+    // untouched, so whatever the caller had in it must not be reported as 16384.
+    if (g_real_glGetError && g_real_glGetError() != 0) return;
+    *data = 16384;
+    LOGE("GL_MAX_TEXTURE_SIZE probe returned 0; clamped to 16384");
 }
 
-
+// Returns the resolved path, or "" when the result would not fit: loading or
+// logging a silently truncated name picks the wrong file.
 static const char *sibling_path(const char *name, char *out, size_t out_len) {
-    if (g_lib_dir[0] && name[0] != '/') {
-        snprintf(out, out_len, "%s/%s", g_lib_dir, name);
-        return out;
+    int written;
+    if (g_lib_dir[0] && name[0] != '/') written = snprintf(out, out_len, "%s/%s", g_lib_dir, name);
+    else written = snprintf(out, out_len, "%s", name);
+    if (written < 0 || (size_t)written >= out_len) {
+        LOGE("path too long (%d bytes, limit %zu): %s", written, out_len, name);
+        out[0] = 0;
     }
-    snprintf(out, out_len, "%s", name);
     return out;
+}
+
+static int regular_and_readable(const char *path) {
+    struct stat st;
+    return path && path[0] && stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, R_OK) == 0;
+}
+
+// A library picked on the device has to look like a GL implementation before it
+// is handed the process: the config that names it lives on shared storage.
+static int exports_gl_entry_points(void *handle) {
+    return handle && dlsym(handle, "eglGetDisplay") && dlsym(handle, "glGetIntegerv");
 }
 
 static void *dlopen_sibling(const char *name) {
@@ -59,9 +80,11 @@ static void *dlopen_sibling(const char *name) {
     if (handle) return handle;
     if (g_lib_dir[0] && name[0] != '/') {
         char path[PATH_MAX];
-        snprintf(path, sizeof(path), "%s/%s", g_lib_dir, name);
-        handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-        if (handle) return handle;
+        sibling_path(name, path, sizeof(path));
+        if (path[0]) {
+            handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+            if (handle) return handle;
+        }
     }
     return NULL;
 }
@@ -80,6 +103,53 @@ static int truthy(const char *value) {
     return strcmp(value, "0") != 0 && strcasecmp(value, "false") != 0;
 }
 
+// The two prefixes that belong to the renderer stack. The file is on shared
+// storage, where any app can write it, and an unchecked name would let that app
+// hand the launcher an LD_PRELOAD or a JAVA_TOOL_OPTIONS agent.
+static int is_propagation_key(const char *key) {
+    const char *suffix;
+    if (strncmp(key, "MOBILEGL_", 9) == 0) suffix = key + 9;
+    else if (strncmp(key, "SFPEW_", 6) == 0) suffix = key + 6;
+    else return 0;
+    if (!*suffix) return 0;
+    for (const char *p = suffix; *p; ++p) {
+        int allowed = (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_';
+        if (!allowed) return 0;
+    }
+    return 1;
+}
+
+// Without a readable config file the wrapper is what shipped builds ran, and it
+// is the right default exactly when the APK actually carries it.
+static const char *default_mode(void) {
+    char path[PATH_MAX];
+    sibling_path("libSfpew_real.so", path, sizeof(path));
+    return (path[0] && access(path, R_OK) == 0) ? "sfpew" : "direct";
+}
+
+// A value the proxy does not recognise is as good as no value: it would send the
+// constructor down the direct branch whatever the user meant.
+static void reject_unknown_mode(char *mode) {
+    if (mode[0] && strcmp(mode, "sfpew") != 0 && strcmp(mode, "direct") != 0) {
+        LOGI("ignoring unrecognised RENDERER_MODE=%s", mode);
+        mode[0] = 0;
+    }
+}
+
+// Only fills in what is still unknown: an explicit RENDERER_MODE or SFPEW_ENABLED
+// in the environment outranks anything inferred from the APK's contents.
+static void use_default_mode(char *mode, size_t mode_len, const char *why) {
+    if (mode[0]) {
+        LOGI("%s; keeping RENDERER_MODE=%s from the environment", why, mode);
+        return;
+    }
+    snprintf(mode, mode_len, "%s", default_mode());
+    LOGI("%s; defaulting to RENDERER_MODE=%s", why, mode);
+}
+
+#define MAX_CONFIG_BYTES (64 * 1024)
+#define MAX_CONFIG_LINE 1024
+
 static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
     mode[0] = 0;
     so[0] = 0;
@@ -93,14 +163,39 @@ static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
     if (env_so && env_so[0]) snprintf(so, so_len, "%s", env_so);
     const char *env = getenv("MOBILEGL_CONFIG_FILE");
     const char *path = (env && env[0]) ? env : "/sdcard/MobileGL/runtime.conf";
-    FILE *file = fopen(path, "r");
-    if (!file) {
-        LOGE("cannot read %s, using env/defaults", path);
-        if (!mode[0]) snprintf(mode, mode_len, "direct");
+    if (!regular_and_readable(path)) {
+        reject_unknown_mode(mode);
+        use_default_mode(mode, mode_len, "no readable config file");
         return 0;
     }
-    char line[1024];
+    struct stat st;
+    if (stat(path, &st) == 0 && st.st_size > MAX_CONFIG_BYTES) {
+        // Parsing gigabytes in a library constructor stalls the game; the plugin
+        // writes a few hundred bytes, so anything this large is not its file.
+        LOGE("%s is %lld bytes, over the %d byte limit; ignoring it", path, (long long)st.st_size,
+             MAX_CONFIG_BYTES);
+        reject_unknown_mode(mode);
+        use_default_mode(mode, mode_len, "oversized config file");
+        return 0;
+    }
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        reject_unknown_mode(mode);
+        use_default_mode(mode, mode_len, "cannot open the config file");
+        return 0;
+    }
+    char line[MAX_CONFIG_LINE];
     while (fgets(line, sizeof(line), file)) {
+        // A full buffer is the only sign of an over-long record: a short last line
+        // without a trailing newline is a normal line and must still be parsed.
+        if (!strchr(line, '\n') && strlen(line) == sizeof(line) - 1) {
+            // Over-long record: the tail would otherwise be read as a fresh key.
+            int c;
+            while ((c = fgetc(file)) != EOF && c != '\n') {
+            }
+            LOGE("config line longer than %d bytes; skipped", MAX_CONFIG_LINE - 1);
+            continue;
+        }
         trim(line);
         if (!line[0] || line[0] == '#') continue;
         char *eq = strchr(line, '=');
@@ -115,16 +210,18 @@ static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
             snprintf(so, so_len, "%s", value);
         } else if (strcmp(line, "SFPEW_ENABLED") == 0) {
             snprintf(mode, mode_len, "%s", truthy(value) ? "sfpew" : "direct");
-        } else if (strncmp(line, "RENDERER_", 9) != 0) {
+        } else if (line[0] && is_propagation_key(line)) {
             // Propagate the plugin-managed file into the process env so both
             // SFPEW and MobileGL read the exact same configuration.
-            setenv(line, value, 1);
+            if (setenv(line, value, 1) != 0) LOGE("setenv failed for %s", line);
+        } else if (line[0]) {
+            LOGE("ignoring %s from the config file; only MOBILEGL_*/SFPEW_* keys are propagated", line);
         }
     }
     fclose(file);
-    // A present config file must opt in explicitly. A missing file keeps the
-    // historical default (load SFPEW), which is what shipped builds relied on.
-    if (!mode[0]) snprintf(mode, mode_len, "direct");
+    // A present config file must opt in explicitly.
+    reject_unknown_mode(mode);
+    if (!mode[0]) use_default_mode(mode, mode_len, "config file names no usable mode");
     LOGI("config %s: RENDERER_MODE=%s RENDERER_SO=%s", path, mode, so[0] ? so : "(bundled)");
     return 1;
 }
@@ -178,7 +275,7 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
     if (!g_lib_dir[0]) snprintf(g_lib_dir, sizeof(g_lib_dir), "/data/app");
     LOGI("proxy library dir: %s", g_lib_dir);
     char mode[16];
-    char so[512];
+    char so[PATH_MAX];
     int file_ok = read_config(mode, sizeof(mode), so, sizeof(so));
 
     void *target = NULL;
@@ -191,7 +288,7 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
         // search path, so dlopen("libSfpew_real.so") alone fails there.
         char sfpew_path[PATH_MAX];
         sibling_path("libSfpew_real.so", sfpew_path, sizeof(sfpew_path));
-        target = dlopen(sfpew_path, RTLD_NOW | RTLD_LOCAL);
+        if (sfpew_path[0]) target = dlopen(sfpew_path, RTLD_NOW | RTLD_LOCAL);
         if (!target) {
             target = dlopen("libSfpew_real.so", RTLD_NOW | RTLD_LOCAL);
         }
@@ -201,9 +298,14 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
         } else {
             sibling_path("libMobileGL.so", backend_path, sizeof(backend_path));
         }
-        setenv("SFPEW_EGL", backend_path, 1);
+        if (backend_path[0] && regular_and_readable(backend_path)) {
+            setenv("SFPEW_EGL", backend_path, 1);
+        } else {
+            LOGE("backend %s is not a readable file; keeping the wrapper's own choice", so[0] ? so : "(bundled)");
+            backend_path[0] = 0;
+        }
         if (target) {
-            LOGI("SFPEW enabled: %s loaded, backend=%s", sfpew_path, backend_path);
+            LOGI("SFPEW enabled: %s loaded, backend=%s", sfpew_path, backend_path[0] ? backend_path : "(default)");
         } else {
             LOGE("SFPEW enabled but libSfpew_real.so failed: %s; using direct MobileGL", dlerror());
         }
@@ -216,7 +318,16 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
         if (so[0]) {
             char direct_path[PATH_MAX];
             sibling_path(so, direct_path, sizeof(direct_path));
-            target = strchr(so, '/') ? memfd_load(so) : dlopen_sibling(so);
+            if (direct_path[0]) {
+                // Resolve first, then pick the loader: a relative name with a slash
+                // otherwise loaded against the process CWD while the log named the
+                // library directory.
+                target = strchr(direct_path, '/') ? memfd_load(direct_path) : dlopen(direct_path, RTLD_NOW | RTLD_LOCAL);
+            }
+            if (target && !exports_gl_entry_points(target)) {
+                LOGE("%s does not export eglGetDisplay/glGetIntegerv; not a GL renderer", direct_path);
+                target = NULL;
+            }
             if (target) LOGI("direct renderer loaded: %s", direct_path);
             else LOGE("cannot load direct renderer %s: %s", direct_path, dlerror());
         }
@@ -239,6 +350,9 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
         } else if (strcmp(g_proxy_symbols[i].name, "glGetIntegerv") == 0) {
             g_real_glGetIntegerv = (void (*)(uint32_t, int32_t *))fn;
             *g_proxy_symbols[i].slot = (void *)proxy_glGetIntegerv;
+        } else if (strcmp(g_proxy_symbols[i].name, "glGetError") == 0) {
+            g_real_glGetError = (int (*)(void))fn;
+            *g_proxy_symbols[i].slot = fn;
         } else {
             *g_proxy_symbols[i].slot = fn;
         }
