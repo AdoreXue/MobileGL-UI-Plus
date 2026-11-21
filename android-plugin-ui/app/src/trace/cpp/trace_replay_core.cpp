@@ -720,12 +720,16 @@ bool CompareAgainstOneGolden(const Request& request,
 
     int compareWidth = request.cropWidth > 0 ? request.cropWidth : actual.width;
     int compareHeight = request.cropHeight > 0 ? request.cropHeight : actual.height;
+    // Widened before adding: the crop comes from an intent, so x0 + width can overflow
+    // int, wrap negative, and pass every bound below before the loops run off the buffer.
+    const long long right = static_cast<long long>(x0) + compareWidth;
+    const long long bottom = static_cast<long long>(y0) + compareHeight;
     if (compareWidth <= 0 || compareHeight <= 0 ||
         x0 < 0 || y0 < 0 ||
-        x0 + compareWidth > actual.width ||
-        y0 + compareHeight > actual.height ||
-        x0 + compareWidth > golden.width ||
-        y0 + compareHeight > golden.height) {
+        right > actual.width ||
+        bottom > actual.height ||
+        right > golden.width ||
+        bottom > golden.height) {
         error = "compare crop is outside actual or golden image bounds: " + goldenPath;
         return false;
     }

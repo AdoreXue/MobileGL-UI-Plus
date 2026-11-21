@@ -19,8 +19,16 @@ public final class TraceReplayActivity extends Activity {
     public static final String ACTION_TRACE_REPLAY = "ui.mobilegl.plugin.TRACE_REPLAY";
 
     private static final String TAG = "MobileGLTraceRunner";
+    /** Set when the runner is not in this APK: a prebuilt-library build skips its native sources. */
+    private static final UnsatisfiedLinkError LIBRARY_FAILURE;
     static {
-        System.loadLibrary("trace_replay_runner");
+        UnsatisfiedLinkError failure = null;
+        try {
+            System.loadLibrary("trace_replay_runner");
+        } catch (UnsatisfiedLinkError e) {
+            failure = e;
+        }
+        LIBRARY_FAILURE = failure;
     }
 
     private TextView statusView;
@@ -39,6 +47,15 @@ public final class TraceReplayActivity extends Activity {
         );
         SurfaceView surfaceView = new SurfaceView(this);
         setContentView(surfaceView);
+        if (LIBRARY_FAILURE != null) {
+            TextView message = new TextView(this);
+            message.setPadding(24, 24, 24, 24);
+            message.setText("Trace replay is not available in this build: "
+                    + LIBRARY_FAILURE.getMessage());
+            setContentView(message);
+            Log.e(TAG, "trace_replay_runner is missing from this APK", LIBRARY_FAILURE);
+            return;
+        }
 
         Intent intent = getIntent();
         request = TraceReplayRequest.from(
@@ -211,12 +228,14 @@ public final class TraceReplayActivity extends Activity {
         }
 
         static TraceReplayRequest from(Intent intent, File filesDir, String nativeLibraryDir, String defaultBackend) {
-            String outputDir = readString(intent, "output_dir", new File(filesDir, "trace-replay").getAbsolutePath());
-            String diffPath = readString(intent, "diff_path", "");
+            String defaultOutput = new File(filesDir, "trace-replay").getAbsolutePath();
+            String outputDir = pathInside(filesDir, readString(intent, "output_dir", defaultOutput), defaultOutput, false);
+            String diffPath = pathInside(filesDir, readString(intent, "diff_path", ""), "", false);
+            File nativeDir = new File(nativeLibraryDir);
             return new TraceReplayRequest(
-                    readString(intent, "trace_path", ""),
-                    readString(intent, "golden_path", ""),
-                    readString(intent, "alternate_golden_path", ""),
+                    pathInside(filesDir, readString(intent, "trace_path", ""), "", false),
+                    pathInside(filesDir, readString(intent, "golden_path", ""), "", false),
+                    pathInside(filesDir, readString(intent, "alternate_golden_path", ""), "", false),
                     outputDir,
                     diffPath,
                     readString(intent, "backend", defaultBackend),
@@ -229,11 +248,36 @@ public final class TraceReplayActivity extends Activity {
                     intent.getIntExtra("crop_y", 0),
                     intent.getIntExtra("crop_width", 0),
                     intent.getIntExtra("crop_height", 0),
-                    readString(intent, "angle_library_dir", nativeLibraryDir),
+                    pathInside(nativeDir, readString(intent, "angle_library_dir", nativeLibraryDir),
+                            nativeLibraryDir, true),
                     intent.getBooleanExtra("use_angle", false),
                     intent.getBooleanExtra("use_pbuffer", false),
                     intent.getBooleanExtra("avoid_angle_llvmpipe_sampler_mipmap_min_filter", false)
             );
+        }
+
+        /**
+         * This activity answers an exported intent, so a path from it may only name something
+         * inside the directory we own. Anything else would let any installed app make the trace
+         * sink create or truncate files with this app's all-files privilege.
+         */
+        private static String pathInside(File root, String path, String fallback, boolean mustExist) {
+            if (path == null || path.isEmpty()) {
+                return fallback;
+            }
+            try {
+                String canonicalRoot = root.getCanonicalPath() + File.separator;
+                File candidate = new File(path);
+                String canonical = candidate.getCanonicalPath();
+                if (!canonical.startsWith(canonicalRoot) || (mustExist && !candidate.isDirectory())) {
+                    Log.w(TAG, "ignoring intent path outside " + root + ": " + path);
+                    return fallback;
+                }
+                return canonical;
+            } catch (java.io.IOException e) {
+                Log.w(TAG, "cannot resolve intent path " + path, e);
+                return fallback;
+            }
         }
 
         private static String readString(Intent intent, String key, String fallback) {
