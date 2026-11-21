@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
+import android.Manifest
+import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
@@ -14,6 +17,7 @@ import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.BackEventCompat
+import androidx.core.app.ActivityCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
@@ -37,9 +41,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
@@ -108,8 +112,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -134,12 +141,16 @@ import ui.mobilegl.plugin.selftest.SelfTestRepository
 import ui.mobilegl.plugin.selftest.SelfTestResult
 import java.util.Locale
 
-/** 一次性装载二级页与首页所需的磁盘数据，避免多次跨线程往返。 */
-private data class DriversData(
+/** 冷启动后台读回来的全部状态：一次 IO 读齐，避免多个 LaunchedEffect 抢着写同一批 state。 */
+private data class BootData(
+    val config: PluginConfig,
+    val corrupt: Boolean,
     val drivers: List<DriverPack>,
     val libraries: List<ExternalLibrary>,
     val status: RuntimeConfigWriter.Status,
-    val report: SelfTestResult?,
+    val cached: SelfTestResult?,
+    val soc: SocExtra,
+    val gl: GlInfoProbe.Info?,
 )
 
 private sealed interface Dest {
@@ -198,10 +209,14 @@ fun MobileGlPluginApp() {
         val runtimeWriter = remember { RuntimeConfigWriter(context) }
         val scope = rememberCoroutineScope()
 
-        // 冷启动 IO 全部移出主线程：先给轻量占位，LaunchedEffect 内后台加载。
-        // 注意 ConfigStore.load() 只是读小的 json，可在首帧前同步完成，避免 UI 空窗；
-        // drivers/externalLibraries/runtimeStatus 涉及目录扫描、SHA-256 与 /sdcard FUSE 写，必须异步。
-        var config by remember { mutableStateOf(store.load()) }
+        // 冷启动 IO 全部移出主线程：先给占位，下面那一个 LaunchedEffect 读回真实状态。
+        // drivers/externalLibraries/runtimeStatus 涉及目录扫描、SHA-256 与 /sdcard FUSE 写；
+        // config.json 也在那里读，启动时只读一次（原来是两次）。
+        var config by remember {
+            // 首帧占位也要是这个 flavor 的后端，否则 magma 包会闪一下 GLES。
+            val backend = store.defaultBackend()
+            mutableStateOf(PluginConfig(backend = backend, env = PluginConfig.defaultEnv(backend)))
+        }
         var drivers by remember { mutableStateOf<List<DriverPack>>(emptyList()) }
         var externalLibraries by remember { mutableStateOf<List<ExternalLibrary>>(emptyList()) }
         var runtimeStatus by remember { mutableStateOf(runtimeWriter.initialStatus()) }
@@ -231,39 +246,58 @@ fun MobileGlPluginApp() {
         val infoListState = rememberLazyListState()
         val configListState = rememberLazyListState()
 
+        // 启动只跑一个后台任务：原来拆成两个 LaunchedEffect(Unit)，两边都写 report 和
+        // probing，手动自检或缓存结论会被对方盖回去，probe 结束前也可能被置回 true。
         LaunchedEffect(Unit) {
-            val rawLoaded = withContext(Dispatchers.IO) {
-                store.load()
-            }
-            // config.json 是唯一真源：backend 以 env 里的 MOBILEGL_BACKEND_TYPE 为准
-            val loaded = rawLoaded.copy(
-                backend = rawLoaded.env["MOBILEGL_BACKEND_TYPE"] ?: rawLoaded.backend,
-            )
-            config = loaded
-            val io = withContext(Dispatchers.IO) {
-                DriversData(
+            val boot = withContext(Dispatchers.IO) {
+                val loaded = store.load().let { raw ->
+                    // config.json 是唯一真源：backend 以 env 里的 MOBILEGL_BACKEND_TYPE 为准
+                    raw.copy(backend = raw.env["MOBILEGL_BACKEND_TYPE"] ?: raw.backend)
+                }
+                BootData(
+                    config = loaded,
+                    corrupt = store.loadWasCorrupt,
                     drivers = driverRepository.list(),
                     libraries = externalRepository.list(),
                     status = runtimeWriter.write(loaded),
-                    report = selfTestRepository.cached(),
+                    cached = selfTestRepository.cached(),
+                    soc = readSocExtra(),
+                    gl = GlInfoProbe.query(),
                 )
             }
-            drivers = io.drivers
-            externalLibraries = io.libraries
-            runtimeStatus = io.status
-            report = io.report
-            probing = io.report == null
+            config = boot.config
+            drivers = boot.drivers
+            externalLibraries = boot.libraries
+            runtimeStatus = boot.status
+            socExtra = boot.soc
+            glInfo = boot.gl
+            if (boot.corrupt) {
+                Toast.makeText(
+                    context,
+                    "配置文件读不出来，已恢复默认设置；原文件留作 config.json.corrupt-*",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            // 先把上次的结论摆出来，再决定要不要重新自检，这样首屏不会空着。
+            report = boot.cached
+            probing = false
+            if (boot.config.autoSelfTest) {
+                probing = true
+                report = selfTestRepository.run(
+                    boot.config,
+                    boot.config.selfTestLibraryPath ?: boot.config.activeRendererLibPath,
+                )
+                probing = false
+            }
         }
 
-        val device = remember(
-            report,
-            glInfo,
-            config.activeRendererVersion,
-            config.activeRendererCommit,
-            socExtra,
-            deviceTick,
-        ) {
-            deviceInfo(deviceContext, report, glInfo, config, socExtra)
+        // 设备信息要读 sysfs、/proc/cpuinfo、StatFs 与 DisplayManager，放进 IO 线程算：
+        // 组合里直接算等于每 5 秒把几十次文件读挂在主线程上。
+        var device by remember { mutableStateOf(DeviceInfo.empty()) }
+        LaunchedEffect(report, glInfo, config, socExtra, deviceTick) {
+            device = withContext(Dispatchers.IO) {
+                deviceInfo(deviceContext, report, glInfo, config, socExtra)
+            }
         }
         // 电量、可用存储、当前频率、GPU 占用这些会变的值：重读一次即触发重组。
         fun refreshDeviceState() {
@@ -282,19 +316,6 @@ fun MobileGlPluginApp() {
             }
         }
 
-        LaunchedEffect(Unit) {
-            // sysfs 与 /proc/cpuinfo 是多次小文件读，放到 IO 线程，装配期不阻塞
-            socExtra = withContext(Dispatchers.IO) { readSocExtra() }
-            glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
-            if (config.autoSelfTest) {
-                probing = true
-                report = selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
-                probing = false
-            } else {
-                // 未开启自动自检：沿用上次缓存结果，不阻塞首屏
-                probing = false
-            }
-        }
 
         fun persist(updated: PluginConfig) {
             config = updated
@@ -314,8 +335,13 @@ fun MobileGlPluginApp() {
         }
 
         val prefs = remember { context.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
+        // 只在真有可授予开关的系统上弹这个对话框：Android 10 上没有这个页面，弹了也点不动。
         var showPermissionDialog by remember {
-            mutableStateOf(!hasAllFilesAccess() && !prefs.getBoolean("permission_prompted", false))
+            mutableStateOf(
+                storageAccessSupported() &&
+                    !hasAllFilesAccess(context) &&
+                    !prefs.getBoolean("permission_prompted", false)
+            )
         }
         if (showPermissionDialog) {
             AlertDialog(
@@ -461,9 +487,16 @@ fun MobileGlPluginApp() {
                             pendingRestart = pendingRestart,
                             onSave = { persist(it) },
                             onResetAll = {
+                                // 重置的是配置，不是磁盘上的驱动包与外部库：清空列表只会让用户
+                                // 以为文件被删了，所以重新读一遍。
                                 persist(PluginConfig().copy(theme = config.theme))
-                                drivers = emptyList()
-                                externalLibraries = emptyList()
+                                scope.launch {
+                                    val (packs, libraries) = withContext(Dispatchers.IO) {
+                                        driverRepository.list() to externalRepository.list()
+                                    }
+                                    drivers = packs
+                                    externalLibraries = libraries
+                                }
                             },
                         )
                         Dest.Info -> InfoTab(
@@ -474,7 +507,7 @@ fun MobileGlPluginApp() {
                             drivers = drivers,
                             externalCount = externalLibraries.size,
                             runtime = runtimeStatus,
-                            onShareReport = { shareReport(context, selfTestRepository) },
+                            onShareReport = { scope.launch { shareReport(context, selfTestRepository) } },
                             onRefresh = { refreshDeviceState() },
                         )
                         Dest.Drivers -> DriverScreen(
@@ -485,25 +518,54 @@ fun MobileGlPluginApp() {
                             externalLibraries = externalLibraries,
                             config = config,
                             onRefresh = {
-                                drivers = driverRepository.list()
-                                externalLibraries = externalRepository.list()
+                                // 目录扫描、sha256 与 /sdcard 上的比较都很慢，不能留在点击回调里。
+                                scope.launch {
+                                    val (packs, libraries) = withContext(Dispatchers.IO) {
+                                        driverRepository.list() to externalRepository.list()
+                                    }
+                                    drivers = packs
+                                    externalLibraries = libraries
+                                }
                             },
                             onActivate = { pack ->
-                                val icd = runCatching { driverRepository.generateIcd(pack) }.getOrNull()
-                                persist(config.copy(activeDriverId = pack.id, activeIcdPath = icd?.absolutePath))
+                                scope.launch {
+                                    val icd = withContext(Dispatchers.IO) {
+                                        runCatching { driverRepository.generateIcd(pack) }.getOrNull()
+                                    }
+                                    persist(config.copy(activeDriverId = pack.id, activeIcdPath = icd?.absolutePath))
+                                }
                             },
                             onClearActive = { persist(config.copy(activeDriverId = null, activeIcdPath = null)) },
                             onActivateLibrary = { lib ->
-                                val shared = lib?.sharedFile?.absolutePath ?: lib?.file?.absolutePath
-                                val (version, commit) = lib?.file?.let { scanMobileGlVersion(it) } ?: (null to null)
-                                val updated = config.copy(
-                                    activeRendererLibPath = shared,
-                                    selfTestLibraryPath = lib?.file?.absolutePath,
-                                    activeRendererVersion = version,
-                                    activeRendererCommit = commit,
-                                )
-                                persist(updated)
                                 scope.launch {
+                                    val prepared = withContext(Dispatchers.IO) {
+                                        if (lib == null) {
+                                            null
+                                        } else {
+                                            // 共享副本每次启用前重建并核对摘要：/sdcard/MobileGL/libs
+                                            // 任何持有存储权限的应用都写得到。
+                                            val shared = externalRepository.activate(lib)
+                                            val (version, commit) = scanMobileGlVersion(lib.file)
+                                            Triple(shared?.absolutePath, version, commit)
+                                        }
+                                    }
+                                    // activate() 已经把共享副本重建并核对过摘要；失败时不能退回私有路径
+                                    // （游戏进程读不到 filesDir），只能说明原因。
+                                    val shared = prepared?.first
+                                    if (lib != null && shared == null) {
+                                        Toast.makeText(
+                                            context,
+                                            "无法准备共享副本，游戏读不到这个库；请检查“所有文件访问权限”",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                    val updated = config.copy(
+                                        activeRendererLibPath = shared,
+                                        selfTestLibraryPath = lib?.file?.absolutePath,
+                                        activeRendererVersion = prepared?.second,
+                                        activeRendererCommit = prepared?.third,
+                                    )
+                                    persist(updated)
                                     probing = true
                                     report = selfTestRepository.run(updated, lib?.file?.absolutePath)
                                     probing = false
@@ -515,12 +577,15 @@ fun MobileGlPluginApp() {
                             writer = runtimeWriter,
                             status = runtimeStatus,
                             onStatusChanged = { runtimeStatus = it },
-                            onMerge = { kv ->
-                                val merged = LinkedHashMap(config.env)
-                                merged.putAll(kv)
+                            onMerge = { edited ->
+                                // 整个 env 换成编辑器里的内容：原来 putAll 会让「恢复默认」删掉的键
+                                // 留在 config.json 里，下次保存又被写回 runtime.conf。
+                                // RENDERER_* 由 writer 从配置字段生成，编辑器里的同名键只是镜像，
+                                // 不能让它反过来成为配置的来源。
+                                val kv = edited.filterKeys { !it.startsWith("RENDERER_") }
                                 persist(
                                     config.copy(
-                                        env = merged,
+                                        env = kv,
                                         backend = kv["MOBILEGL_BACKEND_TYPE"] ?: config.backend,
                                         sfpewEnabled = kv["SFPEW_ENABLED"]?.let { v -> v == "1" || v.equals("true", true) }
                                             ?: config.sfpewEnabled,
@@ -575,12 +640,9 @@ fun MobileGlPluginApp() {
                                 scaleX = shrink
                                 scaleY = shrink
                             }
-                            // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {},
-                            ),
+                            // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。用 pointerInput
+                            // 而不是 clickable：一个没有动作的 clickable 在无障碍里是个空按钮。
+                            .pointerInput(Unit) { detectTapGestures { } },
                     ) {
                         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
                             MobileGlTopBar(
@@ -604,8 +666,9 @@ fun MobileGlPluginApp() {
     }
 }
 
-private fun shareReport(context: Context, repository: SelfTestRepository) {
-    val text = repository.readableReport()
+/** 读最近一次原报告（读文件 + 解析 JSON）放在 IO 上，再把分享交给主线程。 */
+private suspend fun shareReport(context: Context, repository: SelfTestRepository) {
+    val text = withContext(Dispatchers.IO) { repository.readableReport() }
     if (text.isBlank()) {
         Toast.makeText(context, "还没有自检结果，请先运行自检", Toast.LENGTH_SHORT).show()
         return
@@ -664,6 +727,14 @@ private fun MobileGlTheme(themeMode: String = "system", content: @Composable () 
         else -> systemDark
     }
     val context = LocalContext.current
+    // 状态栏/导航栏图标跟着主题走：深色主题下还要保持深色图标的话，两个栏就看不见了。
+    LaunchedEffect(dark) {
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        WindowInsetsControllerCompat(activity.window, activity.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
     val scheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -688,7 +759,16 @@ internal data class DeviceInfo(
     val socExtra: SocExtra,
     val screen: String,
     val storage: String,
-)
+) {
+    companion object {
+        /** 首帧占位：真实内容由后台 effect 填进来。 */
+        fun empty(): DeviceInfo = DeviceInfo(
+            gpu = "", gles = "", vulkan = "", memory = "", memoryAvail = "", soc = "",
+            socVendor = "", socDetail = "", android = "", coreVersion = "", coreCommit = null,
+            socExtra = SocExtra(), screen = "", storage = "",
+        )
+    }
+}
 
 /** 读文件首行，权限不足或不存在时返回 null。 */
 private fun readFirstLine(path: String): String? = runCatching {
@@ -835,7 +915,7 @@ private fun HomeTab(
 ) {
     val context = LocalContext.current
     val info = device
-    val authorized = hasAllFilesAccess()
+    val authorized = hasAllFilesAccess(context)
     val sfpewActive = sfpewEnabled(config)
     val summary = rendererName(config)
 
@@ -989,7 +1069,15 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
     Surface(
         color = if (authorized) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.errorContainer,
         shape = RoundedCornerShape(50),
-        modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            // 已授权（或本机没有这个开关）时它就是一条状态，不再是个点不动的按钮。
+            .clickable(
+                enabled = !authorized,
+                onClickLabel = "去授权所有文件访问权限",
+                role = Role.Button,
+                onClick = onClick,
+            ),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -1082,14 +1170,57 @@ fun verdictColor(verdict: String): Color = when (verdict.uppercase()) {
     else -> MaterialTheme.colorScheme.error
 }
 
-/** 跳系统「所有文件访问权限」页；不支持的机型回退到通用授权页。 */
+/**
+ * 请求共享存储访问，按系统版本走不同路径：
+ *  - Android 11+：跳「所有文件访问权限」页，不支持时回退到通用授权页；
+ *  - Android 8–9：manifest 里的 WRITE_EXTERNAL_STORAGE 封顶在 28，只有运行时授权才生效；
+ *  - Android 10：分区存储下共享路径本就写不了，也不能授予，只能说明原因。
+ *
+ * 授权后要重启一次才能重读权限并写配置，所以这里统一打上 awaiting_restart 标记，
+ * MainActivity 在 onResume 里看到它会 recreate()——这样任何入口授权回来都不会留下旧状态。
+ */
 internal fun openAllFilesAccessSettings(context: Context) {
-    val packageUri = Uri.parse("package:" + context.packageName)
-    runCatching {
-        context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
-    }.onFailure {
-        runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+    context.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE)
+        .edit().putBoolean("awaiting_restart", true).apply()
+    when {
+        storageAccessSupported() -> {
+            val packageUri = Uri.parse("package:" + context.packageName)
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
+            }.onFailure {
+                runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+            }
+        }
+        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P -> {
+            val activity = context.findActivity()
+            if (activity == null) {
+                Toast.makeText(context, "请在系统设置里授予存储权限", Toast.LENGTH_LONG).show()
+            } else {
+                ActivityCompat.requestPermissions(
+                    activity,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    STORAGE_PERMISSION_REQUEST,
+                )
+            }
+        }
+        else -> Toast.makeText(
+            context,
+            "Android 10 不支持共享配置：需要 Android 11 及以上的“所有文件访问权限”",
+            Toast.LENGTH_LONG,
+        ).show()
     }
+}
+
+private const val STORAGE_PERMISSION_REQUEST = 0x51
+
+/** 从可能被包装过的 Context 里取出 Activity，用来发起运行时权限请求。 */
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 @Composable

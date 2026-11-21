@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import androidx.compose.foundation.BorderStroke
@@ -374,9 +377,23 @@ internal fun InfoLine(
     }
 }
 
-/** 所有文件访问权限的唯一判断点。 */
-internal fun hasAllFilesAccess(): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager() else true
+/**
+ * 共享存储访问的唯一判断点。
+ *
+ * Android 11+ 靠「所有文件访问权限」；API 26–28 靠 WRITE_EXTERNAL_STORAGE 的运行时授权
+ * （manifest 里封顶在 28）；API 29 在 targetSdk 34 下是分区存储，/sdcard 上的共享配置
+ * 根本写不了，也没有可授予的权限，所以这里如实返回 false。
+ */
+internal fun hasAllFilesAccess(context: Context): Boolean = when {
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> Environment.isExternalStorageManager()
+    Build.VERSION.SDK_INT <= Build.VERSION_CODES.P ->
+        context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+    else -> false
+}
+
+/** API 30 起才有「所有文件访问权限」；29 上没有可授予的开关。 */
+internal fun storageAccessSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
 
 /** runtime.conf 的 0/1 与布尔互转，全站共用一套。 */
 internal fun onOff(value: Boolean): String = if (value) "1" else "0"

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -25,12 +26,20 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
-        }
         val store = ConfigStore(this)
         val config = store.load()
+        // The bar icons have to contrast with the theme the app was last left in; they used to
+        // stay dark on dark when the user picked the dark theme.
+        val darkTheme = when (config.theme) {
+            THEME_DARK -> true
+            THEME_LIGHT -> false
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
         // Apply before libMobileGL.so can be loaded by the self-test screen.
         NativeEnv.apply(config)
         // Debug build: load the renderer proxy once so logcat shows that the

@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.withFrameNanos
@@ -53,8 +54,21 @@ fun rememberContentReady(tag: String = "", warm: Boolean = true): Boolean {
     return ready
 }
 
-/** 骨架换内容时的入场状态：透明度与上移量，直接喂给 graphicsLayer。 */
-data class ContentReveal(val alpha: Float, val rise: Dp)
+/**
+ * 骨架换内容时的入场状态：透明度与上移量，直接喂给 graphicsLayer。
+ *
+ * 它持有动画本身，而不是算好的两个常量：调用点都在 graphicsLayer 的 lambda 里读，
+ * 那个 lambda 在绘制阶段才执行，所以入场只让图层失效，不会每帧把整页重组一遍
+ * （之前进度值在组合期读取，60fps 的动画就是 60 次整页重组）。
+ */
+class ContentReveal internal constructor(
+    private val progress: Animatable<Float, AnimationVector1D>,
+    private val fromAlpha: Float,
+    private val riseAtZero: Float,
+) {
+    val alpha: Float get() = fromAlpha + (1f - fromAlpha) * progress.value
+    val rise: Dp get() = ((1f - progress.value) * riseAtZero).dp
+}
 
 /**
  * 骨架换成真实内容时的入场。
@@ -79,10 +93,7 @@ fun rememberContentReveal(ready: Boolean, durationMs: Int = Motion.Slow): Conten
             progress.animateTo(1f, tween(durationMs, easing = Motion.Decelerate))
         }
     }
-    return ContentReveal(
-        alpha = 0.75f + 0.25f * progress.value,
-        rise = ((1f - progress.value) * 4f).dp,
-    )
+    return ContentReveal(progress, fromAlpha = 0.75f, riseAtZero = 4f)
 }
 
 /**
@@ -100,7 +111,7 @@ fun rememberStaggerReveal(index: Int, stepMs: Int = 30, maxSteps: Int = 4): Cont
         progress.animateTo(1f, tween(durationMillis = Motion.Base, easing = Motion.Decelerate))
     }
     // 起点留 0.7 不透明度：完全透明会让页面底下给人"空的"错觉，等它淡进来又像突然补齐。
-    return ContentReveal(alpha = 0.7f + 0.3f * progress.value, rise = ((1f - progress.value) * 6f).dp)
+    return ContentReveal(progress, fromAlpha = 0.7f, riseAtZero = 6f)
 }
 
 /** 包一层错峰入场，二级页里按顺序给 index 即可。 */
