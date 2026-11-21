@@ -207,10 +207,11 @@ android {
         // strictly increasing across releases and across the builds inside one
         // month: the build number is what changes when nothing else does, so
         // Dev.1 and Dev.2 are no longer the same installable package.
-        // Max ~99_129999_999 is still under Android's 2_100_000_000 ceiling.
+        // Worst case (year 99, last month, highest numbers) is 991_299_999, still under
+        // Android's 2_100_000_000 ceiling.
         // 年*1e7 + 月*1e5 + 当月修订*1e3 + 构建号，同月内每次构建都能升级
         versionCode mobileGlVersionMajor * 10000000 + mobileGlVersionMinor * 100000 +
-            mobileGlVersionRevision * 1000 + Math.min(mobileGlForkBuildRevision(), 999)
+            mobileGlVersionRevision * 1000 + Math.min(mobileGlForkBuildRevision, 999)
         versionName mobileGlForkVersionName
 
         ndk {
