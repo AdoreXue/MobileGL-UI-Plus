@@ -251,9 +251,14 @@ fun DriverScreen(
             text = { Text("确认删除 " + pack.name + "？") },
             confirmButton = {
                 TextButton(onClick = {
-                    message = if (repository.delete(pack)) "已删除 " + pack.name else "删除失败"
+                    // 删一个驱动包是递归删目录，不能挂在对话框的回调里同步跑。
+                    val target = pack
                     pendingDelete = null
-                    onRefresh()
+                    scope.launch {
+                        val removed = withContext(Dispatchers.IO) { repository.delete(target) }
+                        message = if (removed) "已删除 " + target.name else "删除失败"
+                        onRefresh()
+                    }
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
@@ -266,10 +271,16 @@ fun DriverScreen(
             text = { Text("确认删除 " + library.name + "？") },
             confirmButton = {
                 TextButton(onClick = {
-                    if ((library.sharedFile?.absolutePath ?: library.file.absolutePath) == config.activeRendererLibPath) onActivateLibrary(null)
-                    message = if (externalRepository.delete(library)) "已删除 " + library.name else "删除失败"
+                    val target = library
+                    val wasActive = (target.sharedFile?.absolutePath ?: target.file.absolutePath) == config.activeRendererLibPath
                     pendingDeleteLibrary = null
-                    onRefresh()
+                    scope.launch {
+                        if (wasActive) onActivateLibrary(null)
+                        // 私有副本与 /sdcard 上的共享副本都要删，同样是文件操作。
+                        val removed = withContext(Dispatchers.IO) { externalRepository.delete(target) }
+                        message = if (removed) "已删除 " + target.name else "删除失败"
+                        onRefresh()
+                    }
                 }) { Text("删除") }
             },
             dismissButton = { TextButton(onClick = { pendingDeleteLibrary = null }) { Text("取消") } },

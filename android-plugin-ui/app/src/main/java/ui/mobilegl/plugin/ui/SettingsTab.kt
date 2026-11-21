@@ -85,7 +85,7 @@ fun SettingsTab(
                 InfoLine(null, "运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）", mono = false)
                 DividerLine()
                 InfoLine(null, "生效时机", if (pendingRestart) "有修改待生效，重启游戏后生效" else "与当前游戏进程一致", mono = false)
-                if (!hasAllFilesAccess()) {
+                if (!hasAllFilesAccess(context)) {
                     DividerLine()
                     EntryRow(null, "授予“所有文件访问权限”", "写共享配置、让启动器读取", {
                         openAllFilesAccessSettings(context)
@@ -125,7 +125,7 @@ fun SettingsTab(
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = { Text("重置全部设置？") },
-            text = { Text("将清空渲染后端、包装器、主题、驱动激活与外部库选择。此操作不可撤销。") },
+            text = { Text("将清空渲染后端、包装器、驱动激活与外部库选择，主题保持不变。已安装的驱动包与外部库文件不会被删除。此操作不可撤销。") },
             confirmButton = {
                 TextButton(onClick = { showResetDialog = false; onResetAll() }) { Text("确认重置") }
             },

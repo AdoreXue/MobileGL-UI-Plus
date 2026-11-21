@@ -98,7 +98,7 @@ internal fun InfoTab(
         Toast.makeText(context, "已复制 " + label, Toast.LENGTH_SHORT).show()
     }
     // 授权状态可能在用户跳去系统设置后改变，每次重组读取一次即可（读系统设置开销很小）。
-    val authorized = hasAllFilesAccess()
+    val authorized = hasAllFilesAccess(context)
     val ready = rememberContentReady("info")
     val reveal = rememberContentReveal(ready)
     var chipMore by remember { mutableStateOf(false) }
@@ -293,18 +293,18 @@ internal fun InfoTab(
                         if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) "已启用"
                         else if (BuildConfig.SFPEW_BUNDLED) "未启用" else "未内置",
                         mono = false,
-                    ) { }
+                    )
                     DividerLine()
                     InfoLine(UiIcons.Chip, "激活驱动", activeName, mono = false) { copy("激活驱动", activeName) }
                     DividerLine()
-                    InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false) { }
+                    InfoLine(UiIcons.Code, "外部库", externalCount.toString() + " 个", mono = false)
                     DividerLine()
                     InfoLine(
                         UiIcons.Layers,
                         "共享配置",
                         if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本",
                         mono = false,
-                    ) { }
+                    )
                     DividerLine()
                     ExpandableInfoLine(UiIcons.Gpu, "OpenGL ES", device.gles) { copy("OpenGL ES", device.gles) }
                     DividerLine()

@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +67,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -130,13 +132,12 @@ fun ConfigScreen(
             message = "发现 " + issues.size + " 个问题，已阻止保存：\n" + issues.joinToString("\n")
             return
         }
-        busy = true
         // 解析成键值对交回 PluginApp：写入 config.json（唯一真源），再由它统一生成 runtime.conf，
-        // 这样设置页开关与这里的编辑不会再互相覆盖。
+        // 这样设置页开关与这里的编辑不会再互相覆盖。写盘在那边异步进行，结果由状态卡展示，
+        // 所以这里不再用一个永远不会渲染的 busy 假装「保存中」。
         val kv = parseKeyValues(text)
         onMerge(kv)
-        message = "已保存 " + kv.size + " 项（校验通过）"
-        busy = false
+        message = "已提交 " + kv.size + " 项（校验通过），写入结果见上方状态卡"
     }
     // 整页共用一份解析结果：原始文件每敲一个字只解析一次，供所有选项读取。
     val parsed = remember(text) { parseKeyValues(text) }
@@ -239,12 +240,19 @@ fun ConfigScreen(
                     )
                     if (query.isNotBlank()) {
                         Spacer(Modifier.width(8.dp))
-                        Icon(
-                            Icons.Filled.Clear,
-                            contentDescription = "清除",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp).clickable { query = "" },
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clickable(onClickLabel = "清除搜索", role = Role.Button) { query = "" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Clear,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -255,7 +263,12 @@ fun ConfigScreen(
                                 if (onlyChanged) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.surface,
                             )
-                            .clickable(enabled = changedTotal > 0 || onlyChanged) { onlyChanged = !onlyChanged }
+                            .minimumInteractiveComponentSize()
+                            .clickable(
+                                enabled = changedTotal > 0 || onlyChanged,
+                                onClickLabel = "只看改动过的项",
+                                role = Role.Button,
+                            ) { onlyChanged = !onlyChanged }
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (onlyChanged) {
@@ -414,7 +427,12 @@ fun ConfigScreen(
                                 if (section.isNotBlank()) {
                                     Text(
                                         "跳到该组 ›",
-                                        modifier = Modifier.clickable { jumpTo(section) },
+                                        modifier = Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable(
+                                                onClickLabel = "跳到该组",
+                                                role = Role.Button,
+                                            ) { jumpTo(section) },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -579,7 +597,7 @@ fun ConfigScreen(
                                 "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n")
                         }) { Text("校验配置") }
                         OutlinedButton(onClick = { confirmTemplate = true }) { Text("恢复模板") }
-                        if (!hasAllFilesAccess()) {
+                        if (!hasAllFilesAccess(context)) {
                             OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text("授予所有文件访问权限") }
                         }
                     }
