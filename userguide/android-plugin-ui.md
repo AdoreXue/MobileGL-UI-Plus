@@ -109,9 +109,9 @@ Two importers on the 驱动管理 page, and they replace different things:
 Prerequisites: JDK 21, Android SDK with platform 34, NDK `27.3.13750724`, and either the prebuilt
 renderer libraries or the full source tree.
 
-The CI build uses prebuilt libraries in `android-plugin-ui/prebuilt/arm64-v8a/` — `libMobileGL.so`,
-`libRendererProxy.so` and `libSfpew_real.so` — so it needs no NDK and no `MobileGL/` submodule build.
-The local build below follows it:
+A build packages three libraries from `android-plugin-ui/prebuilt/arm64-v8a/`: `libMobileGL.so`,
+`libRendererProxy.so` and `libSfpew_real.so`. Take them from the tree — the local build below does,
+and needs no NDK — or let CI rebuild them (see below).
 
 ```sh
 cd android-plugin-ui
@@ -148,10 +148,33 @@ is unsigned and Android refuses to install it over an existing copy. Debug build
 `debug.keystore`.
 
 The CI workflow `.github/workflows/build-plugin.yml` builds the app on a push to `dev` that touches
-`android-plugin-ui/` or the workflow itself, and on `workflow_dispatch`. Pass `versionName` to lock a
-release name, or leave it empty for a `-Dev.N` build numbered by the successful runs on `dev`. The
-run stops early when the four `SIGNING_*` secrets are missing, because an unsigned release APK
-cannot be installed. The artifact is uploaded as `MobileGL-plugin-apk`.
+the app, the core (`MobileGL/`, `include/`, `3rdparty/`, the build files) or the workflow itself, and
+on `workflow_dispatch`. Pass `versionName` to lock a release name, or leave it empty for a `-Dev.N`
+build numbered by the successful runs on `dev`. The run stops early when the four `SIGNING_*` secrets
+are missing, before the libraries build, because an unsigned release APK cannot be installed. The
+artifact is uploaded as `MobileGL-plugin-apk`.
+
+### What CI builds
+
+The workflow compiles the three libraries on the runner in its `libs` job, and the `build` job
+packages them:
+
+| Library | Built from | Shape |
+|---|---|---|
+| `libMobileGL.so` | this tree, through `android-plugin`'s `:MobileGL` module | the shipping shape: no render-server split, because the proxy loads the renderer on its own |
+| `libRendererProxy.so` | `android-plugin-ui/app/src/main/cpp/renderer_proxy` | arm64-v8a trampolines for each EGL and GL entry point |
+| `libSfpew_real.so` | the checked-in binary, unless a manual run names a commit | the wrapper, as its own repository last built it |
+
+So an APK carries libraries built from the commit it was built at. Copying whatever `.so` happened to
+be checked in is what let a shipped renderer run behind the source it came from. The build then
+proves it: the packaged `libMobileGL.so` has to contain the short commit the renderer reports in
+`glGetString(GL_VERSION)`, and the renderer path the launcher reads has to name `libRendererProxy.so`
+rather than the renderer itself.
+
+A manual run can refresh the checked-in copies that local builds read, with `commitLibraries` on: the
+`publish` job writes the build's `.so` files back to `android-plugin-ui/prebuilt/arm64-v8a/` when
+they differ. The wrapper is the one library this tree cannot build on its own, so it stays as
+committed unless `sfpewRef` names a `MobileGL-Dev/SimpleFPEWrapper` commit to rebuild it from.
 
 ## Files and paths
 
