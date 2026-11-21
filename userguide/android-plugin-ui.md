@@ -175,6 +175,10 @@ packages them:
 | `libRendererProxy.so` | `android-plugin-ui/app/src/main/cpp/renderer_proxy` | arm64-v8a trampolines for each EGL and GL entry point |
 | `libSfpew_real.so` | the checked-in binary, unless a manual run names a commit | the wrapper, as its own repository last built it |
 
+The proxy's trampolines (`stubs.S`) and their slots (`proxy_symbols.h`) are generated as a pair by
+`tools/gen_proxy.py`; run `python3 tools/gen_proxy.py` after changing the entry-point list, and
+`--check` fails the build when the two files disagree.
+
 So an APK carries libraries built from the commit it was built at. Copying whatever `.so` happened to
 be checked in is what let a shipped renderer run behind the source it came from. The build then
 proves it: the packaged `libMobileGL.so` has to contain the short commit the renderer reports in
