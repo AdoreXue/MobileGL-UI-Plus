@@ -1,22 +1,46 @@
-<h1 align="center">MobileGL</h1>
+<h1 align="center">MobileGL UI Plus</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Language-C%2B%2B-00599c?style=flat&logo=c%2B%2B" alt="C++">
+  <img src="https://img.shields.io/badge/Language-C%2B%2B%20%7C%20Kotlin-00599c?style=flat&logo=kotlin&logoColor=white" alt="C++ and Kotlin">
   <img src="https://img.shields.io/badge/License-GNU%20LGPL%203.0-00399c?style=flat" alt="GNU LGPL 3.0">
-  <img src="https://img.shields.io/badge/Status-Development-0078d7?style=flat" alt="Development">
+  <img src="https://img.shields.io/badge/Status-Release%20candidate-0078d7?style=flat" alt="Release candidate">
 </p>
 
 <p align="center"><em>
-A desktop OpenGL implementation
+MobileGL on Android, with a configuration app
 </em></p>
 
-MobileGL is a *free* and *open-source* project that implements a desktop **OpenGL** API. The goal is to provide a complete desktop OpenGL implementation with a state management layer and multi-backend support.
+**This is a fork of [MobileGL-Dev/MobileGL](https://github.com/MobileGL-Dev/MobileGL).** The core
+OpenGL implementation is upstream's and is kept in step with it; what this fork adds is
+`android-plugin-ui/`, a Jetpack Compose app that configures the Android renderer plugin, imports
+driver packages and libraries, and runs the driver self test. The core is not modified here beyond
+merging upstream.
+
+| | |
+|---|---|
+| **Download** | [Releases](https://github.com/AdoreXue/MobileGL-UI-Plus/releases): `MobileGL-<version>.apk`, release-signed |
+| **What it is** | A renderer plugin for FCL, Zalith Launcher 2 and other Pojav-style launchers |
+| **Set up the app** | [userguide/android-plugin-ui.md](userguide/android-plugin-ui.md) |
+| **Adds over upstream** | The configuration UI ([screens and features](userguide/android-plugin-ui.md#what-the-app-shows)), imported driver packages and Vulkan ICDs, and the SFPEW wrapper switch |
+| **Upstream user guide** | [userguide/README.md](userguide/README.md) |
+
+### 这个仓库是什么
+
+上游 [MobileGL-Dev/MobileGL](https://github.com/MobileGL-Dev/MobileGL) 的 Android 分支，核心 OpenGL
+实现与上游同步、本身不改；本仓库加的是 `android-plugin-ui/` 这个配置 App：给 FCL、Zalith
+Launcher 2 等启动器当 MobileGL 渲染器插件，在里面切换后端、改运行时配置、导入驱动包、跑驱动自检。
+APK 在 [Releases](https://github.com/AdoreXue/MobileGL-UI-Plus/releases) 下载，安装和用法见
+[中文说明](userguide/android-plugin-ui.md)。
+
+---
+
+The sections below describe the upstream project. MobileGL is a *free* and *open-source* project that implements a desktop **OpenGL** API. The goal is to provide a complete desktop OpenGL implementation with a state management layer and multi-backend support.
 
 > [!NOTE]
 >
 > **Status:** In development. Both backends expose **OpenGL 4.6 (Core Profile)**; a small number of 4.6 features are still incomplete.
 
-For end-user setup (building, installing, configuring and troubleshooting on Android, Linux and Windows), see the [user guide](userguide/README.md) in `userguide/`.
+For end-user setup of the core (building, installing, configuring and troubleshooting on Android, Linux and Windows), see the [upstream user guide](userguide/README.md). For this fork's Android app, see [userguide/android-plugin-ui.md](userguide/android-plugin-ui.md).
 
 ## Project positioning
 
@@ -64,8 +88,10 @@ Refer to each component's repository for exact license texts. Any bundled third-
 
 ## Build Instructions
 
-We currently provide **no releases** and **no precompiled binaries**.  
-If you want to try the project right now, you’ll need to build it yourself:
+The core library has **no precompiled binaries**: build it from source. The Android app in this
+fork does ship as an APK on the [releases page](https://github.com/AdoreXue/MobileGL-UI-Plus/releases),
+and its own build is described in [userguide/android-plugin-ui.md](userguide/android-plugin-ui.md).
+To build the core:
 
 1. Clone the repository:
 

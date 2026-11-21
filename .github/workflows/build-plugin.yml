@@ -2,16 +2,300 @@ name: Build MobileGL Plugin APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
+    # The renderer libraries are built here from this tree, so a core change changes the APK even
+    # when the app sources did not move: shipping binaries older than the source is what the
+    # libraries job exists to prevent.
+    paths:
+      - 'android-plugin-ui/**'
+      - 'MobileGL/**'
+      - 'include/**'
+      - '3rdparty/**'
+      - 'buildsystem/**'
+      - 'CMakeLists.txt'
+      - 'build.gradle'
+      - '.github/workflows/build-plugin.yml'
   workflow_dispatch:
     inputs:
       versionName:
         description: release build full versionName e.g. 26.11.1-rc.2; leave empty for dev build with -DevN suffix
         required: false
         type: string
+      commitLibraries:
+        description: also write the built libraries back to android-plugin-ui/prebuilt
+        required: false
+        type: boolean
+        default: false
+      sfpewRef:
+        description: SimpleFPEWrapper commit to rebuild libSfpew_real.so from; empty keeps the checked-in copy
+        required: false
+        type: string
+        default: ''
+
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_COMPRESS: "true"
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 5G
+  CCACHE_NOHASHDIR: "true"
+  MOBILEGL_CMAKE_COMPILER_LAUNCHER: ccache
+  NDK_VERSION: "27.3.13750724"
+  # The wrapper's module pins its own NDK, one minor line behind the core's.
+  SFPEW_NDK_VERSION: "27.0.12077973"
+  PACKAGE_DIR: staging/arm64-v8a
 
 jobs:
+  # Without the secrets the release APK is unsigned, which Android refuses to install, so the run
+  # stops before the libraries build rather than after it.
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require signing secrets
+        env:
+          STORE_BASE64: ${{ secrets.SIGNING_STORE_FILE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          for name in STORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::secret $name is not set. The release APK would be unsigned and cannot be installed; set the four SIGNING_* secrets, or build locally with the checked-in debug keystore."
+              exit 1
+            fi
+          done
+
+  # The three libraries the APK packages, compiled from this tree. A renderer taken from whatever
+  # .so happened to be checked in is how a shipped build ends up behind its own source.
+  libs:
+    needs: guard
+    runs-on: ubuntu-latest
+    # A cold core build with its submodules is the long part; the ccache entry keeps repeats short.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      # A fresh key each run with the branch as the prefix: cache entries are immutable, so a fixed
+      # key would never take a new build, and rolling keys need no eviction step or extra token.
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-prebuilt-ccache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-prebuilt-ccache-
+
+      - name: Install ccache
+        timeout-minutes: 15
+        run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ccache
+          ccache --version
+
+      - name: Setup Android SDK
+        id: sdk
+        continue-on-error: true
+        timeout-minutes: 15
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: false
+          packages: platform-tools
+
+      - name: Setup Android SDK (retry)
+        timeout-minutes: 15
+        if: steps.sdk.outcome == 'failure'
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: false
+          packages: platform-tools
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null
+
+      - name: Install Android NDK
+        timeout-minutes: 30
+        run: |
+          for attempt in 1 2 3; do
+            sdkmanager "ndk;${NDK_VERSION}" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "sdkmanager attempt $attempt failed; retrying"
+            sleep 20
+          done
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Update glslang external sources
+        timeout-minutes: 15
+        working-directory: 3rdparty/glslang
+        run: |
+          for attempt in 1 2 3; do
+            python3 update_glslang_sources.py && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "glslang source update attempt $attempt failed; retrying"
+            sleep 20
+          done
+
+      # OFF for both split switches: the proxy loads libMobileGL.so on its own, so the renderer has
+      # to be the whole thing. CMakeLists.txt calls this the shipping shape.
+      - name: Build the core library
+        run: >
+          gradle --no-daemon -p android-plugin :MobileGL:assemblePluginRelease
+          -Pmobilegl.buildDisaggregated=OFF -Pmobilegl.buildDisaggregatedInproc=OFF
+          -Pmobilegl.cmakeCompilerLauncher=ccache --max-workers "$(nproc)"
+
+      - name: Collect the core library
+        run: |
+          mkdir -p "$PACKAGE_DIR"
+          module_build="$GITHUB_WORKSPACE/build"
+          src=""
+          for candidate in \
+            "$module_build/intermediates/stripped_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so" \
+            "$module_build/intermediates/merged_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so"; do
+            if [ -f "$candidate" ]; then
+              src="$candidate"
+              break
+            fi
+          done
+          if [ -z "$src" ]; then
+            src=$(find "$module_build" -name libMobileGL.so -path '*arm64*' 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$src" ]; then
+            echo "::error::the :MobileGL build produced no libMobileGL.so"
+            find "$module_build" -name 'libMobileGL*.so' 2>/dev/null | head -n 20 || true
+            exit 1
+          fi
+          echo "core library from $src"
+
+          # The shipping shape compiles none of MG_Remote in, so nothing it defines may appear
+          # here. Checked before stripping, because strip would hide the static symbol table.
+          if nm --defined-only "$src" 2>/dev/null | grep -qi 'MG_Remote'; then
+            echo "::error::libMobileGL.so defines MG_Remote symbols; the split shape was on"
+            exit 1
+          fi
+          if readelf -d "$src" | grep 'NEEDED' | grep -q 'libMobileGLServer'; then
+            echo "::error::libMobileGL.so needs libMobileGLServer.so, which this APK does not carry"
+            exit 1
+          fi
+
+          cp "$src" "$PACKAGE_DIR/libMobileGL.so"
+          strip="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          if [ -x "$strip" ]; then
+            # Already stripped when the build dropped the stripped copy here; this only makes sure.
+            "$strip" --strip-unneeded "$PACKAGE_DIR/libMobileGL.so" \
+              || echo "::warning::llvm-strip failed; shipping the library unstripped"
+          fi
+
+      - name: Build the renderer proxy
+        run: |
+          cmake -S android-plugin-ui/app/src/main/cpp/renderer_proxy -B "$RUNNER_TEMP/proxy" \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_ASM_COMPILER_LAUNCHER=ccache
+          cmake --build "$RUNNER_TEMP/proxy" -j "$(nproc)"
+          cp "$RUNNER_TEMP/proxy/libRendererProxy.so" "$PACKAGE_DIR/libRendererProxy.so"
+
+      - name: Checkout the wrapper
+        if: inputs.sfpewRef != ''
+        uses: actions/checkout@v4
+        with:
+          repository: MobileGL-Dev/SimpleFPEWrapper
+          ref: ${{ inputs.sfpewRef }}
+          path: sfpew
+          submodules: recursive
+          # The wrapper reads its own commit for its version string, which a shallow clone hides.
+          fetch-depth: 0
+
+      - name: Install the wrapper's NDK
+        if: inputs.sfpewRef != ''
+        timeout-minutes: 30
+        run: |
+          for attempt in 1 2 3; do
+            sdkmanager "ndk;${SFPEW_NDK_VERSION}" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "sdkmanager attempt $attempt failed; retrying"
+            sleep 20
+          done
+
+      - name: Build the wrapper
+        if: inputs.sfpewRef != ''
+        working-directory: sfpew/android-plugin
+        run: |
+          ./gradlew --no-daemon :SimpleFPEWrapper:assembleRelease -Psfpew.abis=arm64-v8a \
+            --max-workers "$(nproc)"
+          src=$(find "$GITHUB_WORKSPACE/sfpew" -name libSimpleFPEWrapper.so -path '*arm64*' | head -n 1)
+          if [ -z "$src" ]; then
+            echo "::error::the wrapper build produced no libSimpleFPEWrapper.so"
+            exit 1
+          fi
+          cp "$src" "$GITHUB_WORKSPACE/$PACKAGE_DIR/libSfpew_real.so"
+
+      - name: Stage the checked-in wrapper
+        if: inputs.sfpewRef == ''
+        run: |
+          mkdir -p "$PACKAGE_DIR"
+          # The wrapper lives in another repository, so a plain run ships the binary this tree
+          # already carries; naming a commit rebuilds it from that commit instead.
+          cp android-plugin-ui/prebuilt/arm64-v8a/libSfpew_real.so "$PACKAGE_DIR/"
+
+      - name: Show ccache stats
+        if: always()
+        run: ccache --show-stats
+
+      # A library that is the wrong architecture, or a renderer without the entry points the proxy
+      # resolves, only shows up as a game that will not start, on a phone, at the end of a build.
+      - name: Verify the libraries
+        run: |
+          for lib in libMobileGL.so libRendererProxy.so libSfpew_real.so; do
+            path="$PACKAGE_DIR/$lib"
+            if [ ! -s "$path" ]; then
+              echo "::error::$lib is missing or empty"
+              exit 1
+            fi
+            header=$(readelf -h "$path")
+            grep -q 'Machine:.*AArch64' <<<"$header" \
+              || { echo "::error::$lib is not an AArch64 ELF"; exit 1; }
+            grep -q 'Type:.*DYN' <<<"$header" \
+              || { echo "::error::$lib is not a shared object"; exit 1; }
+            printf '%-22s %9s bytes  %6s exported functions  sha256 %s\n' \
+              "$lib" "$(stat -c %s "$path")" \
+              "$(readelf -sW --dyn-syms "$path" | awk 'NF >= 8 && $4 == "FUNC" && $7 != "UND"' | wc -l)" \
+              "$(sha256sum "$path" | cut -c1-16)"
+          done
+          # The launcher's games call these on the way in, so both sides of the pair have to
+          # export them: the proxy forwards, the renderer answers.
+          for symbol in glDrawElements glGetError glGetString; do
+            readelf -sW --dyn-syms "$PACKAGE_DIR/libMobileGL.so" | awk '{print $8}' | grep -qx "$symbol" \
+              || { echo "::error::libMobileGL.so does not export $symbol"; exit 1; }
+          done
+          for symbol in eglGetProcAddress eglInitialize glDrawElements; do
+            readelf -sW --dyn-syms "$PACKAGE_DIR/libRendererProxy.so" | awk '{print $8}' | grep -qx "$symbol" \
+              || { echo "::error::libRendererProxy.so does not export $symbol"; exit 1; }
+          done
+          # glGetString(GL_VERSION) reports the commit the library was built from, so an APK can be
+          # shown to carry this build rather than one that happened to be checked in.
+          short="${GITHUB_SHA:0:7}"
+          grep -qa "$short" "$PACKAGE_DIR/libMobileGL.so" \
+            || { echo "::error::libMobileGL.so does not carry commit $short, so its build stamp is not this tree's"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobilegl-prebuilt-arm64
+          path: staging/arm64-v8a
+          retention-days: 30
+          if-no-files-found: error
+
   build:
+    needs: libs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,12 +311,23 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      # Over the checked-in copies rather than beside them: what the APK packages is then the
+      # libraries this run built, and a stale checked-in .so cannot be picked up by accident.
+      - name: Take the libraries built in this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobilegl-prebuilt-arm64
+          path: android-plugin-ui/prebuilt/arm64-v8a
+
       - name: Restore release keystore from secret
         working-directory: android-plugin-ui
         env:
           SIGNING_STORE_FILE_BASE64: ${{ secrets.SIGNING_STORE_FILE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
           echo "$SIGNING_STORE_FILE_BASE64" | base64 -d > keystore.jks
+          test -s keystore.jks || { echo "::error::the restored keystore.jks is empty; check SIGNING_STORE_FILE_BASE64."; exit 1; }
+          keytool -list -keystore keystore.jks -storepass "$SIGNING_STORE_PASSWORD" > /dev/null
           ls -l keystore.jks
 
       - name: Resolve display version (DevN for non-release builds)
@@ -45,10 +340,12 @@ jobs:
           else
             BASE=$(gradle --no-daemon -q -p android-plugin-ui :app:printBaseVersion | tail -1)
             echo "base version: $BASE"
-            # DevN 按本工作流在本分支上的成功构建次数递增（含本次运行），不依赖发 release
+            # DevN counts this workflow's successful runs on this branch, this one included, so it
+            # moves with every build instead of with every release.
             WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id')
-            # runs 接口一页最多 100 条：只数第一页的话，成功次数过百后 DevN 就永远停在 100。
-            # --paginate 会逐页输出各自的长度，按页求和得到此前的成功次数，再 +1 就是本次的编号。
+            # One page of the runs endpoint holds 100 entries, so counting the first page alone
+            # would pin DevN at 100 for good. Pagination prints one length per page; the sum is the
+            # runs before this one, and one more is this run's number.
             DEVN=$(gh api --paginate \
               "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
               --jq '.workflow_runs | length' | awk '{ total += $1 } END { print total + 1 }')
@@ -83,7 +380,58 @@ jobs:
           cp app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk \
              "../MobileGL-${VERSION}.apk"
 
+      # The APK is what a phone installs, so the checks run on it and not on the build tree: the
+      # renderer path the launcher is given, the libraries it names, and the commit they carry.
+      - name: Verify the packaged libraries came from this tree
+        run: |
+          apk=$(ls MobileGL-*.apk | head -n 1)
+          test -n "$apk" || { echo "::error::no APK was produced"; exit 1; }
+          contents=$(unzip -Z1 "$apk")
+          for lib in libMobileGL.so libRendererProxy.so libSfpew_real.so; do
+            grep -qx "lib/arm64-v8a/$lib" <<<"$contents" \
+              || { echo "::error::$lib is missing from the APK"; exit 1; }
+          done
+
+          aapt2=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -n 1)
+          resources=$(tr -d '"' <<<"$("$aapt2" dump resources "$apk")")
+          grep -Fq 'rendererGLPath:**|libRendererProxy.so' <<<"$resources" \
+            || { echo "::error::the renderer path does not point at libRendererProxy.so, so the runtime config would not be read"; exit 1; }
+
+          unzip -p "$apk" lib/arm64-v8a/libMobileGL.so > "$RUNNER_TEMP/packed.so"
+          short="${GITHUB_SHA:0:7}"
+          grep -qa "$short" "$RUNNER_TEMP/packed.so" \
+            || { echo "::error::the packaged libMobileGL.so does not carry commit $short; it is not the library this run built"; exit 1; }
+          echo "packaged libMobileGL.so carries commit $short"
+
       - uses: actions/upload-artifact@v4
         with:
           name: MobileGL-plugin-apk
           path: MobileGL-*.apk
+
+  # Refreshes the checked-in copies that local builds read. Only on a manual run that asks for it,
+  # because a binary written back on every push would turn the tree into a build output.
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.commitLibraries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobilegl-prebuilt-arm64
+          path: android-plugin-ui/prebuilt/arm64-v8a
+
+      - name: Commit the libraries
+        run: |
+          if git diff --quiet -- android-plugin-ui/prebuilt; then
+            echo "the checked-in libraries already match this build"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-plugin-ui/prebuilt/arm64-v8a
+          git commit -m "[Build] (android-plugin-ui/prebuilt): rebuild the shipped libraries"
+          git push
