@@ -52,11 +52,15 @@ def mobileGlAbiFilters = {
 def mobileGlRendererDisplayName = { String backendType -> 'MobileGL' }
 
 // 实际加载的渲染库文件名：预编译/官方 .so 走代理，否则按是否内置 SFPEW 选。
-def mobileGlRendererLib = { String prefix ->
-    if (!mobileGlPrebuiltLibsDir.isEmpty()) return prefix + 'libRendererProxy.so'
-    if (mobileGlUseSfpew) return prefix + 'libSimpleFPEWrapper.so'
-    return prefix + 'libMobileGL.so'
+// 返回值已带 lib 前缀，调用方不要再拼一次。
+def mobileGlRendererLibName = {
+    if (!mobileGlPrebuiltLibsDir.isEmpty()) return 'libRendererProxy.so'
+    if (mobileGlUseSfpew) return 'libSimpleFPEWrapper.so'
+    return 'libMobileGL.so'
 }
+// RendererPlugin-v2 用 "**|" 让启动器替换成它自己的 nativeLibraryDir；
+// 旧的 fclPlugin 元数据要的是不带目录的库名。
+def mobileGlRendererLib = { String prefix -> prefix + mobileGlRendererLibName() }
 def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
     def env = [
@@ -94,7 +98,7 @@ def mobileGlRendererConfig = { String backendType ->
 // 后端 flavor 的公共配置：占位符、环境变量与 resValue 只写一份。
 def mobileGlBackendFlavor = { flavor, String backend, String appId ->
     def env = mobileGlEnvString(backend)
-    def lib = mobileGlRendererLib('lib')
+    def lib = mobileGlRendererLibName()
     flavor.dimension 'backend'
     flavor.applicationId = appId
     flavor.resValue 'string', 'mobilegl_default_backend', backend
