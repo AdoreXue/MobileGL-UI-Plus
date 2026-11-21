@@ -156,10 +156,12 @@ jobs:
         run: |
           mkdir -p "$PACKAGE_DIR"
           module_build="$GITHUB_WORKSPACE/build"
+          # The merged copy comes first because it still has a static symbol table: the
+          # shipping-shape check below reads it, and the stripped output no longer carries one.
           src=""
           for candidate in \
-            "$module_build/intermediates/stripped_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so" \
-            "$module_build/intermediates/merged_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so"; do
+            "$module_build/intermediates/merged_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so" \
+            "$module_build/intermediates/stripped_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so"; do
             if [ -f "$candidate" ]; then
               src="$candidate"
               break
@@ -176,8 +178,13 @@ jobs:
           echo "core library from $src"
 
           # The shipping shape compiles none of MG_Remote in, so nothing it defines may appear
-          # here. Checked before stripping, because strip would hide the static symbol table.
-          if nm --defined-only "$src" 2>/dev/null | grep -qi 'MG_Remote'; then
+          # here. This has to run while the static symbol table is still there: `nm` on the
+          # stripped output prints "no symbols" and an unchecked pipeline would call that clean.
+          if ! readelf -SW "$src" | grep -q '\.symtab'; then
+            echo "::error::$src carries no .symtab, so the shipping-shape check cannot run; the collector should have picked the merged_native_libs copy"
+            exit 1
+          fi
+          if readelf -sW "$src" | grep -q 'MG_Remote'; then
             echo "::error::libMobileGL.so defines MG_Remote symbols; the split shape was on"
             exit 1
           fi
@@ -272,13 +279,17 @@ jobs:
               "$(sha256sum "$path" | cut -c1-16)"
           done
           # The launcher's games call these on the way in, so both sides of the pair have to
-          # export them: the proxy forwards, the renderer answers.
+          # export them: the proxy forwards, the renderer answers. Only defined functions count -
+          # a library that merely imports the name has not implemented anything.
+          exports_of() {
+            readelf -sW --dyn-syms "$1" | awk 'NF >= 8 && $4 == "FUNC" && $7 != "UND" {print $8}'
+          }
           for symbol in glDrawElements glGetError glGetString; do
-            readelf -sW --dyn-syms "$PACKAGE_DIR/libMobileGL.so" | awk '{print $8}' | grep -qx "$symbol" \
+            exports_of "$PACKAGE_DIR/libMobileGL.so" | grep -qx "$symbol" \
               || { echo "::error::libMobileGL.so does not export $symbol"; exit 1; }
           done
           for symbol in eglGetProcAddress eglInitialize glDrawElements; do
-            readelf -sW --dyn-syms "$PACKAGE_DIR/libRendererProxy.so" | awk '{print $8}' | grep -qx "$symbol" \
+            exports_of "$PACKAGE_DIR/libRendererProxy.so" | grep -qx "$symbol" \
               || { echo "::error::libRendererProxy.so does not export $symbol"; exit 1; }
           done
           # glGetString(GL_VERSION) reports the commit the library was built from, so an APK can be
@@ -372,6 +383,18 @@ jobs:
           fi
           gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginRelease
 
+      # The trace profile is a release-only tool and never shipped, but its Java is only compiled
+      # when some job builds that variant: a stale package name in the JNI entry points survived
+      # several releases that way, because nothing ever compiled the file.
+      - name: Compile the trace profile
+        working-directory: android-plugin-ui
+        env:
+          ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir: ${{ github.workspace }}/android-plugin-ui/prebuilt
+          ORG_GRADLE_PROJECT_mobilegl.sfpew: 'true'
+        run: |
+          gradle --no-daemon -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" \
+            -Pmobilegl.sfpew=true :app:assembleMagmaTraceRelease
+
       - name: Collect artifact (rename with version)
         working-directory: android-plugin-ui
         run: |
@@ -426,12 +449,14 @@ jobs:
 
       - name: Commit the libraries
         run: |
-          if git diff --quiet -- android-plugin-ui/prebuilt; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage first: git diff alone compares tracked files, so a library that this build
+          # produced for the first time would look like "nothing to do" and never get committed.
+          git add android-plugin-ui/prebuilt/arm64-v8a
+          if git diff --cached --quiet -- android-plugin-ui/prebuilt; then
             echo "the checked-in libraries already match this build"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add android-plugin-ui/prebuilt/arm64-v8a
           git commit -m "[Build] (android-plugin-ui/prebuilt): rebuild the shipped libraries"
           git push
