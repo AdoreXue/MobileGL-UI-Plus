@@ -15,6 +15,10 @@ This guide is for people who build, install, configure and run MobileGL. Develop
 
 > **Status.** MobileGL is in development and ships no prebuilt binaries. Everything here is built
 > from source. Commands were checked against the `feat/disaggregated` branch.
+>
+> **This fork.** The Android app in `android-plugin-ui/` does ship as an APK, and it replaces the
+> plugin described here for configuring MobileGL in a launcher. See
+> [android-plugin-ui.md](android-plugin-ui.md).
 
 ## Topologies: where the backend runs
 
@@ -39,6 +43,7 @@ app can only render out of process into a window that the **server** owns. See
 
 | You want to... | Setup | Guide |
 |---|---|---|
+| Configure MobileGL in a launcher with an app, and download an APK | This fork's `android-plugin-ui` app | [android-plugin-ui.md](android-plugin-ui.md) |
 | Play Minecraft on Android with the copy of MobileGL that is built into an FCL build | FCL embedded, monolith | [android-fcl.md](android-fcl.md) |
 | Use MobileGL in FCL (or another launcher that reads FCL renderer plugins) without rebuilding the launcher | Renderer plugin APK, monolith or `inproc` | [android-plugin.md](android-plugin.md) |
 | Test out-of-process rendering on Android, with frames shown on screen | Plugin APK: on-screen display server + `spawn` client | [android-plugin.md](android-plugin.md#out-of-process-rendering-with-a-window) |
@@ -79,6 +84,7 @@ frame. It exists for sharing one GPU-owning server between processes, sandboxes 
 
 | File | Contents |
 |---|---|
+| [android-plugin-ui.md](android-plugin-ui.md) | This fork's app: install, the screens, how the configuration reaches the renderer, driver packages, building it |
 | [android-fcl.md](android-fcl.md) | MobileGL built into FCL: monolith, choosing the backend, settings |
 | [android-plugin.md](android-plugin.md) | The renderer plugin APK: install, `inproc`, the render server, windowed out-of-process rendering, TCP, same-device external programs, embedding the server in your own APK |
 | [linux.md](linux.md) | Linux library: glvnd EGL/GLX vendor, GBM backend, `/etc/mobilegl/client.conf`, the server, TCP |
