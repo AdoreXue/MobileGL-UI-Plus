@@ -34,6 +34,10 @@ class ExternalLibraryRepository(private val context: Context) {
     private val root = File(context.filesDir, "libraries")
     private val sharedRoot = File("/sdcard/MobileGL/libs")
 
+    private companion object {
+        const val MAX_IMPORT_BYTES = 128L * 1024 * 1024
+    }
+
 
     fun list(): List<ExternalLibrary> {
         root.mkdirs()
@@ -42,12 +46,17 @@ class ExternalLibraryRepository(private val context: Context) {
             .sortedByDescending { it.lastModified() }
             .mapNotNull { file ->
                 runCatching {
+                    val digest = sha256(file)
                     ExternalLibrary(
                         name = file.name,
                         file = file,
-                        sharedFile = File(sharedRoot, file.name).takeIf { it.isFile },
+                        // Only a copy that still matches what was imported counts as the shared
+                        // one; the directory is world-writable, so a file that merely has the
+                        // same name is not the library that was validated.
+                        sharedFile = File(sharedRoot, file.name)
+                            .takeIf { it.isFile && it.length() == file.length() && sha256(it) == digest },
                         size = file.length(),
-                        sha256 = sha256(file),
+                        sha256 = digest,
                         importedAt = file.lastModified(),
                     )
                 }.getOrNull()
@@ -55,35 +64,74 @@ class ExternalLibraryRepository(private val context: Context) {
     }
 
     suspend fun import(uri: Uri): Result<ExternalLibrary> = withContext(Dispatchers.IO) {
-        runCatching {
-            val temp = File(context.cacheDir, "import-" + System.currentTimeMillis() + ".so")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                temp.outputStream().use { output ->
-                    input.copyTo(output, 1024 * 1024)
+        val temp = File(context.cacheDir, "import-" + System.currentTimeMillis() + ".so")
+        try {
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    // Cap while copying: a hostile document provider can stream gigabytes, and
+                    // checking the length afterwards would have filled /data already.
+                    temp.outputStream().use { output ->
+                        val buffer = ByteArray(1024 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            total += read
+                            if (total > MAX_IMPORT_BYTES) error("文件超过 128 MiB")
+                            output.write(buffer, 0, read)
+                        }
+                    }
+                } ?: error("无法读取所选文件")
+                if (!isArm64Elf(temp)) error("不是 arm64 ELF（需要 AArch64 64 位小端 .so）")
+                if (!isMobileGlLibrary(temp)) error("不是 MobileGL 的 .so（需要包含 MobileGL Driver POST / EGL 符号）")
+                val baseName = sanitize(uri.lastPathSegment?.substringAfterLast('/') ?: "imported.so")
+                val name = if (baseName.endsWith(".so")) baseName else baseName + ".so"
+                root.mkdirs()
+                val target = File(root, name)
+                if (!temp.renameTo(target)) {
+                    temp.copyTo(target, overwrite = true)
                 }
-            } ?: error("无法读取所选文件")
-            if (temp.length() > 128L * 1024 * 1024) error("文件超过 128 MiB")
-            if (!isArm64Elf(temp)) error("不是 arm64 ELF（需要 AArch64 64 位小端 .so）")
-            if (!isMobileGlLibrary(temp)) error("不是 MobileGL 的 .so（需要包含 MobileGL Driver POST / EGL 符号）")
-            val baseName = sanitize(uri.lastPathSegment?.substringAfterLast('/') ?: "imported.so")
-            val name = if (baseName.endsWith(".so")) baseName else baseName + ".so"
-            root.mkdirs()
-            val target = File(root, name)
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
+                val digest = sha256(target)
+                ExternalLibrary(name, target, copyToShared(target, digest), target.length(), digest, System.currentTimeMillis())
             }
-            // Shared copy: the game process (launcher UID) cannot read this app's
-            // filesDir, but libRendererProxy.so can memfd-load a .so from /sdcard.
-            val shared = runCatching {
-                sharedRoot.mkdirs()
-                val out = File(sharedRoot, name)
-                target.copyTo(out, overwrite = true)
-                out
-            }.getOrNull()
-            ExternalLibrary(name, target, shared, target.length(), sha256(target), System.currentTimeMillis())
+        } finally {
+            temp.delete()
         }
     }
+
+    /**
+     * Re-creates the shared copy the game process loads and proves it matches the library that
+     * was validated at import time. The shared directory is writable by any app with storage
+     * access, so a digest taken once at import says nothing about the file that is there now.
+     */
+    suspend fun activate(library: ExternalLibrary): File? = withContext(Dispatchers.IO) {
+        runCatching {
+            val source = library.file.canonicalFile
+            val canonicalRoot = root.canonicalPath + File.separator
+            if (!source.isFile || !source.canonicalPath.startsWith(canonicalRoot)) {
+                error("导入的库不在应用目录内")
+            }
+            val digest = sha256(source)
+            if (digest != library.sha256) error("导入的库在导入后被修改过")
+            copyToShared(source, digest) ?: error("无法写入共享库目录")
+        }.getOrNull()
+    }
+
+    /** Copies [source] next to the game-readable path and returns it only after a hash check. */
+    private fun copyToShared(source: File, digest: String): File? = runCatching {
+        sharedRoot.mkdirs()
+        val out = File(sharedRoot, source.name)
+        if (!out.isFile || sha256(out) != digest) {
+            val temp = File(sharedRoot, source.name + ".tmp")
+            source.copyTo(temp, overwrite = true)
+            if (!temp.renameTo(out)) {
+                temp.delete()
+                error("无法替换 " + out.absolutePath)
+            }
+        }
+        if (sha256(out) != digest) error("共享副本校验失败")
+        out
+    }.getOrNull()
 
     fun delete(library: ExternalLibrary): Boolean {
         val canonicalRoot = root.canonicalPath + File.separator
@@ -95,6 +143,10 @@ class ExternalLibraryRepository(private val context: Context) {
     private fun sanitize(name: String): String =
         name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(96)
 
+    /**
+     * Whether the file looks like a MobileGL build. This is a hint for the user, not a security
+     * boundary: a substring search cannot vouch for anything that gets loaded as native code.
+     */
     private fun isMobileGlLibrary(file: File): Boolean {
         if (file.length() > 64L * 1024 * 1024) return false
         val text = runCatching { String(file.readBytes(), Charsets.ISO_8859_1) }.getOrNull() ?: return false

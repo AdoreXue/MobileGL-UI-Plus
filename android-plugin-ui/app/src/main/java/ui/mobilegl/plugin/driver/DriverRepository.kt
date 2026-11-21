@@ -50,14 +50,22 @@ data class DriverPack(
 class DriverRepository(private val context: Context) {
     private val root = File(context.filesDir, "drivers")
 
+    private companion object {
+        /** Directory suffix used while a pack is being unpacked; never shown as installed. */
+        const val STAGING_SUFFIX = ".installing"
+    }
+
     fun rootDir(): File {
         root.mkdirs()
+        root.listFiles()?.forEach { dir ->
+            if (dir.isDirectory && dir.name.endsWith(STAGING_SUFFIX)) dir.deleteRecursively()
+        }
         return root
     }
 
     fun list(): List<DriverPack> {
         val dirs = rootDir().listFiles() ?: return emptyList()
-        return dirs.filter { it.isDirectory }
+        return dirs.filter { it.isDirectory && !it.name.endsWith(STAGING_SUFFIX) }
             .mapNotNull { parsePack(it) }
             .sortedBy { it.name.lowercase() }
     }
@@ -67,6 +75,9 @@ class DriverRepository(private val context: Context) {
         val templateName = pack.icdTemplate ?: return null
         val template = File(pack.dir, templateName)
         if (!template.isFile) return null
+        // Checked again here: driver.json is writable after the install, and this path is read
+        // on its own and then handed to the Vulkan loader.
+        if (!template.canonicalPath.startsWith(pack.dir.canonicalPath + File.separator)) return null
         val libraryPath = pack.libraryFile().absolutePath
         val rendered = template.readText()
             .replace("@LIBRARY@", libraryPath)
@@ -121,16 +132,39 @@ class DriverRepository(private val context: Context) {
                 error("library 路径非法")
             }
             if (!isArm64Elf(libraryFile)) error("library 不是 arm64 ELF: " + library)
+            // The declared digest is what a pack promises about its own library; a pack that
+            // does not match it is not the pack the user chose to install.
+            val declaredSha = manifest.optString("sha256", "")
+            if (declaredSha.isNotEmpty() && !declaredSha.equals(sha256(libraryFile), ignoreCase = true)) {
+                error("驱动包 library 的 sha256 与 driver.json 声明不一致")
+            }
             val icd = manifest.optString("icd").ifEmpty { null }
-            if (icd != null && !File(extractDir, icd).isFile) error("driver.json 指向的 ICD 模板不存在: " + icd)
+            if (icd != null) {
+                val icdFile = File(extractDir, icd)
+                if (!icdFile.isFile) error("driver.json 指向的 ICD 模板不存在: " + icd)
+                // Same check as `library`: a template path is read on its own later, so `..`
+                // would make the app read a file the pack never shipped.
+                if (!icdFile.canonicalPath.startsWith(extractDir.canonicalPath + File.separator)) {
+                    error("icd 路径非法")
+                }
+            }
 
             val target = File(rootDir(), id)
             if (target.exists()) error("已安装同 id 的驱动: " + id)
 
-            extractDir.copyRecursively(target, overwrite = false)
-            if (parsePack(target) == null) {
-                target.deleteRecursively()
+            // Copy under a staging name and rename into place: a kill in the middle of the copy
+            // otherwise leaves a half-written directory that list() reports as installed.
+            val staged = File(rootDir(), id + STAGING_SUFFIX)
+            staged.deleteRecursively()
+            extractDir.copyRecursively(staged, overwrite = false)
+            val pack = parsePack(staged)
+            if (pack == null) {
+                staged.deleteRecursively()
                 error("驱动包解析失败")
+            }
+            if (!staged.renameTo(target)) {
+                staged.deleteRecursively()
+                error("无法把驱动安装到 " + target.absolutePath)
             }
             return parsePack(target) ?: error("驱动包解析失败")
         } finally {
@@ -223,7 +257,6 @@ class DriverRepository(private val context: Context) {
         return is64 && isLittleEndian && machine == 0xB7
     }
 
-    @Suppress("unused")
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
