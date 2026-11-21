@@ -64,6 +64,12 @@ jobs:
             fi
           done
 
+      # The proxy's 2900 trampolines and their slots are generated together. A symbol added to one
+      # file and not the other either fails to link or jumps through a null pointer at runtime.
+      - uses: actions/checkout@v4
+      - name: Require the generated proxy tables to be current
+        run: python3 tools/gen_proxy.py --check
+
   # The three libraries the APK packages, compiled from this tree. A renderer taken from whatever
   # .so happened to be checked in is how a shipped build ends up behind its own source.
   libs:
@@ -156,47 +162,59 @@ jobs:
         run: |
           mkdir -p "$PACKAGE_DIR"
           module_build="$GITHUB_WORKSPACE/build"
-          # The merged copy comes first because it still has a static symbol table: the
-          # shipping-shape check below reads it, and the stripped output no longer carries one.
-          src=""
-          for candidate in \
-            "$module_build/intermediates/merged_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so" \
-            "$module_build/intermediates/stripped_native_libs/pluginRelease/out/lib/arm64-v8a/libMobileGL.so"; do
-            if [ -f "$candidate" ]; then
-              src="$candidate"
-              break
-            fi
+          echo "candidates:"
+          find "$module_build" -name libMobileGL.so -path '*arm64*' 2>/dev/null | sort || true
+          # Pick a copy that still has a static symbol table: the shipping-shape check below reads
+          # it, and every stripped copy prints "no symbols", which an unchecked pipeline calls
+          # clean. The merge output comes first, then the compiler's own output; the AGP directory
+          # names move between releases, so both are searched rather than spelled out.
+          # check_src: a copy that still has a static symbol table, for the checks below.
+          check_src=""
+          for root in "$module_build/intermediates/merged_native_libs" "$module_build/intermediates/cxx"; do
+            while IFS= read -r candidate; do
+              if [ -n "$candidate" ] && readelf -SW "$candidate" | grep -q '\.symtab'; then
+                check_src="$candidate"
+                break
+              fi
+            done <<EOF
+          $(find "$root" -name libMobileGL.so -path '*arm64-v8a*' 2>/dev/null | sort)
+          EOF
+            if [ -n "$check_src" ]; then break; fi
           done
-          if [ -z "$src" ]; then
-            src=$(find "$module_build" -name libMobileGL.so -path '*arm64*' 2>/dev/null | head -n 1)
+          # ship_src: what goes into the APK, unchanged from before: the stripped output when the
+          # build produced one.
+          ship_src=$(find "$module_build" -path '*stripped_native_libs*' -name libMobileGL.so -path '*arm64-v8a*' 2>/dev/null | head -n 1)
+          if [ -z "$ship_src" ]; then
+            ship_src="$check_src"
           fi
-          if [ -z "$src" ]; then
+          if [ -z "$ship_src" ] && [ -z "$check_src" ]; then
             echo "::error::the :MobileGL build produced no libMobileGL.so"
             find "$module_build" -name 'libMobileGL*.so' 2>/dev/null | head -n 20 || true
             exit 1
           fi
-          echo "core library from $src"
+          if [ -z "$check_src" ]; then
+            echo "::error::no unstripped libMobileGL.so was found, so the shipping-shape check cannot run. Teach the candidate list in this step about the directory this build used."
+            exit 1
+          fi
+          echo "checks read $check_src"
+          echo "packaging $ship_src"
 
           # The shipping shape compiles none of MG_Remote in, so nothing it defines may appear
           # here. This has to run while the static symbol table is still there: `nm` on the
           # stripped output prints "no symbols" and an unchecked pipeline would call that clean.
-          if ! readelf -SW "$src" | grep -q '\.symtab'; then
-            echo "::error::$src carries no .symtab, so the shipping-shape check cannot run; the collector should have picked the merged_native_libs copy"
-            exit 1
-          fi
-          if readelf -sW "$src" | grep -q 'MG_Remote'; then
+          if readelf -sW "$check_src" | grep -q 'MG_Remote'; then
             echo "::error::libMobileGL.so defines MG_Remote symbols; the split shape was on"
             exit 1
           fi
-          if readelf -d "$src" | grep 'NEEDED' | grep -q 'libMobileGLServer'; then
+          if readelf -d "$check_src" | grep 'NEEDED' | grep -q 'libMobileGLServer'; then
             echo "::error::libMobileGL.so needs libMobileGLServer.so, which this APK does not carry"
             exit 1
           fi
 
-          cp "$src" "$PACKAGE_DIR/libMobileGL.so"
+          cp "$ship_src" "$PACKAGE_DIR/libMobileGL.so"
           strip="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
           if [ -x "$strip" ]; then
-            # Already stripped when the build dropped the stripped copy here; this only makes sure.
+            # A no-op when the build already stripped this copy; this only makes sure.
             "$strip" --strip-unneeded "$PACKAGE_DIR/libMobileGL.so" \
               || echo "::warning::llvm-strip failed; shipping the library unstripped"
           fi
