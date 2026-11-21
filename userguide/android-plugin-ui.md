@@ -44,6 +44,11 @@ The interface is in Chinese; the configuration keys, paths and log lines are Eng
    `/sdcard/MobileGL/runtime.conf`. Grant it: the app restarts itself when you come back. Without
    the permission the app still saves a private copy of the configuration and says so on the
    设置 tab, but the game process cannot read that copy, so your settings do not reach the renderer.
+
+   On Android 8 and 9 the same prompt asks for the storage permission instead, which is what that
+   system uses for the shared path. **Android 10 cannot write it at all**: apps targeting API 30 or
+   newer are sandboxed on that release, and it has no "all files access" switch, so the plugin runs
+   with bundled defaults there.
 4. In a launcher, select the **MobileGL** renderer plugin. FCL reads the legacy `fclPlugin` metadata
    and shows no options for it; Zalith Launcher 2 and other launchers that read `fclPlugin_V2` show
    the backend and the toggles declared in the manifest. Either way the app's configuration wins
@@ -64,9 +69,14 @@ There are two files and one environment:
 
 `config.json` is the app's single source of truth; `runtime.conf` is the subset the native side
 reads. On launch the proxy (`libRendererProxy.so`, the library the launcher loads) reads the file and
-forwards every key in it to the process environment, then loads the renderer named by
-`RENDERER_SO`, or the bundled one. `RENDERER_MODE` and `SFPEW_ENABLED` decide whether the
+forwards its `MOBILEGL_*` and `SFPEW_*` keys to the process environment, then loads the renderer
+named by `RENDERER_SO`, or the bundled one. `RENDERER_MODE` and `SFPEW_ENABLED` decide whether the
 SimpleFPEWrapper front end is inserted for Minecraft 1.16.5 and older.
+
+The file lives on shared storage, where any app with storage access can write it, so both sides
+treat it as data and not as instructions: the proxy only propagates the two renderer prefixes above,
+and it accepts a `RENDERER_SO` only if the library exports the GL entry points. Keys outside those
+prefixes are logged and ignored.
 
 Because the proxy sets those variables, the app's settings **override** the environment the launcher
 declared in the plugin manifest. Where the two disagree, the app wins; the launcher's own
@@ -139,8 +149,8 @@ Build properties used by this module:
 The version scheme is calendar-based: the year and month come from the `HEAD` commit date, so the
 same commit always yields the same number. The public name is `26.11.1`; the info page shows the
 internal name `26.11.1-buildN-<hash>-release`. `versionCode` is
-`year × 1e6 + month × 1e4 + revision`, which keeps it increasing across releases so every build is an
-installable upgrade.
+`year × 1e7 + month × 1e5 + revision × 1e3 + buildN`, which keeps it increasing both across releases
+and across the builds inside one month, so every build is an installable upgrade over the last one.
 
 A release build is signed only when `android-plugin-ui/keystore.jks` exists **and**
 `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` are set. Otherwise the APK

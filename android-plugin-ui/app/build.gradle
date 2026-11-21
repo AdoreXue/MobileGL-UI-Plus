@@ -199,12 +199,14 @@ android {
     defaultConfig {
         minSdk 26
         targetSdk 34
-        // year*1_000_000 + month*10_000 + monthly revision keeps versionCode
-        // strictly increasing across releases (monotonic within a month and
-        // across month/year rollovers), so every build is an installable
-        // upgrade. Max ~99_129999, well under Android's 2_100_000_000 ceiling.
-        // 年*1e6 + 月*1e4 + 当月修订，随 HEAD 日期单调递增
-        versionCode mobileGlVersionMajor * 1000000 + mobileGlVersionMinor * 10000 + mobileGlVersionRevision
+        // year*1e7 + month*1e5 + revision*1e3 + build number keeps versionCode
+        // strictly increasing across releases and across the builds inside one
+        // month: the build number is what changes when nothing else does, so
+        // Dev.1 and Dev.2 are no longer the same installable package.
+        // Max ~99_129999_999 is still under Android's 2_100_000_000 ceiling.
+        // 年*1e7 + 月*1e5 + 当月修订*1e3 + 构建号，同月内每次构建都能升级
+        versionCode mobileGlVersionMajor * 10000000 + mobileGlVersionMinor * 100000 +
+            mobileGlVersionRevision * 1000 + Math.min(mobileGlForkBuildRevision(), 999)
         versionName mobileGlForkVersionName
 
         ndk {
