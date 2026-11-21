@@ -50,11 +50,6 @@ data class DriverPack(
 class DriverRepository(private val context: Context) {
     private val root = File(context.filesDir, "drivers")
 
-    private companion object {
-        /** Directory suffix used while a pack is being unpacked; never shown as installed. */
-        const val STAGING_SUFFIX = ".installing"
-    }
-
     fun rootDir(): File {
         root.mkdirs()
         root.listFiles()?.forEach { dir ->
@@ -271,6 +266,8 @@ class DriverRepository(private val context: Context) {
     }
 
     companion object {
+        /** Directory suffix used while a pack is being unpacked; never shown as installed. */
+        private const val STAGING_SUFFIX = ".installing"
         private const val MAX_ZIP_BYTES = 512L * 1024 * 1024
         private const val MAX_UNCOMPRESSED_BYTES = 1024L * 1024 * 1024
         private const val MAX_ENTRIES = 10_000

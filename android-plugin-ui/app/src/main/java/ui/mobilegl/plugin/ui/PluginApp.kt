@@ -730,7 +730,7 @@ private fun MobileGlTheme(themeMode: String = "system", content: @Composable () 
     // 状态栏/导航栏图标跟着主题走：深色主题下还要保持深色图标的话，两个栏就看不见了。
     LaunchedEffect(dark) {
         val activity = context.findActivity() ?: return@LaunchedEffect
-        WindowInsetsControllerCompat(activity.window, activity.decorView).apply {
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
         }
