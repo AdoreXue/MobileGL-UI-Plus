@@ -113,8 +113,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -369,15 +371,27 @@ fun MobileGlPluginApp() {
                     backSign = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
                     subProgress.snapTo((1f - event.progress).coerceIn(0f, 1f))
                 }
-                if (sawGesture) {
-                    dismissSub(Motion.Base)
+                // 松手后走完剩下的路：划过大半就快速收尾，只划了一点就完整收回，
+                // 时长按剩余距离算，不再每次都固定滑 220ms。旧系统只发一次「按下」、
+                // 没有进度事件，走完整时长，于是它也有滑出动画而不是瞬切。
+                val ms = if (sawGesture) {
+                    (ShuffleAxisMs * subProgress.value.coerceIn(0f, 1f))
+                        .roundToInt()
+                        .coerceIn(Motion.Fast, ShuffleAxisMs)
                 } else {
-                    // 旧系统只发一次「按下」，没有进度事件：直接收掉这一层。
-                    subDest = null
-                    subProgress.snapTo(0f)
+                    ShuffleAxisMs
                 }
+                dismissSub(ms)
             } catch (cancel: CancellationException) {
-                subProgress.animateTo(1f, tween(Motion.Base, easing = Motion.Decelerate))
+                // 手势收回。系统这时已经取消了这个协程，所以动画必须放在不可取消的上下文里：
+                // 直接在取消中的协程里 animate，第一个挂起点就把异常抛出去，回位根本不会播，
+                // 页面会停在划到一半的位置。
+                withContext(NonCancellable) {
+                    // 期间若已被别的路径关掉这一层（顶栏返回键），就不要再把它弹回来。
+                    if (subDest != null) {
+                        subProgress.animateTo(1f, tween(Motion.Base, easing = Motion.Decelerate))
+                    }
+                }
                 throw cancel
             }
         }
@@ -552,7 +566,15 @@ fun MobileGlPluginApp() {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
                             // 整层连顶栏一起滑：跟手返回时下面那页本来就是热的，不用临时去铺。
-                            .graphicsLayer { translationX = backSign * (1f - subProgress.value) * size.width }
+                            .graphicsLayer {
+                                val open = subProgress.value
+                                translationX = backSign * (1f - open) * size.width
+                                // 跟随手势退后一层：系统的预测性返回会让被返回的页面略微缩小，
+                                // 这里用同一个比例，滑到底只剩很小的幅度，不抢位移的注意力。
+                                val shrink = 1f - 0.04f * (1f - open)
+                                scaleX = shrink
+                                scaleY = shrink
+                            }
                             // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
