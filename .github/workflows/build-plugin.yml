@@ -2,7 +2,12 @@ name: Build MobileGL Plugin APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
+    # The app is the only thing this workflow builds, so a change elsewhere in the tree has nothing
+    # to compile here. Core-only pushes are covered by test.yml and apk.yml.
+    paths:
+      - 'android-plugin-ui/**'
+      - '.github/workflows/build-plugin.yml'
   workflow_dispatch:
     inputs:
       versionName:
@@ -27,12 +32,31 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      # Without the secrets the release APK is unsigned, which Android refuses to install, so the run
+      # stops here instead of uploading an artifact nobody can use.
+      - name: Require signing secrets
+        env:
+          STORE_BASE64: ${{ secrets.SIGNING_STORE_FILE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          for name in STORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::secret $name is not set. The release APK would be unsigned and cannot be installed; set the four SIGNING_* secrets, or build locally with the checked-in debug keystore."
+              exit 1
+            fi
+          done
+
       - name: Restore release keystore from secret
         working-directory: android-plugin-ui
         env:
           SIGNING_STORE_FILE_BASE64: ${{ secrets.SIGNING_STORE_FILE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
         run: |
           echo "$SIGNING_STORE_FILE_BASE64" | base64 -d > keystore.jks
+          test -s keystore.jks || { echo "::error::the restored keystore.jks is empty; check SIGNING_STORE_FILE_BASE64."; exit 1; }
+          keytool -list -keystore keystore.jks -storepass "$SIGNING_STORE_PASSWORD" > /dev/null
           ls -l keystore.jks
 
       - name: Resolve display version (DevN for non-release builds)
