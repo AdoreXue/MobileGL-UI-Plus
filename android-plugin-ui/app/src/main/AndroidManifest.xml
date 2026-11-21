@@ -34,7 +34,7 @@
         <activity
             android:name="top.mobilegl.plugin.PostActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.MobileGLPlugin" />
 
         <activity

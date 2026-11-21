@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.config
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import java.io.File
@@ -14,7 +16,9 @@ import java.io.File
  * user has not granted it we still write a private copy and report the fallback path.
  *
  * The native side reads MOBILEGL_CONFIG_FILE first, then this default path. The proxy also
- * exports these values into the game process so the file stays authoritative for the plugin UI.
+ * exports these keys into the game process so the file stays authoritative for the plugin UI.
+ * Both sides parse it with the same rules: one key per line, `KEY=value`, `#` starts a comment,
+ * and only `MOBILEGL_*` keys are ever propagated into the process environment.
  */
 class RuntimeConfigWriter(private val context: Context) {
     data class Status(
@@ -41,27 +45,35 @@ class RuntimeConfigWriter(private val context: Context) {
             val entries = LinkedHashMap(config.env)
             entries["MOBILEGL_BACKEND_TYPE"] = config.backend
             entries.forEach { (key, value) ->
-                if (key.matches(Regex("[A-Z][A-Z0-9_]{1,63}"))) {
-                    appendLine(key + "=" + value)
+                // RENDERER_* and the two SFPEW switches the proxy owns are written from the
+                // fields below: letting a key that came back from the shared file through
+                // here is how a foreign RENDERER_SO used to stick.
+                if (key.startsWith("RENDERER_") || key == "SFPEW_ENABLED" || key == "SFPEW_EGL") {
+                    return@forEach
                 }
+                if (!KEY_PATTERN.matches(key) || !isWritableValue(value)) return@forEach
+                appendLine(key + "=" + value.trim())
             }
             // Read by libRendererProxy.so before the launcher starts the game.
             appendLine("RENDERER_MODE=" + if (config.sfpewEnabled) "sfpew" else "direct")
-            config.activeRendererLibPath?.takeIf { it.isNotBlank() }?.let { appendLine("RENDERER_SO=" + it) }
+            config.activeRendererLibPath?.let { trustedLibraryPath(it) }?.let {
+                appendLine("RENDERER_SO=" + it)
+            }
         }
 
-        val shared = File("/sdcard/MobileGL/runtime.conf")
+        val shared = File(SHARED_PATH)
         var sharedWritten = false
         var reason: String? = null
         try {
             shared.parentFile?.mkdirs()
-            shared.writeText(text)
+            writeAtomically(shared, text)
             sharedWritten = true
         } catch (t: Throwable) {
-            reason = if (!hasAllFilesAccess()) {
-                "未授予“所有文件访问权限”，共享路径不可写"
-            } else {
-                t.message ?: t.toString()
+            reason = when {
+                !storageAccessSupported() ->
+                    "Android 10 及更低版本无法写入 /sdcard/MobileGL：共享配置需要 Android 11 起才提供的“所有文件访问权限”"
+                !hasAllFilesAccess() -> "未授予“所有文件访问权限”，共享路径不可写"
+                else -> t.message ?: t.toString()
             }
         }
 
@@ -69,7 +81,7 @@ class RuntimeConfigWriter(private val context: Context) {
         var privateWritten = false
         try {
             private.parentFile?.mkdirs()
-            private.writeText(text)
+            writeAtomically(private, text)
             privateWritten = true
         } catch (_: Throwable) {
         }
@@ -84,15 +96,61 @@ class RuntimeConfigWriter(private val context: Context) {
     }
 
     fun readShared(): String? {
-        val shared = File("/sdcard/MobileGL/runtime.conf")
+        val shared = File(SHARED_PATH)
         return runCatching { if (shared.isFile) shared.readText() else null }.getOrNull()
     }
 
-    fun hasAllFilesAccess(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            true
+    /** Write beside the target and rename over it: a crash mid-write must not leave a half file. */
+    private fun writeAtomically(target: File, text: String) {
+        val temp = File(target.parentFile, target.name + ".tmp")
+        temp.writeText(text)
+        if (!temp.renameTo(target)) {
+            target.delete()
+            if (!temp.renameTo(target)) {
+                temp.delete()
+                error("无法替换 " + target.absolutePath)
+            }
         }
+    }
+
+    /**
+     * Only a library this app installed may be named here. The value ends up inside a file on
+     * shared storage that the game process memfd-loads, so anything else is an executable path
+     * chosen by whoever can write that file.
+     */
+    private fun trustedLibraryPath(path: String): String? {
+        if (path.isBlank() || !isWritableValue(path)) return null
+        val candidate = runCatching { File(path).canonicalFile }.getOrNull() ?: return null
+        if (!candidate.isFile) return null
+        val roots = listOf(
+            File(context.filesDir, "libraries"),
+            File(SHARED_LIBS_DIR),
+        ).mapNotNull { runCatching { it.canonicalPath }.getOrNull() }
+        val inside = roots.any { candidate.path.startsWith(it + File.separator) }
+        return if (inside) candidate.path else null
+    }
+
+    /** Values go into a line-oriented file: a newline would turn one key into two. */
+    private fun isWritableValue(value: String): Boolean {
+        if (value.length > MAX_VALUE_LENGTH) return false
+        return value.none { it == '\n' || it == '\r' || it == '=' || it == '#' }
+    }
+
+    /** API 30 起才有「所有文件访问权限」；29 走分区存储，共享路径本就不可写。 */
+    fun storageAccessSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    fun hasAllFilesAccess(): Boolean = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> Environment.isExternalStorageManager()
+        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P ->
+            context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        else -> false
+    }
+
+    private companion object {
+        const val SHARED_PATH = "/sdcard/MobileGL/runtime.conf"
+        const val SHARED_LIBS_DIR = "/sdcard/MobileGL/libs"
+        const val MAX_VALUE_LENGTH = 1024
+        val KEY_PATTERN = Regex("[A-Z][A-Z0-9_]{0,63}")
     }
 }
