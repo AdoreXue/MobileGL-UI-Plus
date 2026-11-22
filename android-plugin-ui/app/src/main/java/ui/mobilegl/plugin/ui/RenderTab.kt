@@ -236,14 +236,18 @@ private fun RenderHero(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "当前渲染方案",
+                stringResource(R.string.render_hero_title),
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.primary,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.weight(1f))
             StatusPill(
-                if (pendingRestart) "待生效" else "已生效",
+                if (pendingRestart) {
+                    stringResource(R.string.render_pending)
+                } else {
+                    stringResource(R.string.render_effective_short)
+                },
                 if (pendingRestart) scheme.tertiary else scheme.primary,
                 icon = if (pendingRestart) Icons.Filled.Refresh else Icons.Filled.Check,
             )
@@ -276,8 +280,16 @@ private fun RenderHero(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             StatusPill(backend, scheme.tertiary)
-            if (backend == "DirectGLES") StatusPill(if (angleOn) "ANGLE" else "原生 GLES", scheme.secondary)
-            StatusPill(if (sfpewActive) "SFPEW" else "无包装器", scheme.onSurfaceVariant)
+            if (backend == "DirectGLES") {
+                StatusPill(
+                    if (angleOn) "ANGLE" else stringResource(R.string.render_native_gles_short),
+                    scheme.secondary,
+                )
+            }
+            StatusPill(
+                if (sfpewActive) "SFPEW" else stringResource(R.string.render_no_wrapper),
+                scheme.onSurfaceVariant,
+            )
         }
         MonoValue(
             "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
@@ -306,9 +318,9 @@ private fun BackendCard(
         }
         Text(
             if (backend == "DirectGLES") {
-                "Espryt 把 GL 调用直接转成系统 GLES，路径短、兼容性好；打开 ANGLE 后改为经 ANGLE 落地。"
+                stringResource(R.string.render_espryt_detail)
             } else {
-                "Magma 把 GL 调用翻译成 Vulkan 提交，能吃到驱动的现代特性，需要可用的驱动包。"
+                stringResource(R.string.render_magma_detail)
             },
             modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
             style = MaterialTheme.typography.labelSmall,
@@ -318,8 +330,8 @@ private fun BackendCard(
             DividerLine()
             IconSwitchRow(
                 icon = UiIcons.Bolt,
-                title = "使用 ANGLE",
-                subtitle = "Espryt 后端改用 ANGLE 作为 GLES 实现",
+                title = stringResource(R.string.render_use_angle_hint),
+                subtitle = stringResource(R.string.render_use_angle_detail),
                 checked = angleOn,
                 onCheckedChange = onToggleAngle,
             )
@@ -335,7 +347,11 @@ private fun BackendCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (detailsOpen) "收起技术细节" else "技术细节",
+                if (detailsOpen) {
+                    stringResource(R.string.render_details_collapse)
+                } else {
+                    stringResource(R.string.render_details_expand)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.primary,
                 modifier = Modifier.weight(1f),
@@ -372,7 +388,7 @@ private fun BackendCard(
         }
         DividerLine()
         Text(
-            "建议：兼容优先留 DirectGLES；需要 Vulkan 特性、且已导入可用驱动包时再切 DirectVulkan。",
+            stringResource(R.string.render_backend_advice),
             modifier = Modifier.padding(vertical = 10.dp),
             style = MaterialTheme.typography.labelSmall,
             color = scheme.onSurfaceVariant,

@@ -133,7 +133,7 @@ private fun readClusters(parts: Map<Int, String>): List<Cluster> {
 private fun mergedClusters(clusters: List<Cluster>): List<NamedCluster> {
     val merged = ArrayList<NamedCluster>()
     for (c in clusters) {
-        val name = c.name.ifBlank { "簇" + (merged.size + 1) }
+        val name = c.name.ifBlank { String.format(Locale.US, "cluster %d", merged.size + 1) }
         val hit = merged.indexOfFirst { it.name == name }
         if (hit >= 0) {
             val old = merged[hit]

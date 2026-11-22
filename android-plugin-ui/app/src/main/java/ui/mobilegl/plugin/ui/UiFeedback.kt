@@ -29,10 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ui.mobilegl.plugin.R
 import kotlinx.coroutines.delay
 
 /**
@@ -165,7 +167,7 @@ internal fun FoldableNote(
         TextButton(
             onClick = { onToggle(!expanded) },
             contentPadding = PaddingValues(0.dp),
-        ) { Text(if (expanded) "收起" else "说明 ›") }
+        ) { Text(if (expanded) stringResource(R.string.fold_collapse) else stringResource(R.string.fold_expand)) }
     }
 }
 
@@ -230,7 +232,7 @@ internal fun NoticeHost(
             modifier = Modifier
                 .padding(horizontal = Space.Page, vertical = Space.Md)
                 .clickable(
-                    onClickLabel = "关闭提示",
+                    onClickLabel = stringResource(R.string.notice_dismiss),
                     role = Role.Button,
                     onClick = onDismiss,
                 ),

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 
 /**
@@ -84,6 +86,7 @@ internal fun Modifier.cardStroke(shape: RoundedCornerShape = CardCorner): Modifi
 internal fun Modifier.copyOnLongPress(onCopy: (() -> Unit)?): Modifier {
     if (onCopy == null) return this
     val haptics = LocalHapticFeedback.current
+    val copyLabel = stringResource(R.string.common_copy)
     return this
         .pointerInput(onCopy) {
             detectTapGestures(
@@ -94,7 +97,7 @@ internal fun Modifier.copyOnLongPress(onCopy: (() -> Unit)?): Modifier {
             )
         }
         .semantics {
-            onLongClick(label = "复制") {
+            onLongClick(label = copyLabel) {
                 onCopy()
                 true
             }

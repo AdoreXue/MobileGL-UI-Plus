@@ -134,7 +134,7 @@ fun SelfTestScreen(
                                 ).show()
                             }
                         },
-                    ) { Text("分享原始报告") }
+                    ) { Text(stringResource(R.string.selftest_share_report)) }
                 }
                 if (running) {
                     Spacer(Modifier.height(8.dp))

@@ -792,6 +792,8 @@ internal data class DeviceInfo(
     val soc: String,
     val socVendor: String,
     val socDetail: String,
+    /** 逻辑核数：分簇摘要与短值都从它算，不再回头解析上面那串本地化文本。 */
+    val cores: Int,
     val android: String,
     val coreVersion: String,
     val coreCommit: String?,
@@ -803,7 +805,7 @@ internal data class DeviceInfo(
         /** 首帧占位：真实内容由后台 effect 填进来。 */
         fun empty(): DeviceInfo = DeviceInfo(
             gpu = "", gles = "", vulkan = "", memory = "", memoryAvail = "", soc = "",
-            socVendor = "", socDetail = "", android = "", coreVersion = "", coreCommit = null,
+            socVendor = "", socDetail = "", cores = 0, android = "", coreVersion = "", coreCommit = null,
             socExtra = SocExtra(), screen = "", storage = "",
         )
     }
@@ -938,7 +940,8 @@ private fun deviceInfo(
     val socDetail = socDetailText(context)
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
     return DeviceInfo(
-        gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android,
+        gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail,
+        Runtime.getRuntime().availableProcessors(), android,
         coreVersion, coreCommit, socExtra, screenText(context), storageText(context),
     )
 }

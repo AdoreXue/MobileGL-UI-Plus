@@ -157,7 +157,7 @@ internal fun InfoTab(
         add(labelMemory to stringResource(R.string.info_memory_value, device.memory, device.memoryAvail))
         add("SoC" to device.soc)
         add(labelSystem to device.android)
-        add(labelCore to coreCountText(device.socDetail))
+        add(labelCore to coreCountText(device.cores))
         add(labelScreen to device.screen)
         add(labelStorage to device.storage)
         add("OpenGL ES" to device.gles)
@@ -262,9 +262,9 @@ internal fun InfoTab(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             icon = UiIcons.Chip,
                             label = labelCore,
-                            value = coreCountText(device.socDetail),
+                            value = coreCountText(device.cores),
                             // 分簇直接写进这一格：小屏上比单独一行更省位置。
-                            caption = clusterSummary(clusterText).ifBlank { coreCaption(device.socDetail) },
+                            caption = clusterSummary(clusterText),
                             mono = false,
                             onLongPress = { copy(labelCore, clusterText) },
                         )
@@ -408,14 +408,18 @@ internal fun InfoTab(
                             ),
                         )
                     }
-                    EntryCardRow(UiIcons.Globe, "上游项目", "MobileGL / SimpleFPEWrapper") {
+                    EntryCardRow(
+                        UiIcons.Globe,
+                        stringResource(R.string.info_upstream),
+                        "MobileGL / SimpleFPEWrapper",
+                    ) {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")),
                         )
                     }
                 }
             }
-            item { SectionLabel("关于") }
+            item { SectionLabel(stringResource(R.string.info_section_about)) }
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -884,12 +888,10 @@ internal fun healthShort(report: SelfTestResult?): String = stringResource(
     },
 )
 
-/** 「8 核」这种短值：从分簇文本里取核数，取不到就原样展示。 */
+/** 「8 核」这种短值：直接用设备报的核数，不再从本地化文本里抠数字。 */
 @Composable
-private fun coreCountText(detail: String): String {
-    val count = Regex("([0-9]+) 核").find(detail)?.groupValues?.getOrNull(1)
-    return if (count == null) detail else stringResource(R.string.info_core_count_text, count)
-}
+private fun coreCountText(cores: Int): String =
+    if (cores > 0) stringResource(R.string.info_core_count, cores) else "—"
 
 /** 「1080×2400 · 120 Hz」拆成值和小字。 */
 @Composable
@@ -921,8 +923,3 @@ private fun clusterSummary(clusters: String): String {
         .joinToString(" · ")
 }
 
-/** 核数格子下面那行小字：去掉「N 核」前缀后剩下的说明。 */
-private fun coreCaption(detail: String): String {
-    val match = Regex("([0-9]+ 核)( · )?").find(detail) ?: return ""
-    return detail.removeRange(match.range).trim()
-}

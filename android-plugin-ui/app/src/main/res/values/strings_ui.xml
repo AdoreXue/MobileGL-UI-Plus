@@ -585,4 +585,18 @@
     <string name="config_restore_default">恢复默认</string>
 
 
+    <string name="render_tune_hint">这是什么、什么时候该动</string>
+    <string name="render_hero_title">当前渲染方案</string>
+    <string name="render_pending">待生效</string>
+    <string name="render_effective_short">已生效</string>
+    <string name="render_native_gles_short">原生 GLES</string>
+    <string name="render_espryt_detail">Espryt 把 GL 调用直接转成系统 GLES，路径短、兼容性好；打开 ANGLE 后改为经 ANGLE 落地。</string>
+    <string name="render_magma_detail">Magma 把 GL 调用翻译成 Vulkan 提交，能吃到驱动的现代特性，需要可用的驱动包。</string>
+    <string name="render_use_angle_hint">使用 ANGLE</string>
+    <string name="render_use_angle_detail">Espryt 后端改用 ANGLE 作为 GLES 实现</string>
+    <string name="refresh">刷新</string>
+    <string name="fold_collapse">收起</string>
+    <string name="fold_expand">说明 ›</string>
+    <string name="notice_dismiss">关闭提示</string>
+    <string name="common_copy">复制</string>
 </resources>
