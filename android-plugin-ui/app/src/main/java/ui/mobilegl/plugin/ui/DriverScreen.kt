@@ -33,11 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.driver.DriverPack
 import ui.mobilegl.plugin.driver.DriverRepository
@@ -74,10 +76,16 @@ fun DriverScreen(
                 importing = false
                 notice = outcome.fold(
                     onSuccess = {
-                        Notice("已导入驱动包 " + it.name + "（" + it.version + "）", NoteTone.Good)
+                        Notice(
+                            context.getString(R.string.driver_imported_pack, it.name, it.version),
+                            NoteTone.Good,
+                        )
                     },
                     onFailure = {
-                        Notice("导入失败：" + (it.message ?: it.toString()), NoteTone.Bad)
+                        Notice(
+                            context.getString(R.string.driver_import_failed, it.message ?: it.toString()),
+                            NoteTone.Bad,
+                        )
                     },
                 )
                 onRefresh()
@@ -92,10 +100,16 @@ fun DriverScreen(
                 importing = false
                 notice = outcome.fold(
                     onSuccess = {
-                        Notice("已导入外部库 " + it.name + "（" + (it.size / 1024 / 1024) + " MiB）", NoteTone.Good)
+                        Notice(
+                            context.getString(R.string.driver_imported_library, it.name, it.size / 1024 / 1024),
+                            NoteTone.Good,
+                        )
                     },
                     onFailure = {
-                        Notice("导入失败：" + (it.message ?: it.toString()), NoteTone.Bad)
+                        Notice(
+                            context.getString(R.string.driver_import_failed, it.message ?: it.toString()),
+                            NoteTone.Bad,
+                        )
                     },
                 )
                 onRefresh()
@@ -128,44 +142,55 @@ fun DriverScreen(
                 FillSkeleton(cards = 5)
                 return@Column
             }
-            SectionCard("渲染器组件", stagger = 0) {
+            SectionCard(stringResource(R.string.driver_section_chain), stagger = 0) {
                 Text(
-                    "本 APK 的渲染链：启动器 → libRendererProxy.so →（SFPEW 包装器 或 直连）→ libMobileGL.so。",
+                    stringResource(R.string.driver_chain),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(Space.Sm))
-                InfoLine(null, "SFPEW 包装器", if (sfpewBundled) "已内置" else "未内置（可用外部库页导入自检）")
-                InfoLine(null, "后端库", "libMobileGL.so（APK 内置）")
+                InfoLine(
+                    null,
+                    stringResource(R.string.driver_sfpew_wrapper),
+                    if (sfpewBundled) {
+                        stringResource(R.string.driver_sfpew_bundled)
+                    } else {
+                        stringResource(R.string.driver_sfpew_missing)
+                    },
+                )
+                InfoLine(
+                    null,
+                    stringResource(R.string.driver_backend_lib),
+                    stringResource(R.string.driver_backend_lib_value),
+                )
                 Text(
-                    "说明：启用外部库后，libRendererProxy.so 会在启动游戏时按配置加载（memfd），驱动自检同样使用该库。",
+                    stringResource(R.string.driver_chain_note),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            SectionCard("外部库（单个 .so）", stagger = 1) {
+            SectionCard(stringResource(R.string.driver_section_library), stagger = 1) {
                 Text(
-                    "用于单独替换渲染链中的某个库，无需重新安装 APK。仅接受以下两种文件：",
+                    stringResource(R.string.driver_library_intro),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(Space.Sm))
-                InfoLine(null, "libMobileGL.so", "MobileGL 渲染器核心（Magma / Espryt）")
-                InfoLine(null, "libSimpleFPEWrapper.so", "SFPEW 包装器，旧版本固定管线兼容层")
+                InfoLine(null, "libMobileGL.so", stringResource(R.string.driver_library_renderer))
+                InfoLine(null, "libSimpleFPEWrapper.so", stringResource(R.string.driver_library_sfpew))
                 Spacer(Modifier.height(Space.Sm))
                 Text(
-                    "导入要求：AArch64 64 位小端 ELF，体积不超过 128 MiB，且包含 MobileGL 的 Driver POST 与 EGL 符号。",
+                    stringResource(R.string.driver_library_require),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "生效范围：选定启用后，驱动自检直接使用该库；启动游戏时由 libRendererProxy.so 经 memfd 加载。" +
-                        "未启用时一律使用 APK 内置的副本。",
+                    stringResource(R.string.driver_library_scope),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = Space.Xs),
                 )
                 Text(
-                    "适用场景：需要先试用官方 CI 的新版本，或需替换为旧版本以对照排查当前核心库的问题。",
+                    stringResource(R.string.driver_library_when),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = Space.Xs),
@@ -175,8 +200,16 @@ fun DriverScreen(
                     Button(
                         enabled = !importing,
                         onClick = { libraryImporter.launch(arrayOf("application/octet-stream", "*/*")) },
-                    ) { Text(if (importing) "导入中…" else "导入 .so") }
-                    OutlinedButton(onClick = onRefresh) { Text("刷新") }
+                    ) {
+                        Text(
+                            if (importing) {
+                                stringResource(R.string.driver_importing)
+                            } else {
+                                stringResource(R.string.driver_import_so)
+                            },
+                        )
+                    }
+                    OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.common_refresh)) }
                 }
                 if (importing) {
                     Spacer(Modifier.height(Space.Sm))
@@ -186,9 +219,8 @@ fun DriverScreen(
                 if (externalLibraries.isEmpty()) {
                     EmptyState(
                         icon = UiIcons.Layers,
-                        title = "还没有外部库",
-                        body = "导入一个 libMobileGL.so 或 libSimpleFPEWrapper.so，" +
-                            "就能在不重装 APK 的前提下换掉渲染链里的这一环。",
+                        title = stringResource(R.string.driver_library_empty_title),
+                        body = stringResource(R.string.driver_library_empty_body),
                     )
                 } else {
                     externalLibraries.forEach { library ->
@@ -206,46 +238,39 @@ fun DriverScreen(
                 }
             }
 
-            SectionCard("驱动包（Vulkan 驱动 · 未完善）", stagger = 2) {
+            SectionCard(stringResource(R.string.driver_section_pack), stagger = 2) {
                 Text(
-                    "该包为 zip 格式，根目录含 driver.json 清单，内容为第三方 Vulkan 驱动，主要为适用于 Mali GPU 的 " +
-                        "Mesa PanVK。系统驱动存在问题时，可替换为他人编译的版本。",
+                    stringResource(R.string.driver_pack_intro),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(Space.Sm))
                 Text(
-                    "与外部库的区别：驱动包位于 MobileGL 之下，用于替换系统 Vulkan 驱动；" +
-                        "外部库用于替换 MobileGL 自身。",
+                    stringResource(R.string.driver_pack_differs),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "导入时校验清单字段与库文件完整性；kind 为 vulkan-icd 的包将生成 ICD 配置文件，" +
-                        "供 Vulkan loader 定位该驱动。",
+                    stringResource(R.string.driver_pack_validate),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = Space.Xs),
                 )
                 Spacer(Modifier.height(Space.Sm))
-                NoteBanner(
-                    "当前限制：PanVK 的 loader 接入尚未完成，激活驱动包仅完成安装、校验与 ICD 生成，" +
-                        "不会改变实际渲染路径。此时导入属于预先准备。",
-                    NoteTone.Warn,
-                )
+                NoteBanner(stringResource(R.string.driver_pack_limit), NoteTone.Warn)
                 Spacer(Modifier.height(Space.Sm))
                 ActionRow {
                     Button(onClick = { driverImporter.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }) {
-                        Text("导入驱动包")
+                        Text(stringResource(R.string.driver_import_pack))
                     }
-                    OutlinedButton(onClick = onRefresh) { Text("刷新") }
+                    OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.common_refresh)) }
                 }
             }
             if (drivers.isEmpty() && externalLibraries.isNotEmpty()) {
                 // 列表为空时给一句解释，而不是让这一块直接消失。
                 EmptyState(
                     icon = UiIcons.Chip,
-                    title = "还没有驱动包",
-                    body = "驱动包装在 MobileGL 之下替换系统 Vulkan 驱动，与上面的外部库不是一回事。",
+                    title = stringResource(R.string.driver_pack_empty_title),
+                    body = stringResource(R.string.driver_pack_empty_body),
                 )
             }
             drivers.forEachIndexed { index, pack ->
@@ -273,8 +298,8 @@ fun DriverScreen(
     pendingDelete?.let { pack ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除驱动") },
-            text = { Text("确认删除 " + pack.name + "？") },
+            title = { Text(stringResource(R.string.driver_delete_pack_title)) },
+            text = { Text(stringResource(R.string.driver_delete_confirm, pack.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     // 删一个驱动包是递归删目录，不能挂在对话框的回调里同步跑。
@@ -283,22 +308,24 @@ fun DriverScreen(
                     scope.launch {
                         val removed = withContext(Dispatchers.IO) { repository.delete(target) }
                         notice = if (removed) {
-                            Notice("已删除 " + target.name, NoteTone.Good)
+                            Notice(context.getString(R.string.driver_deleted, target.name), NoteTone.Good)
                         } else {
-                            Notice("删除失败", NoteTone.Bad)
+                            Notice(context.getString(R.string.driver_delete_failed), NoteTone.Bad)
                         }
                         onRefresh()
                     }
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.common_cancel)) }
+            },
         )
     }
     pendingDeleteLibrary?.let { library ->
         AlertDialog(
             onDismissRequest = { pendingDeleteLibrary = null },
-            title = { Text("删除外部库") },
-            text = { Text("确认删除 " + library.name + "？") },
+            title = { Text(stringResource(R.string.driver_delete_library_title)) },
+            text = { Text(stringResource(R.string.driver_delete_confirm, library.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     val target = library
@@ -309,15 +336,17 @@ fun DriverScreen(
                         // 私有副本与 /sdcard 上的共享副本都要删，同样是文件操作。
                         val removed = withContext(Dispatchers.IO) { externalRepository.delete(target) }
                         notice = if (removed) {
-                            Notice("已删除 " + target.name, NoteTone.Good)
+                            Notice(context.getString(R.string.driver_deleted, target.name), NoteTone.Good)
                         } else {
-                            Notice("删除失败", NoteTone.Bad)
+                            Notice(context.getString(R.string.driver_delete_failed), NoteTone.Bad)
                         }
                         onRefresh()
                     }
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteLibrary = null }) { Text("取消") } },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteLibrary = null }) { Text(stringResource(R.string.common_cancel)) }
+            },
         )
     }
 }
@@ -329,11 +358,13 @@ private fun ExternalLibraryRow(
     onActivate: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val kind = when {
-        library.isSfpew() -> "SFPEW 包装器"
-        library.isRenderer() -> "MobileGL 渲染器"
-        else -> "其他 .so"
-    }
+    val kind = stringResource(
+        when {
+            library.isSfpew() -> R.string.driver_kind_sfpew
+            library.isRenderer() -> R.string.driver_kind_renderer
+            else -> R.string.driver_kind_other
+        },
+    )
     Column(Modifier.fillMaxWidth().padding(vertical = Space.Sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -344,18 +375,29 @@ private fun ExternalLibraryRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "导入于 " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-                        .format(java.util.Date(library.importedAt)),
+                    stringResource(
+                        R.string.driver_imported_at,
+                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(library.importedAt)),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (selected) StatusPill("已启用", verdictColor("PASS"))
+            if (selected) StatusPill(stringResource(R.string.driver_enabled), verdictColor("PASS"))
         }
         Spacer(Modifier.height(Space.Xs))
         ActionRow {
-            OutlinedButton(onClick = onActivate) { Text(if (selected) "取消启用" else "启用") }
-            OutlinedButton(onClick = onDelete) { Text("删除") }
+            OutlinedButton(onClick = onActivate) {
+                Text(
+                    if (selected) {
+                        stringResource(R.string.driver_disable)
+                    } else {
+                        stringResource(R.string.driver_enable)
+                    },
+                )
+            }
+            OutlinedButton(onClick = onDelete) { Text(stringResource(R.string.common_delete)) }
         }
     }
 }
@@ -372,28 +414,45 @@ private fun DriverCard(
     onRefresh: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     SectionCard(pack.name) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(pack.version, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            if (active) StatusPill("已激活", verdictColor("PASS")) else StatusPill("未激活", MaterialTheme.colorScheme.onSurfaceVariant)
+            if (active) {
+                StatusPill(stringResource(R.string.driver_active), verdictColor("PASS"))
+            } else {
+                StatusPill(stringResource(R.string.driver_inactive), MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         Spacer(Modifier.height(Space.Sm))
-        InfoLine(null, "ABI", pack.abi)
-        InfoLine(null, "类型", pack.kind)
+        InfoLine(null, stringResource(R.string.driver_abi), pack.abi)
+        InfoLine(null, stringResource(R.string.driver_kind), pack.kind)
         if (pack.mesaVersion.isNotBlank()) InfoLine(null, "Mesa", pack.mesaVersion)
-        InfoLine(null, "路径", pack.dir.absolutePath)
+        InfoLine(null, stringResource(R.string.driver_path), pack.dir.absolutePath)
         Spacer(Modifier.height(Space.Sm))
         ActionRow {
-            if (active) OutlinedButton(onClick = onClearActive) { Text("取消激活") } else Button(onClick = onActivate) { Text("激活") }
+            if (active) {
+                OutlinedButton(onClick = onClearActive) { Text(stringResource(R.string.driver_deactivate)) }
+            } else {
+                Button(onClick = onActivate) { Text(stringResource(R.string.driver_activate)) }
+            }
             if (pack.isVulkanIcd()) {
                 OutlinedButton(onClick = {
                     scope.launch {
-                        val file = withContext(Dispatchers.IO) { runCatching { repository.generateIcd(pack) }.getOrNull() }
-                        onMessage(if (file != null) "ICD 已生成：" + file.absolutePath else "生成 ICD 失败（缺少模板或库）")
+                        val file = withContext(Dispatchers.IO) {
+                            runCatching { repository.generateIcd(pack) }.getOrNull()
+                        }
+                        onMessage(
+                            if (file != null) {
+                                context.getString(R.string.driver_icd_generated, file.absolutePath)
+                            } else {
+                                context.getString(R.string.driver_icd_failed)
+                            },
+                        )
                     }
-                }) { Text("生成 ICD") }
+                }) { Text(stringResource(R.string.driver_generate_icd)) }
             }
-            OutlinedButton(onClick = onDelete) { Text("删除") }
+            OutlinedButton(onClick = onDelete) { Text(stringResource(R.string.common_delete)) }
         }
     }
 }
