@@ -192,7 +192,12 @@ internal fun InfoTab(
             alpha = reveal.alpha
             translationY = reveal.rise.toPx()
         },
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(
+            start = Space.Page,
+            top = 0.dp,
+            end = Space.Page,
+            bottom = Space.Xl,
+        ),
     ) {
         item { BigTitle(stringResource(R.string.info_title)) }
         if (!ready) {
@@ -606,7 +611,7 @@ private fun VersionHero(
             .clip(RoundedCornerShape(20.dp))
             .background(gradient)
             .copyOnLongPress(onLongPress)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = Space.Page, vertical = Space.Lg),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(

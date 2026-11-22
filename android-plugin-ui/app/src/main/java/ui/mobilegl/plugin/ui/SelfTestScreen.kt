@@ -73,7 +73,12 @@ fun SelfTestScreen(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(
+            start = Space.Page,
+            top = Space.Md,
+            end = Space.Page,
+            bottom = Space.Xl,
+        ),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
