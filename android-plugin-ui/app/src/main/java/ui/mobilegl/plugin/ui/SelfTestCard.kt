@@ -20,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.selftest.SelfTestResult
 
 /**
@@ -52,7 +54,7 @@ fun SelfTestCard(
             }
         ),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.Lg, vertical = Space.Md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(10.dp).clip(RoundedCornerShape(50))
@@ -65,9 +67,9 @@ fun SelfTestCard(
                             }
                         ),
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(Space.Md))
                 Text(
-                    if (probing) "正在运行驱动自检…" else reportHealthTitle(report),
+                    if (probing) stringResource(R.string.selftest_running) else reportHealthTitle(report),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
@@ -76,21 +78,27 @@ fun SelfTestCard(
             Text(
                 when {
                     backends.isNotEmpty() -> backends.joinToString(" · ") { it.backend + " " + it.verdict }
-                    probing -> "着色器与驱动探测中，稍候"
-                    else -> "自检会加载 libMobileGL.so 并枚举当前驱动"
+                    probing -> stringResource(R.string.selftest_probing_detail)
+                    else -> stringResource(R.string.selftest_idle_detail)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = Space.Xs),
             )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Space.Sm),
+                modifier = Modifier.padding(top = Space.Md),
             ) {
                 OutlinedButton(enabled = !probing, onClick = onRunSelfTest) {
-                    Text(if (report == null) "运行自检" else "重新自检")
+                    Text(
+                        if (report == null) {
+                            stringResource(R.string.common_run_self_test)
+                        } else {
+                            stringResource(R.string.common_rerun_self_test)
+                        },
+                    )
                 }
-                OutlinedButton(onClick = onOpenReport) { Text("完整报告") }
+                OutlinedButton(onClick = onOpenReport) { Text(stringResource(R.string.common_full_report)) }
             }
         }
     }

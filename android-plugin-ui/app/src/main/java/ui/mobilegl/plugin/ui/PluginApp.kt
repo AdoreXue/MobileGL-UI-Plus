@@ -111,6 +111,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -131,6 +132,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.ConfigStore
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
@@ -1094,12 +1096,23 @@ internal fun reportHealth(report: SelfTestResult?): ReportHealth {
     return if (degraded) ReportHealth.Degraded else ReportHealth.Ok
 }
 
+@Composable
 internal fun reportHealthTitle(report: SelfTestResult?): String = when (reportHealth(report)) {
-    ReportHealth.None -> "驱动自检：未运行"
-    ReportHealth.Error -> if (report?.error.isNullOrBlank()) "驱动自检：失败" else "驱动自检：失败 — " + report?.error
-    ReportHealth.Fail -> "驱动自检：" + (report?.backends?.sumOf { b -> b.checks.count { it.status.equals("fail", true) } } ?: 0) + " 项失败"
-    ReportHealth.Degraded -> "驱动自检：部分降级"
-    ReportHealth.Ok -> "驱动自检：全部通过"
+    ReportHealth.None -> stringResource(R.string.health_title_none)
+    ReportHealth.Degraded -> stringResource(R.string.health_title_degraded)
+    ReportHealth.Ok -> stringResource(R.string.health_title_ok)
+    ReportHealth.Error -> {
+        val detail = report?.error
+        if (detail.isNullOrBlank()) {
+            stringResource(R.string.health_title_error_plain)
+        } else {
+            stringResource(R.string.health_title_error, detail)
+        }
+    }
+    ReportHealth.Fail -> {
+        val fails = report?.backends?.sumOf { b -> b.checks.count { it.status.equals("fail", true) } } ?: 0
+        stringResource(R.string.health_title_fail, fails)
+    }
 }
 
 @Composable

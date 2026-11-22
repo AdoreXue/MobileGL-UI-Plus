@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 package ui.mobilegl.plugin.ui
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,20 +21,21 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import android.os.Build
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 
@@ -60,84 +62,127 @@ fun SettingsTab(
             alpha = reveal.alpha
             translationY = reveal.rise.toPx()
         },
-        contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = Space.Page, top = 0.dp, end = Space.Page, bottom = Space.Xl),
     ) {
-        item { BigTitle("设置") }
+        item { BigTitle(stringResource(R.string.settings_title)) }
         if (!ready) {
             item { FillSkeleton(cards = 6) }
             return@LazyColumn
         }
         item {
-            SectionLabel("应用行为")
+            SectionLabel(stringResource(R.string.settings_section_app))
             InfoCard {
-                SwitchRow("启动时自动自检", "打开应用后自动运行一次驱动自检", config.autoSelfTest) {
-                    onSave(config.copy(autoSelfTest = it))
-                }
+                SwitchRow(
+                    title = stringResource(R.string.settings_auto_self_test),
+                    subtitle = stringResource(R.string.settings_auto_self_test_desc),
+                    checked = config.autoSelfTest,
+                ) { onSave(config.copy(autoSelfTest = it)) }
                 DividerLine()
-                ValueChoiceRow(
-                    title = "主题",
-                    options = listOf(THEME_SYSTEM, THEME_LIGHT, THEME_DARK),
+                // 主题原来直接拿取值（system/light/dark）当按钮文字，选出来是英文键名。
+                ChoiceRow(
+                    title = stringResource(R.string.settings_theme),
+                    subtitle = stringResource(R.string.settings_theme_desc),
+                    options = listOf(
+                        THEME_SYSTEM to stringResource(R.string.settings_theme_system),
+                        THEME_LIGHT to stringResource(R.string.settings_theme_light),
+                        THEME_DARK to stringResource(R.string.settings_theme_dark),
+                    ),
                     selected = config.theme.ifBlank { THEME_SYSTEM },
                     onSelect = { onSave(config.copy(theme = it)) },
                 )
             }
         }
         item {
-            SectionLabel("外观")
+            SectionLabel(stringResource(R.string.settings_section_appearance))
             InfoCard {
                 // 配色来源是界面观感的分叉点：品牌色带在任何机型上一致，跟随系统则和壁纸同色。
                 ChoiceRow(
-                    title = "配色",
+                    title = stringResource(R.string.settings_color_source),
                     subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        "品牌色带在任何手机上都一致；跟随系统会取壁纸颜色"
+                        stringResource(R.string.settings_color_source_desc)
                     } else {
-                        "品牌色带在任何手机上都一致；本机系统不支持取色，选了也按品牌色显示"
+                        stringResource(R.string.settings_color_source_desc_legacy)
                     },
-                    options = listOf(ColorSource.Brand to "品牌色", ColorSource.System to "跟随系统"),
+                    options = listOf(
+                        ColorSource.Brand to stringResource(R.string.settings_color_brand),
+                        ColorSource.System to stringResource(R.string.settings_color_system),
+                    ),
                     selected = colorSource,
                     onSelect = onColorSource,
                 )
                 DividerLine()
-                InfoLine(null, "当前配色", if (colorSource == ColorSource.System) "跟随系统" else "品牌色", mono = false)
+                InfoLine(
+                    null,
+                    stringResource(R.string.settings_color_current),
+                    if (colorSource == ColorSource.System) {
+                        stringResource(R.string.settings_color_system)
+                    } else {
+                        stringResource(R.string.settings_color_brand)
+                    },
+                    mono = false,
+                )
             }
         }
         item {
-            SectionLabel("配置状态")
+            SectionLabel(stringResource(R.string.settings_section_state))
             InfoCard {
-                InfoLine(null, "运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）", mono = false)
+                InfoLine(
+                    null,
+                    stringResource(R.string.settings_runtime_config),
+                    if (runtime.sharedWritten) {
+                        stringResource(R.string.settings_runtime_shared)
+                    } else {
+                        stringResource(R.string.settings_runtime_private)
+                    },
+                    mono = false,
+                )
                 DividerLine()
-                InfoLine(null, "生效时机", if (pendingRestart) "有修改待生效，重启游戏后生效" else "与当前游戏进程一致", mono = false)
+                InfoLine(
+                    null,
+                    stringResource(R.string.settings_restart_when),
+                    if (pendingRestart) {
+                        stringResource(R.string.settings_restart_pending)
+                    } else {
+                        stringResource(R.string.settings_restart_none)
+                    },
+                    mono = false,
+                )
                 if (!hasAllFilesAccess(context)) {
                     DividerLine()
-                    EntryRow(null, "授予“所有文件访问权限”", "写共享配置、让启动器读取", {
-                        openAllFilesAccessSettings(context)
-                    })
+                    EntryRow(
+                        icon = null,
+                        title = stringResource(R.string.settings_grant_storage),
+                        subtitle = stringResource(R.string.settings_grant_storage_desc),
+                        onClick = { openAllFilesAccessSettings(context) },
+                    )
                 }
             }
         }
         item {
-            SectionLabel("危险操作")
+            SectionLabel(stringResource(R.string.settings_section_danger))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             ) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = Space.Lg, vertical = Space.Md)) {
                     Text(
-                        "重置会清空全部设置与驱动激活状态，配置和驱动需要重新设置，此操作不可撤销。",
+                        stringResource(R.string.settings_reset_desc),
                         style = MaterialTheme.typography.labelSmall,
                     )
                     Row(
-                        Modifier.fillMaxWidth().padding(top = 10.dp),
+                        Modifier.fillMaxWidth().padding(top = Space.Sm),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "重置全部设置",
+                            stringResource(R.string.settings_reset_all),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.weight(1f),
                         )
-                        OutlinedButton(onClick = { showResetDialog = true }) { Text("重置") }
+                        OutlinedButton(onClick = { showResetDialog = true }) {
+                            Text(stringResource(R.string.settings_reset))
+                        }
                     }
                 }
             }
@@ -146,12 +191,18 @@ fun SettingsTab(
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text("重置全部设置？") },
-            text = { Text("将清空渲染后端、包装器、驱动激活与外部库选择，主题保持不变。已安装的驱动包与外部库文件不会被删除。此操作不可撤销。") },
+            title = { Text(stringResource(R.string.settings_reset_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_reset_confirm_body)) },
             confirmButton = {
-                TextButton(onClick = { showResetDialog = false; onResetAll() }) { Text("确认重置") }
+                TextButton(onClick = { showResetDialog = false; onResetAll() }) {
+                    Text(stringResource(R.string.settings_reset_confirm))
+                }
             },
-            dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text("取消") } },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
         )
     }
 }
@@ -164,7 +215,7 @@ const val THEME_DARK = "dark"
 @Composable
 internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Space.Md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -176,9 +227,10 @@ internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChec
 }
 
 /**
- * 带说明的三选一控件。
+ * 带说明的选项行：一行标题、一行说明、一排胶囊。
  *
- * [ValueChoiceRow] 只有标题，说不清两个选项差在哪；这里多一行说明，和开关行的排版对齐。
+ * 选项文字由调用方给，控件只管排版，这样同一套控件既能放主题这种固定三项，
+ * 也能放配色这种枚举项。
  */
 @Composable
 internal fun <T> ChoiceRow(
@@ -188,26 +240,13 @@ internal fun <T> ChoiceRow(
     selected: T,
     onSelect: (T) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.Md)) {
         Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(Space.Sm))
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.Sm)) {
             options.forEach { (value, label) ->
                 FilterChip(selected = value == selected, onClick = { onSelect(value) }, label = { Text(label) })
-            }
-        }
-    }
-}
-
-@Composable
-internal fun ValueChoiceRow(title: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { option ->
-                FilterChip(selected = option == selected, onClick = { onSelect(option) }, label = { Text(option) })
             }
         }
     }

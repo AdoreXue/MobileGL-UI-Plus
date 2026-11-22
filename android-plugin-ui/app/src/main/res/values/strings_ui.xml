@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Text the config app draws. Kept apart from strings.xml, which holds the titles the
+  launcher reads for MobileGL's own settings page: those are part of the renderer's
+  interface, these belong to this app, and the two are translated separately.
+
+  Names are <screen>_<what>; common_ is for the few words that repeat everywhere.
+-->
+<resources>
+    <!-- Common -->
+    <string name="common_cancel">取消</string>
+    <string name="common_delete">删除</string>
+    <string name="common_refresh">刷新</string>
+    <string name="common_run_self_test">运行自检</string>
+    <string name="common_rerun_self_test">重新自检</string>
+    <string name="common_full_report">完整报告</string>
+    <string name="common_close">关闭</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_section_app">应用行为</string>
+    <string name="settings_auto_self_test">启动时自动自检</string>
+    <string name="settings_auto_self_test_desc">打开应用后自动运行一次驱动自检</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_desc">跟随系统会随系统的深浅色切换；固定浅色或深色则不受系统影响</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_color_source">配色</string>
+    <string name="settings_color_source_desc">品牌色在任何手机上都一致；跟随系统会取壁纸颜色</string>
+    <string name="settings_color_source_desc_legacy">品牌色在任何手机上都一致；本机系统不支持取色，选了也按品牌色显示</string>
+    <string name="settings_color_brand">品牌色</string>
+    <string name="settings_color_system">跟随系统</string>
+    <string name="settings_color_current">当前配色</string>
+    <string name="settings_section_state">配置状态</string>
+    <string name="settings_runtime_config">运行时配置</string>
+    <string name="settings_runtime_shared">已写入共享路径</string>
+    <string name="settings_runtime_private">仅私有副本（共享路径不可写）</string>
+    <string name="settings_restart_when">生效时机</string>
+    <string name="settings_restart_pending">有修改待生效，重启游戏后生效</string>
+    <string name="settings_restart_none">与当前游戏进程一致</string>
+    <string name="settings_grant_storage">授予“所有文件访问权限”</string>
+    <string name="settings_grant_storage_desc">写共享配置、让启动器读取</string>
+    <string name="settings_section_danger">危险操作</string>
+    <string name="settings_reset_desc">重置会清空全部设置与驱动激活状态，配置和驱动需要重新设置，此操作不可撤销。</string>
+    <string name="settings_reset_all">重置全部设置</string>
+    <string name="settings_reset">重置</string>
+    <string name="settings_reset_confirm_title">重置全部设置？</string>
+    <string name="settings_reset_confirm_body">将清空渲染后端、包装器、驱动激活与外部库选择，主题保持不变。已安装的驱动包与外部库文件不会被删除。此操作不可撤销。</string>
+    <string name="settings_reset_confirm">确认重置</string>
+
+    <!-- Self-test: the shared status words and the card on the home page -->
+    <string name="health_none">自检未运行</string>
+    <string name="health_ok">自检通过</string>
+    <string name="health_degraded">自检降级</string>
+    <string name="health_fail">自检失败</string>
+    <string name="health_error">自检错误</string>
+    <string name="health_title_none">驱动自检：未运行</string>
+    <string name="health_title_ok">驱动自检：全部通过</string>
+    <string name="health_title_degraded">驱动自检：部分降级</string>
+    <string name="health_title_error_plain">驱动自检：失败</string>
+    <string name="health_title_fail">驱动自检：%1$d 项失败</string>
+    <string name="health_title_error">驱动自检：失败 — %1$s</string>
+    <string name="selftest_running">正在运行驱动自检…</string>
+    <string name="selftest_probing_detail">着色器与驱动探测中，稍候</string>
+    <string name="selftest_idle_detail">自检会加载 libMobileGL.so 并枚举当前驱动</string>
+    <string name="selftest_section">驱动自检</string>
+    <string name="selftest_intro">与官方 MobileGL Action APK 使用同一套 Driver POST（DirectGLES + DirectVulkan），展示原生 checks、Known driver bugs 与 Format capabilities 完整报告。</string>
+    <string name="selftest_using_external">使用外部库自检：%1$s</string>
+    <string name="selftest_share_report">分享原始报告</string>
+    <string name="selftest_share_empty">还没有自检结果，请先运行自检</string>
+    <string name="selftest_probing">探测中…</string>
+    <string name="selftest_empty_title">尚未运行自检</string>
+    <string name="selftest_empty_body">自检会加载 libMobileGL.so 并枚举当前驱动，几秒后给出逐项结论。</string>
+    <string name="selftest_failed_section">自检失败</string>
+    <string name="selftest_unknown_error">未知错误</string>
+    <string name="selftest_summary_section">自检总结</string>
+    <string name="selftest_verdict_fail">存在失败项</string>
+    <string name="selftest_verdict_degraded">可用，部分降级</string>
+    <string name="selftest_verdict_ok">可用</string>
+    <string name="selftest_conclusion">结论：%1$s</string>
+    <string name="selftest_counts">通过 %1$d 项 · 替代 %2$d 项 · 失败 %3$d 项</string>
+    <string name="selftest_known_bugs">已知驱动问题 %1$d 项（见下方 Known driver bugs）</string>
+    <string name="selftest_backend_missing">Driver not present / not probeable</string>
+    <string name="selftest_verdict_line">Verdict: %1$s</string>
+    <string name="selftest_known_bugs_title">Known driver bugs</string>
+    <string name="selftest_formats_title">Format capabilities</string>
+    <string name="selftest_formats_row">%1$s (%2$d formats)</string>
+    <string name="selftest_raw_title">Raw report</string>
+    <string name="selftest_raw_expand">Raw report（点一下展开）</string>
+    <string name="selftest_raw_collapse">Raw report（点一下收起）</string>
+</resources>

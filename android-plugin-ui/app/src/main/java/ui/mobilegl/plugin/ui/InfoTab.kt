@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 import ui.mobilegl.plugin.driver.DriverPack
@@ -792,13 +794,16 @@ internal fun healthColor(report: SelfTestResult?): Color = when (reportHealth(re
     else -> MaterialTheme.colorScheme.error
 }
 
-internal fun healthShort(report: SelfTestResult?): String = when (reportHealth(report)) {
-    ReportHealth.None -> "自检未运行"
-    ReportHealth.Ok -> "自检通过"
-    ReportHealth.Degraded -> "自检降级"
-    ReportHealth.Fail -> "自检失败"
-    ReportHealth.Error -> "自检错误"
-}
+@Composable
+internal fun healthShort(report: SelfTestResult?): String = stringResource(
+    when (reportHealth(report)) {
+        ReportHealth.None -> R.string.health_none
+        ReportHealth.Ok -> R.string.health_ok
+        ReportHealth.Degraded -> R.string.health_degraded
+        ReportHealth.Fail -> R.string.health_fail
+        ReportHealth.Error -> R.string.health_error
+    },
+)
 
 /** 「8 核」这种短值：从分簇文本里取核数，取不到就原样展示。 */
 private fun coreCountText(detail: String): String {

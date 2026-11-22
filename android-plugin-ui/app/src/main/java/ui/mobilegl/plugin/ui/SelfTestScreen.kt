@@ -39,11 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.selftest.BackendReport
 import ui.mobilegl.plugin.selftest.CheckItem
@@ -75,10 +77,9 @@ fun SelfTestScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            SectionCard("驱动自检") {
+            SectionCard(stringResource(R.string.selftest_section)) {
                 Text(
-                    "与官方 MobileGL Action APK 使用同一套 Driver POST（DirectGLES + DirectVulkan），" +
-                        "展示原生 checks、Known driver bugs 与 Format capabilities 完整报告。",
+                    stringResource(R.string.selftest_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -86,7 +87,7 @@ fun SelfTestScreen(
                 val activeLib = config.selfTestLibraryPath ?: config.activeRendererLibPath
                 if (!activeLib.isNullOrBlank()) {
                     Text(
-                        "使用外部库自检：" + activeLib,
+                        stringResource(R.string.selftest_using_external, activeLib),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -105,7 +106,15 @@ fun SelfTestScreen(
                                 }
                             }
                         },
-                    ) { Text(if (running) "探测中…" else "运行自检") }
+                    ) {
+                        Text(
+                            if (running) {
+                                stringResource(R.string.selftest_probing)
+                            } else {
+                                stringResource(R.string.common_run_self_test)
+                            },
+                        )
+                    }
                     OutlinedButton(
                         onClick = {
                             val text = result?.rawJson.orEmpty()
@@ -114,9 +123,15 @@ fun SelfTestScreen(
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_TEXT, text)
                                 }
-                                context.startActivity(Intent.createChooser(intent, "分享原始报告"))
+                                context.startActivity(
+                            Intent.createChooser(intent, context.getString(R.string.selftest_share_report)),
+                        )
                             } else {
-                                android.widget.Toast.makeText(context, "还没有自检结果，请先运行自检", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.selftest_share_empty),
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
                             }
                         },
                     ) { Text("分享原始报告") }
@@ -131,11 +146,11 @@ fun SelfTestScreen(
         val report = result
         if (report == null) {
             item {
-                SectionCard("还没有自检结果") {
+                SectionCard(stringResource(R.string.selftest_empty_title)) {
                     EmptyState(
                         icon = UiIcons.Speed,
-                        title = "尚未运行自检",
-                        body = "自检会加载 libMobileGL.so 并枚举当前驱动，几秒后给出逐项结论。",
+                        title = stringResource(R.string.selftest_empty_title),
+                        body = stringResource(R.string.selftest_empty_body),
                     )
                 }
             }
@@ -143,9 +158,9 @@ fun SelfTestScreen(
         }
         if (!report.ok) {
             item {
-                SectionCard("自检失败") {
+                SectionCard(stringResource(R.string.selftest_failed_section)) {
                     // 失败原因整段照原样显示，不做省略：这是用户唯一能去搜索的线索。
-                    NoteBanner(report.error ?: "未知错误", NoteTone.Bad)
+                    NoteBanner(report.error ?: stringResource(R.string.selftest_unknown_error), NoteTone.Bad)
                 }
             }
             return@LazyColumn
@@ -176,22 +191,38 @@ private fun SelfTestSummary(report: SelfTestResult) {
     val passes = checks.count { it.status.equals("PASS", true) }
     val bugs = report.backends.sumOf { it.knownDriverBugs.size }
     val verdicts = report.backends.map { it.verdict.uppercase() }
-    val overall = when {
-        verdicts.any { it == "UNSUPPORTED" } || fails > 0 -> "存在失败项"
-        verdicts.any { it == "DEGRADED" } || warns > 0 -> "可用，部分降级"
-        else -> "可用"
-    }
-    val color = when (overall) {
-        "存在失败项" -> verdictColor("FAIL")
-        "可用，部分降级" -> verdictColor("WARN")
+    val failed = verdicts.any { it == "UNSUPPORTED" } || fails > 0
+    val degraded = verdicts.any { it == "DEGRADED" } || warns > 0
+    val overall = stringResource(
+        when {
+            failed -> R.string.selftest_verdict_fail
+            degraded -> R.string.selftest_verdict_degraded
+            else -> R.string.selftest_verdict_ok
+        },
+    )
+    val color = when {
+        failed -> verdictColor("FAIL")
+        degraded -> verdictColor("WARN")
         else -> verdictColor("PASS")
     }
-    SectionCard("自检总结") {
-        Text("结论：" + overall, color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(6.dp))
-        Text("通过 " + passes + " 项 · 替代 " + warns + " 项 · 失败 " + fails + " 项", style = MaterialTheme.typography.bodySmall)
+    SectionCard(stringResource(R.string.selftest_summary_section)) {
+        Text(
+            stringResource(R.string.selftest_conclusion, overall),
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.height(Space.Sm))
+        Text(
+            stringResource(R.string.selftest_counts, passes, warns, fails),
+            style = MaterialTheme.typography.bodySmall,
+        )
         if (bugs > 0) {
-            Text("已知驱动问题 " + bugs + " 项（见下方 Known driver bugs）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(R.string.selftest_known_bugs, bugs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -211,11 +242,11 @@ private fun BackendCard(
             Text(sectionTitle(backend.backend), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (!backend.available) {
                 Spacer(Modifier.height(6.dp))
-                Text("Driver not present / not probeable", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.selftest_backend_missing), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Verdict: " + backend.verdict,
+                    stringResource(R.string.selftest_verdict_line, backend.verdict),
                     color = verdictColor(backend.verdict),
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyMedium,
@@ -233,7 +264,7 @@ private fun BackendCard(
                 }
                 if (backend.knownDriverBugs.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
-                    Text("Known driver bugs", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.selftest_known_bugs_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     backend.knownDriverBugs.forEach { bug ->
                         val key = backend.backend + "/bug/" + bug.name
                         DriverBugRow(bug = bug, open = key in expanded, onClick = { onToggle(key) })
@@ -242,7 +273,7 @@ private fun BackendCard(
                 val formats = backend.formatCapabilities
                 if (formats != null) {
                     Spacer(Modifier.height(12.dp))
-                    Text("Format capabilities", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.selftest_formats_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     formats.targets.forEach { target ->
                         val key = backend.backend + "/format/" + target.name
                         val open = key in expanded
@@ -251,7 +282,7 @@ private fun BackendCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                target.name + " (" + target.rows.size + " formats)",
+                                stringResource(R.string.selftest_formats_row, target.name, target.rows.size),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
@@ -346,13 +377,17 @@ private fun TableCell(text: String, width: androidx.compose.ui.unit.Dp, backgrou
 private fun RawReportCard(report: SelfTestResult, expanded: Set<String>, onToggle: (String) -> Unit) {
     val key = "raw"
     val open = key in expanded
-    SectionCard("Raw report") {
+    SectionCard(stringResource(R.string.selftest_raw_title)) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable { onToggle(key) }.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (open) "Raw report（点一下收起）" else "Raw report（点一下展开）",
+                if (open) {
+                    stringResource(R.string.selftest_raw_collapse)
+                } else {
+                    stringResource(R.string.selftest_raw_expand)
+                },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
