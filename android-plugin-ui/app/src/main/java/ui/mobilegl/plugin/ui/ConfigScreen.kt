@@ -483,21 +483,16 @@ fun ConfigScreen(
                     }
                 }
             }
-            if (groupShown("渲染后端")) item {
-                SectionLabel("渲染后端", 1)
+            // 这一项也走 OptionRows：搜索能搜到、改动计数算得进、只看已改动时跟着一起筛。
+            val backendKeys = visible(listOf("MOBILEGL_BACKEND_TYPE"))
+            if (groupShown("渲染后端") && backendKeys.isNotEmpty()) item {
+                SectionLabel("渲染后端", backendKeys.size)
                 InfoCard {
-                    OptionSelect(
-                        label = "渲染后端",
-                        key = "MOBILEGL_BACKEND_TYPE",
-                        desc = "DirectGLES 走 Espryt（直通 OpenGL ES，官方默认）；DirectVulkan 走 Magma（Vulkan 翻译层）。名称区分大小写，填错会让 MobileGL 没有后端可用",
-                        options = listOf("DirectGLES", "DirectVulkan"),
-                        value = parsed["MOBILEGL_BACKEND_TYPE"] ?: "DirectGLES",
-                        default = "DirectGLES（官方默认，本插件相同）",
-                        parsed = parsed,
-                        onSelect = { text = setKey(text, "MOBILEGL_BACKEND_TYPE", it) },
-                    )
+                    OptionRows(backendKeys, text, parsed, highlight = query) { key, value ->
+                        text = setKey(text, key, value)
+                    }
                     Text(
-                        "切换后端后，只有对应分组里的配置项会生效。",
+                        "后端只在 app 里选：启动器插件设置不再提供这一项，因为 app 写入的配置会覆盖启动器侧的环境变量。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -923,10 +918,20 @@ private data class OptionMeta(
     val isText: Boolean,
     val desc: String,
     val default: String = "",
+    /** 非空时这一项是固定取值的选择器，不是开关也不是文本框。 */
+    val choices: List<String> = emptyList(),
 )
 
 /** 供搜索使用的选项索引（与页面上的选项一一对应）。 */
 private val OPTION_INDEX: List<OptionMeta> = listOf(
+    OptionMeta(
+        "渲染后端",
+        "MOBILEGL_BACKEND_TYPE",
+        false,
+        "DirectGLES 走 Espryt（直通 OpenGL ES，官方默认）；DirectVulkan 走 Magma（Vulkan 翻译层）。切换后只有对应分组的配置项会生效",
+        "DirectGLES（官方默认）",
+        choices = listOf("DirectGLES", "DirectVulkan"),
+    ),
     OptionMeta("禁用 GPU 计时查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "游戏可用它测每帧 GPU 耗时（如优化 mod、HUD 显示帧耗时）。部分驱动实现有 bug 会卡顿，关掉即不再提供", "关"),
     OptionMeta("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", false, "Vulkan 子组指令（一组线程协同操作）驱动不支持时以软件模拟。开＝总是模拟；关＝用驱动原生的，最快", "自动"),
     OptionMeta("模拟裁剪平面", "MOBILEGL_CLIP_DISTANCE_EMULATION", false, "驱动不支持 gl_ClipDistance 时用「丢弃片元」模拟。开＝总是模拟；关＝用驱动原生的", "自动"),
@@ -995,8 +1000,7 @@ private val OPTION_INDEX: List<OptionMeta> = listOf(
 )
 
 /** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
-private val SUPPORTED_KEYS: Set<String> =
-    (OPTION_INDEX.map { it.key } + listOf("MOBILEGL_BACKEND_TYPE", "SFPEW_EGL")).toSet()
+private val SUPPORTED_KEYS: Set<String> = (OPTION_INDEX.map { it.key } + "SFPEW_EGL").toSet()
 
 
 /** 由插件自身写入、或启动器使用的键：存在但不由本页校验。 */
@@ -1148,7 +1152,10 @@ private fun OptionLabel(label: String, changed: Boolean, highlight: String = "")
 
 private fun changedSelect(value: String, default: String): Boolean {
     val expected = default.substringBefore("（").trim()
-    return expected.isNotBlank() && !value.trim().equals(expected, true)
+    val now = value.trim()
+    // 没写这个键就是渲染器自己的默认，与「官方默认」一致，不算改动。
+    if (now.isBlank()) return false
+    return expected.isNotBlank() && !now.equals(expected, true)
 }
 
 private fun changedQuirk(current: String, default: String): Boolean {
@@ -1180,6 +1187,7 @@ private fun changedText(current: String, default: String): Boolean {
 private fun optionChangedValue(meta: OptionMeta, parsed: Map<String, String>): Boolean {
     val current = (parsed[meta.key] ?: "").trim()
     return when {
+        meta.choices.isNotEmpty() -> changedSelect(current, meta.default)
         QUIRK_KEYS.contains(meta.key) -> changedQuirk(current, meta.default)
         meta.isText -> changedText(current, meta.default)
         meta.default.startsWith("开") || meta.default.startsWith("关") -> changedToggle(current, meta.default)
@@ -1425,6 +1433,16 @@ private fun OptionRows(
     keys.forEach { key ->
         val meta = byKey[key] ?: return@forEach
         when {
+            meta.choices.isNotEmpty() -> OptionSelect(
+                label = meta.label,
+                key = meta.key,
+                options = meta.choices,
+                value = parsed[meta.key] ?: meta.choices.first(),
+                desc = meta.desc,
+                default = meta.default,
+                parsed = parsed,
+                highlight = highlight,
+            ) { onChange(meta.key, it) }
             QUIRK_KEYS.contains(meta.key) -> OptionQuirk(
                 label = meta.label,
                 key = meta.key,
