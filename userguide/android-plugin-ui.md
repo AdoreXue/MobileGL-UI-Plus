@@ -1,9 +1,10 @@
 # MobileGL UI Plus: the Android app
 
 This fork ships an Android app that configures the MobileGL renderer plugin: `android-plugin-ui/`,
-package `ui.mobilegl.plugin.plus` in the `magma` flavor and `ui.mobilegl.plugin.espryt` in the
-`espryt` flavor, app label `MobileGL_UI_Plus`. Launchers that read FCL renderer plugins list it as a
-renderer named **MobileGL** and load `libMobileGL.so` from it.
+package `ui.mobilegl.plugin.plus`, app label `MobileGL_UI_Plus`. Launchers that read FCL renderer
+plugins list it as a renderer named **MobileGL** and load `libMobileGL.so` from it. One package
+serves both backends: the backend is a setting on the app's configuration screen, not a reason to
+install a second copy.
 
 It is not a second copy of the upstream plugin. `android-plugin/` (described in
 [android-plugin.md](android-plugin.md)) is upstream's plugin, with the render server, the trace
@@ -51,7 +52,8 @@ The interface is in Chinese; the configuration keys, paths and log lines are Eng
    with bundled defaults there.
 4. In a launcher, select the **MobileGL** renderer plugin. FCL reads the legacy `fclPlugin` metadata
    and shows no options for it; Zalith Launcher 2 and other launchers that read `fclPlugin_V2` show
-   the backend and the toggles declared in the manifest. Either way the app's configuration wins
+   the toggles declared in the manifest. The backend is not among them: it is a setting in this app,
+   because the configuration the app writes is applied over the launcher's environment
    (see [How the configuration reaches the renderer](#how-the-configuration-reaches-the-renderer)).
 
 Installing this app does not replace the upstream plugin: the two have different package names, so
@@ -126,15 +128,12 @@ and needs no NDK — or let CI rebuild them (see below).
 ```sh
 cd android-plugin-ui
 gradle -Pmobilegl.prebuiltLibsDir="$PWD/prebuilt" -Pmobilegl.sfpew=true \
-  :app:assembleMagmaPluginRelease :app:assembleEsprytPluginRelease
+  :app:assemblePluginRelease
 ```
 
-The two flavors package the same code and libraries; they differ in the application id
-(`ui.mobilegl.plugin.plus` and `ui.mobilegl.plugin.espryt`), in the backend the renderer dialog
-starts on (`DirectVulkan` and `DirectGLES`), and therefore in which of the two can be installed
-beside the other. The APKs land at
-`app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk` and
-`app/build/outputs/apk/esprytPlugin/release/MobileGL-EsprytPlugin-release.apk`.
+The APK lands at `app/build/outputs/apk/plugin/release/MobileGL-Plugin-release.apk`. Its backend
+default is `DirectGLES`; the configuration screen's **渲染后端** switch changes it, and the choice
+is written to the runtime config, so it is what the renderer actually runs with.
 
 Without `mobilegl.prebuiltLibsDir` the Gradle project instead builds `:MobileGL` from source, which
 needs the NDK and the submodules (`git submodule update --init --recursive`).
@@ -169,10 +168,10 @@ on `workflow_dispatch`. Pass `versionName` to lock a release name, or leave it e
 build numbered by the successful runs on `dev`. The run stops early when the four `SIGNING_*` secrets
 are missing, before the libraries build, because an unsigned release APK cannot be installed.
 
-The `build` job assembles both backend flavors and the trace profile, so a mistake that only affects
-one flavor fails the run instead of reaching a user. The artifact `MobileGL-plugin-apk` holds two
-files, `MobileGL-<version>-magma.apk` and `MobileGL-<version>-espryt.apk`; install the one whose
-backend you want the renderer dialog to start on, and switch the backend in that dialog afterwards.
+The `build` job assembles the app and the trace profile. The artifact `MobileGL-plugin-apk` holds
+`MobileGL-<version>.apk`; the checks in that job confirm the packaged manifest carries
+`ui.mobilegl.plugin.plus`, the three libraries are present, and `libMobileGL.so` carries the commit
+the run built.
 
 ### What CI builds
 
