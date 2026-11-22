@@ -329,7 +329,7 @@ fun ConfigScreen(
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
         // 「只看已修改」时，这张说明卡也只在 SFPEW 相关项确实改过时才留下。
         val sfpewDirty = "SFPEW_ENABLED" in changedKeySet || SFPEW_TAIL_KEYS.any { it in changedKeySet }
-        if ((!onlyChanged || sfpewDirty) && groupShown(SECTION_SFPEW)) item {
+        if ((!onlyChanged || sfpewDirty) && groupShown(SECTION_SFPEW)) item(key = "sfpew") {
             Spacer(Modifier.height(4.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -364,7 +364,7 @@ fun ConfigScreen(
                     // 控件等 runtime.conf 读完再画：否则先按模板渲染一遍，读完又跳一次。
                     if (BuildConfig.SFPEW_BUNDLED && ready) {
                         Spacer(Modifier.height(6.dp))
-                        OptionRows(listOf("SFPEW_ENABLED"), text, parsed) { key, value ->
+                        OptionRows(listOf("SFPEW_ENABLED"), parsed) { key, value ->
                             text = setKey(text, key, value)
                         }
                         OptionSelect(
@@ -374,10 +374,9 @@ fun ConfigScreen(
                             options = listOf("libMobileGL.so", "libEGL.so"),
                             value = parsed["SFPEW_EGL"] ?: "libMobileGL.so",
                             default = "libMobileGL.so",
-                            parsed = parsed,
                             onSelect = { text = setKey(text, "SFPEW_EGL", it) },
                         )
-                        OptionRows(SFPEW_TAIL_KEYS, text, parsed) { key, value ->
+                        OptionRows(SFPEW_TAIL_KEYS, parsed) { key, value ->
                             text = setKey(text, key, value)
                         }
                     } else if (BuildConfig.SFPEW_BUNDLED) {
@@ -397,7 +396,7 @@ fun ConfigScreen(
 
         // 搜索结果常驻一个 item，用 AnimatedVisibility 淡入淡出：
         // LazyColumn 的增删 item 没有动画，直接 if 会让整块突然出现。
-        item {
+        item(key = "search") {
             AnimatedVisibility(
                 visible = query.isNotBlank(),
                 enter = Motion.foldEnter(),
@@ -467,7 +466,7 @@ fun ConfigScreen(
                                     )
                                 }
                             }
-                            OptionRows(listOf(meta.key), text, parsed, highlight = query) { key, value ->
+                            OptionRows(listOf(meta.key), parsed, highlight = query) { key, value ->
                                 text = setKey(text, key, value)
                             }
                         }
@@ -516,31 +515,27 @@ fun ConfigScreen(
                 section = SECTION_COMMON,
                 noteRes = R.string.config_section_common_note,
                 keys = if (groupShown(SECTION_COMMON)) visible(COMMON_KEYS) else emptyList(),
-                text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 section = SECTION_PIPE,
                 noteRes = R.string.config_section_pipe_note,
                 keys = if (groupShown(SECTION_PIPE)) visible(PIPE_KEYS) else emptyList(),
-                text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 section = SECTION_COMPAT,
                 noteRes = R.string.config_section_compat_note,
                 keys = if (groupShown(SECTION_COMPAT)) visible(COMPAT_KEYS) else emptyList(),
-                text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
                 section = SECTION_DIAG,
                 noteRes = R.string.config_section_diag_note,
                 keys = if (groupShown(SECTION_DIAG)) visible(DIAG_KEYS) else emptyList(),
-                text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
-            if (groupShown(SECTION_MAGMA) && visible(MAGMA_KEYS).isNotEmpty()) item {
+            if (groupShown(SECTION_MAGMA) && visible(MAGMA_KEYS).isNotEmpty()) item(key = "magma") {
                 SectionLabel(sectionLabel(SECTION_MAGMA), visible(MAGMA_KEYS).size)
                 InfoCard {
                     Text(
@@ -561,11 +556,11 @@ fun ConfigScreen(
                     ) }
                     if (showMagma || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
-                        OptionRows(visible(MAGMA_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
+                        OptionRows(visible(MAGMA_KEYS), parsed) { key, value -> text = setKey(text, key, value) }
                     }
                 }
             }
-            if (groupShown(SECTION_ESPRYT) && visible(ESPRYT_KEYS).isNotEmpty()) item {
+            if (groupShown(SECTION_ESPRYT) && visible(ESPRYT_KEYS).isNotEmpty()) item(key = "espryt") {
                 SectionLabel(sectionLabel(SECTION_ESPRYT), visible(ESPRYT_KEYS).size)
                 InfoCard {
                     Text(
@@ -586,7 +581,7 @@ fun ConfigScreen(
                     ) }
                     if (showEspryt || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
-                        OptionRows(visible(ESPRYT_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
+                        OptionRows(visible(ESPRYT_KEYS), parsed) { key, value -> text = setKey(text, key, value) }
                     }
                 }
             }
@@ -792,7 +787,6 @@ private fun OptionSelect(
     value: String,
     desc: String = "",
     default: String = "",
-    parsed: Map<String, String> = emptyMap(),
     highlight: String = "",
     onSelect: (String) -> Unit,
 ) {
@@ -828,21 +822,20 @@ private const val OFF = "off"
 private fun OptionQuirk(
     label: String,
     key: String,
-    text: String,
+    current: String,
     desc: String = "",
     default: String = "",
-    parsed: Map<String, String> = emptyMap(),
     highlight: String = "",
     onChange: (String) -> Unit,
 ) {
-    val current = (parsed[key] ?: "auto").lowercase()
+    val normalized = current.lowercase()
     // 取值仍是 auto/1/0，显示名来自资源：三枚胶囊的文字跟着语言走，比较仍走机器值。
-    val value = when (current) {
+    val value = when (normalized) {
         "1", "on", "true", "yes", "forceon" -> ON
         "0", "off", "false", "no", "forceoff" -> OFF
         else -> AUTO
     }
-    val changed = changedQuirk(current, default)
+    val changed = changedQuirk(normalized, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         OptionLabel(label, changed, highlight)
         OptionDesc(desc, default, highlight)
@@ -883,14 +876,14 @@ private fun OptionQuirk(
 private fun OptionText(
     label: String,
     key: String,
-    text: String,
+    current: String,
     desc: String = "",
     default: String = "",
-    parsed: Map<String, String> = emptyMap(),
     highlight: String = "",
     onChange: (String) -> Unit,
 ) {
-    var value by remember(key, text) { mutableStateOf(parsed[key] ?: "") }
+    // 本地草稿跟着这一项自己的值走：别的项改动时这里不会被重置，也不会跟着重组。
+    var value by remember(key, current) { mutableStateOf(current) }
     val changed = changedText(value, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         OutlinedTextField(
@@ -917,15 +910,14 @@ private fun OptionText(
 private fun OptionToggle(
     label: String,
     key: String,
-    text: String,
+    current: String,
     desc: String = "",
     default: String = "",
-    parsed: Map<String, String> = emptyMap(),
     highlight: String = "",
     onToggle: (Boolean) -> Unit,
 ) {
-    val enabled = parsed[key] == "1"
-    val changed = changedToggle(parsed[key] ?: "", default)
+    val enabled = current == "1"
+    val changed = changedToggle(current, default)
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1948,12 +1940,12 @@ private fun LazyListScope.optionGroup(
     section: String,
     noteRes: Int,
     keys: List<String>,
-    text: String,
     parsed: Map<String, String>,
     onEdit: (String, String) -> Unit,
 ) {
     if (keys.isEmpty()) return
-    item {
+    // 用分组 id 当 key：筛掉某一组时，剩下的组不会因为位置前移而整体重建。
+    item(key = "group:" + section) {
         SectionLabel(sectionLabel(section), keys.size)
         InfoCard {
             Text(
@@ -1962,7 +1954,7 @@ private fun LazyListScope.optionGroup(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            OptionRows(keys, text, parsed, onChange = onEdit)
+            OptionRows(keys, parsed, onChange = onEdit)
         }
     }
 }
@@ -1971,7 +1963,6 @@ private fun LazyListScope.optionGroup(
 @Composable
 private fun OptionRows(
     keys: List<String>,
-    text: String,
     parsed: Map<String, String>,
     highlight: String = "",
     onChange: (String, String) -> Unit,
@@ -1991,34 +1982,30 @@ private fun OptionRows(
                 value = parsed[meta.key] ?: meta.choices.first(),
                 desc = metaDesc(meta),
                 default = metaDefault(meta),
-                parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             QUIRK_KEYS.contains(meta.key) -> OptionQuirk(
                 label = metaLabel(meta),
                 key = meta.key,
-                text = text,
+                current = parsed[meta.key] ?: "auto",
                 desc = metaDesc(meta),
                 default = metaDefault(meta),
-                parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             meta.isText -> OptionText(
                 label = metaLabel(meta),
                 key = meta.key,
-                text = text,
+                current = parsed[meta.key] ?: "",
                 desc = metaDesc(meta),
                 default = metaDefault(meta),
-                parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             else -> OptionToggle(
                 label = metaLabel(meta),
                 key = meta.key,
-                text = text,
+                current = parsed[meta.key] ?: "",
                 desc = metaDesc(meta),
                 default = metaDefault(meta),
-                parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, onOff(it)) }
         }
