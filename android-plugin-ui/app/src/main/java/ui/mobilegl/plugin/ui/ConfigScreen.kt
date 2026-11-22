@@ -76,6 +76,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
 
@@ -146,12 +147,14 @@ fun ConfigScreen(
     // 整页共用一份解析结果：原始文件每敲一个字只解析一次，供所有选项读取。
     val parsed = remember(text) { parseKeyValues(text) }
     // 搜索过滤按 query 记忆，LazyColumn 重组时不重复扫索引。
-    val matches = remember(query) {
+    val matches = remember(query, context) {
         if (query.isBlank()) {
             emptyList<OptionMeta>()
         } else {
             OPTION_INDEX.filter {
-                it.label.contains(query, true) || it.key.contains(query, true) || it.desc.contains(query, true)
+                it.key.contains(query, true) ||
+                    context.getString(it.labelRes).contains(query, true) ||
+                    context.getString(it.descRes).contains(query, true)
             }
         }
     }
@@ -397,7 +400,7 @@ fun ConfigScreen(
                                 title = "没有匹配的配置项",
                                 body = "换个说法或直接搜键名试试，比如 SFPEW、ANGLE、缓存。",
                             )
-                            val hints = suggestOptions(query)
+                            val hints = suggestOptions(query, context)
                             if (hints.isNotEmpty()) {
                                 Text(
                                     "试试这些：",
@@ -412,8 +415,13 @@ fun ConfigScreen(
                                     hints.forEach { hint ->
                                         FilterChip(
                                             selected = false,
-                                            onClick = { query = hint.label },
-                                            label = { Text(hint.label, style = MaterialTheme.typography.labelMedium) },
+                                            onClick = { query = context.getString(hint.labelRes) },
+                                            label = {
+                                                Text(
+                                                    context.getString(hint.labelRes),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                )
+                                            },
                                         )
                                     }
                                 }
@@ -911,82 +919,544 @@ private fun setKey(text: String, key: String, value: String): String {
 
 
 private data class OptionMeta(
-    val label: String,
+    val labelRes: Int,
     val key: String,
     val isText: Boolean,
-    val desc: String,
-    val default: String = "",
+    val descRes: Int,
+    val defaultRes: Int = 0,
+    /**
+     * 与配置值比较用的机器默认值（`1`、`0`、`auto`、`3`、`0x3fff`）。
+     *
+     * 和 defaultRes 分开，判断「这一项改过没有」就不依赖显示文案：
+     * 换语言、改措辞都不会让概览条的改动数变掉。
+     */
+    val machineDefault: String = "",
     /** 非空时这一项是固定取值的选择器，不是开关也不是文本框。 */
     val choices: List<String> = emptyList(),
 )
 
 /** 供搜索使用的选项索引（与页面上的选项一一对应）。 */
 private val OPTION_INDEX: List<OptionMeta> = listOf(
-    OptionMeta("禁用 GPU 计时查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "游戏可用它测每帧 GPU 耗时（如优化 mod、HUD 显示帧耗时）。部分驱动实现有 bug 会卡顿，关掉即不再提供", "关"),
-    OptionMeta("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", false, "Vulkan 子组指令（一组线程协同操作）驱动不支持时以软件模拟。开＝总是模拟；关＝用驱动原生的，最快", "自动"),
-    OptionMeta("模拟裁剪平面", "MOBILEGL_CLIP_DISTANCE_EMULATION", false, "驱动不支持 gl_ClipDistance 时用「丢弃片元」模拟。开＝总是模拟；关＝用驱动原生的", "自动"),
-    OptionMeta("持久映射当已刷新", "MOBILEGL_COHERENT_AS_FLUSH", false, "GPU 缓冲的「持续映射内存」默认要游戏手动刷新才可见。老引擎（如 Flywheel）不刷新就读，导致画面不动；打开后视为自动可见", "关"),
-    OptionMeta("放宽 GL 规则", "MOBILEGL_RELAXED_SEMANTICS", false, "允许现代游戏继续使用旧版 OpenGL 中已弃用的用法：绘制时未绑定自定义 VAO、删除纹理后立即重用其名称。仅少数旧模组需要", "关"),
-    OptionMeta("大缓冲不直通 GPU", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", false, "超过 16MiB 的缓冲不再直接映射给后端，改经 CPU 拷贝。可降低显存占用，并避免 Mali 驱动在处理忙碌缓冲时停顿，代价是写入多一次拷贝", "关"),
-    OptionMeta("着色器后台编译", "MOBILEGL_ASYNC_SHADER_COMPILE", false, "着色器编译放后台线程，游戏不卡在编译上。自动＝通常等于开", "自动"),
-    OptionMeta("后台编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", true, "0＝自动（取 min(4, 大核数)）", "0（自动）"),
-    OptionMeta("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", true, "CPU 最多提前准备几帧。大＝流畅但吃内存；1＝完全同步，最稳最慢", "3"),
-    OptionMeta("着色器翻译缓存", "MOBILEGL_SHADER_CACHE", false, "GLSL 翻译成 GPU 代码的结果存内存里，重进同一画面不用重译。出渲染 bug 时可关掉排查", "自动（通常等于开）"),
-    OptionMeta("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", false, "对翻译生成的 GPU 中间码逐条检查合法性。仅用于排查着色器问题；日常开启会持续产生额外开销", "关"),
-    OptionMeta("管线统计", "MOBILEGL_PIPE_STATS", false, "输出前后端之间每次调用的字节数、次数等计数，用来分析性能瓶颈在哪", "关"),
-    OptionMeta("帧率日志", "MOBILEGL_FPS_LOG", false, "每两秒输出一行帧率和帧时间", "关"),
-    OptionMeta("统计输出周期", "MOBILEGL_PIPE_STATS_PERIOD", true, "每隔多少帧输出一行统计摘要", "120 帧"),
-    OptionMeta("假装支持双精度", "MOBILEGL_ADVERTISE_FP64", false, "部分光影包在检测到不支持双精度时会拒绝加载。开启后向游戏声明支持双精度（GL_ARB_gpu_shader_fp64），实际运算仍为 32 位精度，可通过检查但精度受限", "关"),
-    OptionMeta("跳过着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", false, "启动时预先初始化编译器内建表，可缩短 20-100 毫秒启动时间；代价是首次编译着色器稍慢", "关"),
-    OptionMeta("编译中先报成功", "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", false, "着色器尚在后台编译时即向游戏返回完成状态，无需同步等待。实际编译失败仍会报错，但游戏可能先获得未完成的着色器", "自动（通常等于关）"),
-    OptionMeta("点大小前移", "MOBILEGL_POINT_SIZE_DEMOTION", false, "把 gl_PointSize 的计算从几何着色器挪到顶点着色器。某些驱动几何阶段改不了点大小，需要这个", "自动"),
-    OptionMeta("iterationRP 修复", "MOBILEGL_ITRP_FIX", false, "修 iterationRP 光影包自带的两个计算着色器 bug。自动＝装了这个光影包才修", "自动"),
-    OptionMeta("帧缓冲状态记忆", "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO", false, "记住帧缓冲当前绑定，游戏重复设置同样的状态时直接跳过，省调用", "自动"),
-    OptionMeta("按页同步映射改动", "MOBILEGL_PIPE_PERSISTENT_MPROTECT", false, "持久映射的缓冲只把改过的内存页同步给后端，没改的页用内存保护挡住，减少无效拷贝", "开"),
-    OptionMeta("命令推送掩码", "MOBILEGL_PIPE_PUSH", true, "哪些子系统走新的前后端直推路径（位掩码，十进制或 0x 十六进制）。官方默认 0x3fff＝全部已迁移；填 0＝全部退回旧路径", "0x3fff（bit0-13 全部已迁移）"),
-    OptionMeta("管线校验", "MOBILEGL_PIPE_VERIFY", false, "每次绘制逐字段比对新旧两条路径的状态，用于排查。慢 5-10 倍", "关"),
-    OptionMeta("校验失败即中止", "MOBILEGL_PIPE_VERIFY_FATAL", false, "发现第一处不一致就崩掉，方便抓现场；关＝只记日志继续跑", "自动（校验开启时等于中止）"),
-    OptionMeta("顶点属性去重", "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP", false, "顶点格式没变时不重复下发，减少前后端通信", "自动"),
-    OptionMeta("HDR 格式回退", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", false, "驱动不支持 R11G11B10F（一种省显存的高动态范围格式）时换用兼容格式", "关"),
-    OptionMeta("额外画面缓冲", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", true, "交换链多备几张图，游戏提交画面不用等上一张显示完。每张多占一份全屏显存", "0"),
-    OptionMeta("分层纹理拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", false, "跨格式拷贝大纹理时一层一层提交。部分 Adreno 只拷第一层，拆开能修好", "自动（探测到才启用）"),
-    OptionMeta("渲染通道复用", "MOBILEGL_MAGMA_PASS_CACHE", false, "Vulkan 的渲染通道对象很贵，内容没变的帧直接复用上一帧的", "自动（通常等于开）"),
-    OptionMeta("丢弃后补状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", false, "画面内容被丢弃后重新下发绘制状态，避免那一帧空白", "自动（探测到设备需要才启用）"),
-    OptionMeta("高通混合写深度", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", false, "高通驱动在启用透明混合时会抑制深度写入，部分游戏依赖此行为。自动＝仅在高通设备上模拟该行为", "自动（只在高通设备上套用）"),
-    OptionMeta("帧在途数（旧名）", "MOBILEGL_MAGMA_FRAMESINFLIGHT", true, "MOBILEGL_FRAMES_IN_FLIGHT 的旧拼法，已被取代", "3（同帧在途数）"),
-    OptionMeta("E5B9G9R9 直读", "MOBILEGL_MAGMA_E5_RAW_READS", false, "这种共享指数的纹理格式直接按原始位读取，绕过驱动错误的自动转换", "自动（探测到才启用）"),
-    OptionMeta("容忍无效 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", false, "没过校验的着色器代码也交给驱动试试，排查用", "关"),
-    OptionMeta("关越界保护", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", false, "Vulkan 默认保证越界读取不崩溃。关掉省一点性能，但越界就是未定义行为，可能花屏", "关"),
-    OptionMeta("图元数查询改道", "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", false, "统计画了多少个三角形的查询，部分驱动返回错值，改走另一条路径", "自动（探测到问题才启用）"),
-    OptionMeta("顶点格式转换缓存", "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", false, "需要 CPU 转格式的顶点数据每帧只转一次，多次绘制共用", "自动（通常等于开）"),
-    OptionMeta("写入换块", "MOBILEGL_MAGMA_WRITE_RENAME", false, "GPU 还在读的缓冲要写入时换一块新内存写，不用等它读完（类似副本-on-write）", "自动"),
-    OptionMeta("多次绘制实现", "MOBILEGL_MAGMA_MULTIDRAW_MODE", true, "Magma 一次提交多个 draw 的方式：ext／indirect／unroll。auto＝选设备支持里最好的", "自动"),
-    OptionMeta("描述符池回收", "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", true, "连续这么多帧没有增长需求就回收描述符池。0＝从不回收", "120 帧"),
-    OptionMeta("单缓冲绘制上限", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", true, "一帧内累计这么多 draw 就先提交一次。0＝从不主动提交。限制大加载帧占用的显存", "16384"),
-    OptionMeta("渲染中清屏合并", "MOBILEGL_MAGMA_INPASS_CLEAR", false, "清屏操作直接并进渲染通道开头，少一次全屏写入", "自动（只在能证明等价时启用）"),
-    OptionMeta("渲染中清屏（默认帧缓冲）", "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT", false, "同上，但作用于屏幕本身那个帧缓冲。自动＝关（Adreno 750 有回归）", "自动（等于关闭）"),
-    OptionMeta("纹理视图扩展", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", false, "对外声明支持 GL_ARB_texture_view（同一张纹理的不同解读方式）", "关"),
-    OptionMeta("经由 ANGLE 渲染", "MOBILEGL_ESPRYT_USE_ANGLE", false, "改用 ANGLE（Google 的 GLES-on-Vulkan 实现）替代系统 GLES 驱动。作为兼容性备选方案", "关"),
-    OptionMeta("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", false, "缓冲数据不走环形上传队列，改回老的逐次拷贝，兼容个别驱动", "关"),
-    OptionMeta("禁用 mipmap 缩小采样", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", false, "缩小采样不用 mipmap，规避部分驱动贴图发黑的 bug，画质略降", "关"),
-    OptionMeta("顶点状态去重", "MOBILEGL_ESPRYT_VAO_SHADOW", false, "只在顶点属性真正变化时才通知驱动，避免重复设置", "自动"),
-    OptionMeta("几何输出延迟", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", false, "几何着色器先写完内存再产出顶点。Adreno 会在 emit 后丢写入，需要这个", "自动（探测到才启用）"),
-    OptionMeta("索引缓冲镜像上限", "MOBILEGL_PIPE_INDEX_MIRROR_MB", true, "后端留一块内存镜像索引数据（MiB），装得下才能做图元重启改写和多次绘制合并", "64"),
-    OptionMeta("忽略 LOD 偏移", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", false, "不叠加游戏写的细节层级偏移。规避 ANGLE + llvmpipe 的崩溃", "关"),
-    OptionMeta("禁用失效刷新", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", false, "映射内存的「先失效再读」路径跳过，直接走拷贝，个别驱动在该路径上会停止响应", "关"),
-    OptionMeta("禁用 UBO 环", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", false, "全局常量缓冲不走环形队列，回老式直接写入", "关"),
-    OptionMeta("禁用纹理上传环", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", false, "纹理上传不走环形队列，回老式逐次拷贝", "关"),
-    OptionMeta("深度模板模拟回读", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", false, "读回深度/模板改走 CPU 模拟路径，不用原生 GLES 读回", "关"),
-    OptionMeta("多视口模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", false, "多视口扩展用软件模拟，不用驱动原生实现", "自动"),
-    OptionMeta("非法图像占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", false, "游戏绑定无效图像时改绑一张空白图像，而不是按规范报错。部分游戏依赖报错后的既定行为，此选项会改变该行为", "自动"),
-    OptionMeta("自动分配着色器接口位置", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", false, "着色器输入输出块没写位置编号时按声明顺序补上", "自动"),
-    OptionMeta("加宽 16 位格式存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", false, "RGB565 这类 16 位纹理内部用 32 位存，避免精度丢失；显存翻倍", "自动（探测到驱动出问题才启用）"),
-    OptionMeta("多次绘制模拟", "MOBILEGL_ESPRYT_MULTIDRAW_MODE", true, "Espryt 模拟 glMultiDrawElements 的方式：ext／multiindirect／indirect／basevertex／drawelements／compute", "自动"),
-    OptionMeta("子组暂存原子读", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", false, "子组模拟的共享内存读取改用原子操作。Adreno 编译器会重排普通读取导致错数据", "自动（探测到才启用）"),
-    OptionMeta("启用 SFPEW 包装器", "SFPEW_ENABLED", false, "打开后走 代理 → SFPEW → MobileGL，可运行 1.16.5 及以下版本", "关"),
-    OptionMeta("SFPEW 宽松建上下文", "SFPEW_RELAXED_CONTEXT", false, "创建 EGL 上下文时放宽校验，兼容不规范的启动器", "关"),
-    OptionMeta("禁用多次绘制数组", "SFPEW_NO_MULTIDRAWARRAYS", false, "关掉 MultiDrawArrays 加速路径，个别驱动存在问题", "关"),
-    OptionMeta("手动生成 mipmap", "SFPEW_MANUAL_MIPGEN", false, "不用驱动自动生成多级纹理，自己算，规避个别驱动的缺陷", "关"),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_disable_timerquery_label,
+        key = "MOBILEGL_DISABLE_TIMERQUERY",
+        isText = false,
+        descRes = R.string.opt_mobilegl_disable_timerquery_desc,
+        defaultRes = R.string.opt_mobilegl_disable_timerquery_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_subgroup_emulation_label,
+        key = "MOBILEGL_SUBGROUP_EMULATION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_subgroup_emulation_desc,
+        defaultRes = R.string.opt_mobilegl_subgroup_emulation_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_clip_distance_emulation_label,
+        key = "MOBILEGL_CLIP_DISTANCE_EMULATION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_clip_distance_emulation_desc,
+        defaultRes = R.string.opt_mobilegl_clip_distance_emulation_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_coherent_as_flush_label,
+        key = "MOBILEGL_COHERENT_AS_FLUSH",
+        isText = false,
+        descRes = R.string.opt_mobilegl_coherent_as_flush_desc,
+        defaultRes = R.string.opt_mobilegl_coherent_as_flush_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_relaxed_semantics_label,
+        key = "MOBILEGL_RELAXED_SEMANTICS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_relaxed_semantics_desc,
+        defaultRes = R.string.opt_mobilegl_relaxed_semantics_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_disable_large_buffer_adoption_label,
+        key = "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_disable_large_buffer_adoption_desc,
+        defaultRes = R.string.opt_mobilegl_disable_large_buffer_adoption_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_async_shader_compile_label,
+        key = "MOBILEGL_ASYNC_SHADER_COMPILE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_async_shader_compile_desc,
+        defaultRes = R.string.opt_mobilegl_async_shader_compile_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_async_shader_compile_threads_label,
+        key = "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS",
+        isText = true,
+        descRes = R.string.opt_mobilegl_async_shader_compile_threads_desc,
+        defaultRes = R.string.opt_mobilegl_async_shader_compile_threads_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_frames_in_flight_label,
+        key = "MOBILEGL_FRAMES_IN_FLIGHT",
+        isText = true,
+        descRes = R.string.opt_mobilegl_frames_in_flight_desc,
+        defaultRes = R.string.opt_mobilegl_frames_in_flight_default,
+        machineDefault = "3",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_shader_cache_label,
+        key = "MOBILEGL_SHADER_CACHE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_shader_cache_desc,
+        defaultRes = R.string.opt_mobilegl_shader_cache_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_enable_spirv_validation_label,
+        key = "MOBILEGL_ENABLE_SPIRV_VALIDATION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_enable_spirv_validation_desc,
+        defaultRes = R.string.opt_mobilegl_enable_spirv_validation_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_stats_label,
+        key = "MOBILEGL_PIPE_STATS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_stats_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_stats_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_fps_log_label,
+        key = "MOBILEGL_FPS_LOG",
+        isText = false,
+        descRes = R.string.opt_mobilegl_fps_log_desc,
+        defaultRes = R.string.opt_mobilegl_fps_log_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_stats_period_label,
+        key = "MOBILEGL_PIPE_STATS_PERIOD",
+        isText = true,
+        descRes = R.string.opt_mobilegl_pipe_stats_period_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_stats_period_default,
+        machineDefault = "120",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_advertise_fp64_label,
+        key = "MOBILEGL_ADVERTISE_FP64",
+        isText = false,
+        descRes = R.string.opt_mobilegl_advertise_fp64_desc,
+        defaultRes = R.string.opt_mobilegl_advertise_fp64_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_disable_shader_prewarm_label,
+        key = "MOBILEGL_DISABLE_SHADER_PREWARM",
+        isText = false,
+        descRes = R.string.opt_mobilegl_disable_shader_prewarm_desc,
+        defaultRes = R.string.opt_mobilegl_disable_shader_prewarm_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_async_optimistic_shader_status_label,
+        key = "MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_async_optimistic_shader_status_desc,
+        defaultRes = R.string.opt_mobilegl_async_optimistic_shader_status_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_point_size_demotion_label,
+        key = "MOBILEGL_POINT_SIZE_DEMOTION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_point_size_demotion_desc,
+        defaultRes = R.string.opt_mobilegl_point_size_demotion_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_itrp_fix_label,
+        key = "MOBILEGL_ITRP_FIX",
+        isText = false,
+        descRes = R.string.opt_mobilegl_itrp_fix_desc,
+        defaultRes = R.string.opt_mobilegl_itrp_fix_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_framebuffer_state_memo_label,
+        key = "MOBILEGL_PIPE_FRAMEBUFFER_STATE_MEMO",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_framebuffer_state_memo_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_framebuffer_state_memo_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_persistent_mprotect_label,
+        key = "MOBILEGL_PIPE_PERSISTENT_MPROTECT",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_persistent_mprotect_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_persistent_mprotect_default,
+        machineDefault = "1",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_push_label,
+        key = "MOBILEGL_PIPE_PUSH",
+        isText = true,
+        descRes = R.string.opt_mobilegl_pipe_push_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_push_default,
+        machineDefault = "0x3fff",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_verify_label,
+        key = "MOBILEGL_PIPE_VERIFY",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_verify_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_verify_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_verify_fatal_label,
+        key = "MOBILEGL_PIPE_VERIFY_FATAL",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_verify_fatal_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_verify_fatal_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_vertex_elements_dedup_label,
+        key = "MOBILEGL_PIPE_VERTEX_ELEMENTS_DEDUP",
+        isText = false,
+        descRes = R.string.opt_mobilegl_pipe_vertex_elements_dedup_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_vertex_elements_dedup_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_r11g11b10f_fallback_label,
+        key = "MOBILEGL_MAGMA_R11G11B10F_FALLBACK",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_r11g11b10f_fallback_desc,
+        defaultRes = R.string.opt_mobilegl_magma_r11g11b10f_fallback_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_extra_swapchain_images_label,
+        key = "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES",
+        isText = true,
+        descRes = R.string.opt_mobilegl_magma_extra_swapchain_images_desc,
+        defaultRes = R.string.opt_mobilegl_magma_extra_swapchain_images_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_split_slice_copies_label,
+        key = "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_split_slice_copies_desc,
+        defaultRes = R.string.opt_mobilegl_magma_split_slice_copies_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_pass_cache_label,
+        key = "MOBILEGL_MAGMA_PASS_CACHE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_pass_cache_desc,
+        defaultRes = R.string.opt_mobilegl_magma_pass_cache_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_reemit_state_after_discard_label,
+        key = "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_reemit_state_after_discard_desc,
+        defaultRes = R.string.opt_mobilegl_magma_reemit_state_after_discard_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_disable_blended_depth_write_label,
+        key = "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_disable_blended_depth_write_desc,
+        defaultRes = R.string.opt_mobilegl_magma_disable_blended_depth_write_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_framesinflight_label,
+        key = "MOBILEGL_MAGMA_FRAMESINFLIGHT",
+        isText = true,
+        descRes = R.string.opt_mobilegl_magma_framesinflight_desc,
+        defaultRes = R.string.opt_mobilegl_magma_framesinflight_default,
+        machineDefault = "3",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_e5_raw_reads_label,
+        key = "MOBILEGL_MAGMA_E5_RAW_READS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_e5_raw_reads_desc,
+        defaultRes = R.string.opt_mobilegl_magma_e5_raw_reads_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_allow_invalid_spirv_label,
+        key = "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_allow_invalid_spirv_desc,
+        defaultRes = R.string.opt_mobilegl_magma_allow_invalid_spirv_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_disable_robust_buffer_access_label,
+        key = "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_disable_robust_buffer_access_desc,
+        defaultRes = R.string.opt_mobilegl_magma_disable_robust_buffer_access_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_primgen_query_reroute_label,
+        key = "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_primgen_query_reroute_desc,
+        defaultRes = R.string.opt_mobilegl_magma_primgen_query_reroute_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_vertex_conversion_cache_label,
+        key = "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_vertex_conversion_cache_desc,
+        defaultRes = R.string.opt_mobilegl_magma_vertex_conversion_cache_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_write_rename_label,
+        key = "MOBILEGL_MAGMA_WRITE_RENAME",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_write_rename_desc,
+        defaultRes = R.string.opt_mobilegl_magma_write_rename_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_multidraw_mode_label,
+        key = "MOBILEGL_MAGMA_MULTIDRAW_MODE",
+        isText = true,
+        descRes = R.string.opt_mobilegl_magma_multidraw_mode_desc,
+        defaultRes = R.string.opt_mobilegl_magma_multidraw_mode_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_descriptor_trim_frames_label,
+        key = "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES",
+        isText = true,
+        descRes = R.string.opt_mobilegl_magma_descriptor_trim_frames_desc,
+        defaultRes = R.string.opt_mobilegl_magma_descriptor_trim_frames_default,
+        machineDefault = "120",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_max_draws_per_command_buffer_label,
+        key = "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER",
+        isText = true,
+        descRes = R.string.opt_mobilegl_magma_max_draws_per_command_buffer_desc,
+        defaultRes = R.string.opt_mobilegl_magma_max_draws_per_command_buffer_default,
+        machineDefault = "16384",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_inpass_clear_label,
+        key = "MOBILEGL_MAGMA_INPASS_CLEAR",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_inpass_clear_desc,
+        defaultRes = R.string.opt_mobilegl_magma_inpass_clear_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_magma_inpass_clear_default_label,
+        key = "MOBILEGL_MAGMA_INPASS_CLEAR_DEFAULT",
+        isText = false,
+        descRes = R.string.opt_mobilegl_magma_inpass_clear_default_desc,
+        defaultRes = R.string.opt_mobilegl_magma_inpass_clear_default_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_enable_texture_view_label,
+        key = "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_enable_texture_view_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_enable_texture_view_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_use_angle_label,
+        key = "MOBILEGL_ESPRYT_USE_ANGLE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_use_angle_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_use_angle_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_disable_upload_ring_label,
+        key = "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_disable_upload_ring_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_disable_upload_ring_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_avoid_sampler_mipmap_min_filter_label,
+        key = "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_avoid_sampler_mipmap_min_filter_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_avoid_sampler_mipmap_min_filter_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_vao_shadow_label,
+        key = "MOBILEGL_ESPRYT_VAO_SHADOW",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_vao_shadow_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_vao_shadow_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_defer_geometry_emits_label,
+        key = "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_defer_geometry_emits_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_defer_geometry_emits_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_pipe_index_mirror_mb_label,
+        key = "MOBILEGL_PIPE_INDEX_MIRROR_MB",
+        isText = true,
+        descRes = R.string.opt_mobilegl_pipe_index_mirror_mb_desc,
+        defaultRes = R.string.opt_mobilegl_pipe_index_mirror_mb_default,
+        machineDefault = "64",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_avoid_explicit_lod_bias_label,
+        key = "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_avoid_explicit_lod_bias_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_avoid_explicit_lod_bias_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_disable_invalidate_flush_label,
+        key = "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_disable_invalidate_flush_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_disable_invalidate_flush_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_disable_ubo_ring_label,
+        key = "MOBILEGL_ESPRYT_DISABLE_UBO_RING",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_disable_ubo_ring_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_disable_ubo_ring_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_disable_unpack_ring_label,
+        key = "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_disable_unpack_ring_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_disable_unpack_ring_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_force_ds_readback_emulation_label,
+        key = "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_force_ds_readback_emulation_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_force_ds_readback_emulation_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_force_viewport_array_emulation_label,
+        key = "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_force_viewport_array_emulation_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_force_viewport_array_emulation_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_invalid_image_placeholder_label,
+        key = "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_invalid_image_placeholder_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_invalid_image_placeholder_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_unlocated_io_blocks_label,
+        key = "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_unlocated_io_blocks_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_unlocated_io_blocks_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_widen_packed16_storage_label,
+        key = "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_widen_packed16_storage_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_widen_packed16_storage_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_multidraw_mode_label,
+        key = "MOBILEGL_ESPRYT_MULTIDRAW_MODE",
+        isText = true,
+        descRes = R.string.opt_mobilegl_espryt_multidraw_mode_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_multidraw_mode_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_mobilegl_espryt_atomic_subgroup_scratch_label,
+        key = "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH",
+        isText = false,
+        descRes = R.string.opt_mobilegl_espryt_atomic_subgroup_scratch_desc,
+        defaultRes = R.string.opt_mobilegl_espryt_atomic_subgroup_scratch_default,
+        machineDefault = "auto",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_sfpew_enabled_label,
+        key = "SFPEW_ENABLED",
+        isText = false,
+        descRes = R.string.opt_sfpew_enabled_desc,
+        defaultRes = R.string.opt_sfpew_enabled_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_sfpew_relaxed_context_label,
+        key = "SFPEW_RELAXED_CONTEXT",
+        isText = false,
+        descRes = R.string.opt_sfpew_relaxed_context_desc,
+        defaultRes = R.string.opt_sfpew_relaxed_context_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_sfpew_no_multidrawarrays_label,
+        key = "SFPEW_NO_MULTIDRAWARRAYS",
+        isText = false,
+        descRes = R.string.opt_sfpew_no_multidrawarrays_desc,
+        defaultRes = R.string.opt_sfpew_no_multidrawarrays_default,
+        machineDefault = "0",
+    ),
+    OptionMeta(
+        labelRes = R.string.opt_sfpew_manual_mipgen_label,
+        key = "SFPEW_MANUAL_MIPGEN",
+        isText = false,
+        descRes = R.string.opt_sfpew_manual_mipgen_desc,
+        defaultRes = R.string.opt_sfpew_manual_mipgen_default,
+        machineDefault = "0",
+    ),
 )
 
 /** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
@@ -1143,48 +1613,42 @@ private fun OptionLabel(label: String, changed: Boolean, highlight: String = "")
     }
 }
 
-private fun changedSelect(value: String, default: String): Boolean {
-    val expected = default.substringBefore("（").trim()
+private fun changedSelect(value: String, machineDefault: String): Boolean {
     val now = value.trim()
     // 没写这个键就是渲染器自己的默认，与「官方默认」一致，不算改动。
     if (now.isBlank()) return false
-    return expected.isNotBlank() && !now.equals(expected, true)
+    return machineDefault.isNotBlank() && !now.equals(machineDefault, true)
 }
 
-private fun changedQuirk(current: String, default: String): Boolean {
-    val expected = when {
-        default.startsWith("开") -> "1"
-        default.startsWith("关") -> "0"
-        else -> "auto"
-    }
+private fun changedQuirk(current: String, machineDefault: String): Boolean {
     val now = current.trim().lowercase()
+    // auto 等于让渲染器自己挑，与「自动」这个默认一致。
     if (now.isBlank() || now == "auto") return false
-    return now != expected
+    return now != machineDefault.lowercase()
 }
 
-private fun changedToggle(current: String, default: String): Boolean {
-    val expected = if (default.startsWith("开")) "1" else "0"
+private fun changedToggle(current: String, machineDefault: String): Boolean {
     val now = current.trim().lowercase()
+    // 默认是「自动」的开关：只要显式写了 0/1 就算玩家自己选的。
     if (now.isBlank()) return false
-    return now != expected
+    if (machineDefault.equals("auto", true)) return now != "auto"
+    return now != machineDefault.lowercase()
 }
 
-private fun changedText(current: String, default: String): Boolean {
-    val expected = default.substringBefore("（").trim()
+private fun changedText(current: String, machineDefault: String): Boolean {
     val now = current.trim()
     if (now.isBlank()) return false
-    return now != expected
+    return now != machineDefault
 }
 
 /** 概览条计数用：按索引里的默认值判断这一项是否被改过。 */
 private fun optionChangedValue(meta: OptionMeta, parsed: Map<String, String>): Boolean {
     val current = (parsed[meta.key] ?: "").trim()
     return when {
-        meta.choices.isNotEmpty() -> changedSelect(current, meta.default)
-        QUIRK_KEYS.contains(meta.key) -> changedQuirk(current, meta.default)
-        meta.isText -> changedText(current, meta.default)
-        meta.default.startsWith("开") || meta.default.startsWith("关") -> changedToggle(current, meta.default)
-        else -> changedText(current, meta.default)
+        meta.choices.isNotEmpty() -> changedSelect(current, meta.machineDefault)
+        QUIRK_KEYS.contains(meta.key) -> changedQuirk(current, meta.machineDefault)
+        meta.isText -> changedText(current, meta.machineDefault)
+        else -> changedToggle(current, meta.machineDefault)
     }
 }
 
@@ -1354,11 +1818,13 @@ private val COMMON_PICKS = listOf(
 )
 
 /** 搜不到时的兜底建议：先找名字相近的，再退到常用项。 */
-private fun suggestOptions(query: String): List<OptionMeta> {
+private fun suggestOptions(query: String, context: Context): List<OptionMeta> {
     val needle = query.trim()
     if (needle.isEmpty()) return emptyList()
     val head = needle.take(2)
-    val near = OPTION_INDEX.filter { it.label.contains(head, true) || it.key.contains(head, true) }.take(4)
+    val near = OPTION_INDEX.filter {
+        it.key.contains(head, true) || context.getString(it.labelRes).contains(head, true)
+    }.take(4)
     return near.ifEmpty { OPTION_INDEX.filter { it.key in COMMON_PICKS } }
 }
 
@@ -1422,43 +1888,47 @@ private fun OptionRows(
     onChange: (String, String) -> Unit,
 ) {
     val byKey = remember { OPTION_INDEX.associateBy { it.key } }
+    val context = LocalContext.current
+    fun metaLabel(meta: OptionMeta) = context.getString(meta.labelRes)
+    fun metaDesc(meta: OptionMeta) = context.getString(meta.descRes)
+    fun metaDefault(meta: OptionMeta) = if (meta.defaultRes == 0) "" else context.getString(meta.defaultRes)
     keys.forEach { key ->
         val meta = byKey[key] ?: return@forEach
         when {
             meta.choices.isNotEmpty() -> OptionSelect(
-                label = meta.label,
+                label = metaLabel(meta),
                 key = meta.key,
                 options = meta.choices,
                 value = parsed[meta.key] ?: meta.choices.first(),
-                desc = meta.desc,
-                default = meta.default,
+                desc = metaDesc(meta),
+                default = metaDefault(meta),
                 parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             QUIRK_KEYS.contains(meta.key) -> OptionQuirk(
-                label = meta.label,
+                label = metaLabel(meta),
                 key = meta.key,
                 text = text,
-                desc = meta.desc,
-                default = meta.default,
+                desc = metaDesc(meta),
+                default = metaDefault(meta),
                 parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             meta.isText -> OptionText(
-                label = meta.label,
+                label = metaLabel(meta),
                 key = meta.key,
                 text = text,
-                desc = meta.desc,
-                default = meta.default,
+                desc = metaDesc(meta),
+                default = metaDefault(meta),
                 parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, it) }
             else -> OptionToggle(
-                label = meta.label,
+                label = metaLabel(meta),
                 key = meta.key,
                 text = text,
-                desc = meta.desc,
-                default = meta.default,
+                desc = metaDesc(meta),
+                default = metaDefault(meta),
                 parsed = parsed,
                 highlight = highlight,
             ) { onChange(meta.key, onOff(it)) }
