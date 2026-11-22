@@ -27,12 +27,19 @@ Four tabs, and three sub pages pushed over them.
 | 首页 (Home) | Version, the all-files permission state, status chips (backend, wrapper, self-test verdict), the last self-test card, the active renderer |
 | 渲染 (Render) | The active solution: backend switch (`DirectGLES` / `DirectVulkan`), the ANGLE switch on `DirectGLES`, a one-line tuning summary that expands to frames in flight, the push mask and the index mirror, and the entry points to drivers, config and the self-test |
 | 信息 (Info) | Device and runtime: SoC, GPU, GLES and Vulkan strings, kernel, memory, storage, screen; the full internal version; copy and share; links; licences |
-| 设置 (Settings) | Auto self-test on launch, theme (system / light / dark), where the runtime config was written, whether a restart is pending, and a reset that clears everything |
+| 设置 (Settings) | Auto self-test on launch, theme (system / light / dark), where the colour comes from (the brand palette or the system wallpaper colours on Android 12+), where the runtime config was written, whether a restart is pending, and a reset that clears everything |
 | 驱动管理 (Drivers) | Import, activate and delete driver packages and external libraries ([below](#driver-packages-and-external-libraries)) |
 | 启动配置 (Config) | Every runtime option with a Chinese name, its meaning, the official default on its own line, and the underlying key; search across all of them; a changed-only filter; an editor for the raw file; validation before saving |
 | 驱动自检 (Self test) | The MobileGL driver POST: per-check verdicts, known driver bugs, the format capability matrix, and the raw report |
 
-The interface is in Chinese; the configuration keys, paths and log lines are English.
+The interface is in Chinese; the configuration keys, paths and log lines are English. The
+app's own text lives in `res/values/strings_ui.xml` (the titles the launcher reads for its
+own settings page are in `res/values/strings.xml`), so a translation only has to touch one
+file.
+
+On tablets, foldables and in landscape the four tabs move to a navigation rail on the left
+and the page content stops widening at 720dp, so a wide screen gets a two-pane shell instead
+of one stretched column.
 
 ## Install
 

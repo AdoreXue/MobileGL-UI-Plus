@@ -189,7 +189,7 @@
     <string name="render_hours_ago">%1$d 小时前</string>
     <string name="render_days_ago">%1$d 天前</string>
     <string name="render_ms">%1$d 毫秒</string>
-    <string name="render_seconds">%1$g 秒</string>
+    <string name="render_seconds">%1$.1f 秒</string>
     <string name="render_driver_pack">驱动包</string>
     <string name="render_start_config">启动配置</string>
 
