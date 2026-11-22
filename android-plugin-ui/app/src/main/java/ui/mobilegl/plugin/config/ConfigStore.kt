@@ -9,6 +9,7 @@ import java.io.File
 /** JSON persistence for [PluginConfig]. Writes atomically and keeps a backup of the last good file. */
 class ConfigStore(private val context: Context) {
     private val dir = File(context.filesDir, "plugin")
+    private val backendKey = "MOBILEGL_BACKEND_TYPE"
     private val file = File(dir, "config.json")
     private val backup = File(dir, "config.json.bak")
 
@@ -26,7 +27,8 @@ class ConfigStore(private val context: Context) {
         dir.mkdirs()
         loadWasCorrupt = false
         if (!file.isFile) {
-            return PluginConfig(backend = defaultBackend(), env = PluginConfig.defaultEnv(defaultBackend()))
+            val backend = previousBackend()
+            return PluginConfig(backend = backend, env = PluginConfig.defaultEnv(backend))
         }
         return try {
             PluginConfig.fromJson(JSONObject(file.readText()))
@@ -48,6 +50,30 @@ class ConfigStore(private val context: Context) {
                 PluginConfig(backend = defaultBackend(), env = PluginConfig.defaultEnv(defaultBackend()))
             }
         }
+    }
+
+    /**
+     * The backend an install was already rendering with, or the built-in default.
+     *
+     * The app used to ship as one package per backend. An install of the package this one keeps
+     * can upgrade with no config.json while its own runtime copy, written on every launch, still
+     * names the backend it had. Reading that back keeps the render path unchanged instead of
+     * switching it on the first launch after the update.
+     *
+     * Only the private copy is read: it is this package's own file, so an upgrade inherits from
+     * the copy the app itself wrote. The shared copy on storage is what other apps can write, and
+     * it is not a source for stored state.
+     */
+    private fun previousBackend(): String {
+        val own = File(dir, "runtime.conf")
+        val text = runCatching { if (own.isFile) own.readText() else null }.getOrNull()
+            ?: return defaultBackend()
+        val value = text.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith(backendKey + "=") }
+            ?.substringAfter('=')
+            ?.trim()
+        return if (value != null && value in PluginConfig.BACKENDS) value else defaultBackend()
     }
 
     @Synchronized

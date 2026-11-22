@@ -45,6 +45,9 @@ data class PluginConfig(
     companion object {
         const val SCHEMA_VERSION = 1
 
+        /** The two backends MobileGL builds: Espryt over GLES, and Magma over Vulkan. */
+        val BACKENDS = listOf("DirectGLES", "DirectVulkan")
+
         fun defaultEnv(backend: String): Map<String, String> = linkedMapOf(
             "MOBILEGL_BACKEND_TYPE" to backend,
             "LIBGL_ES" to "3",
