@@ -176,6 +176,9 @@ android {
     }
     kotlinOptions {
         jvmTarget = '17'
+        // FlowRow is the only sane way to lay out the action rows on a 360dp phone, and the
+        // opt-in is stable enough that scattering @OptIn over a dozen call sites buys nothing.
+        freeCompilerArgs += ['-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi']
     }
     buildFeatures {
         compose true

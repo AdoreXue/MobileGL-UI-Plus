@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.os.Build
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -41,6 +42,8 @@ fun SettingsTab(
     config: PluginConfig,
     runtime: RuntimeConfigWriter.Status,
     pendingRestart: Boolean,
+    colorSource: ColorSource,
+    onColorSource: (ColorSource) -> Unit,
     onSave: (PluginConfig) -> Unit,
     onResetAll: () -> Unit,
     listState: LazyListState = rememberLazyListState(),
@@ -77,6 +80,25 @@ fun SettingsTab(
                     selected = config.theme.ifBlank { THEME_SYSTEM },
                     onSelect = { onSave(config.copy(theme = it)) },
                 )
+            }
+        }
+        item {
+            SectionLabel("外观")
+            InfoCard {
+                // 配色来源是界面观感的分叉点：品牌色带在任何机型上一致，跟随系统则和壁纸同色。
+                ChoiceRow(
+                    title = "配色",
+                    subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        "品牌色带在任何手机上都一致；跟随系统会取壁纸颜色"
+                    } else {
+                        "品牌色带在任何手机上都一致；本机系统不支持取色，选了也按品牌色显示"
+                    },
+                    options = listOf(ColorSource.Brand to "品牌色", ColorSource.System to "跟随系统"),
+                    selected = colorSource,
+                    onSelect = onColorSource,
+                )
+                DividerLine()
+                InfoLine(null, "当前配色", if (colorSource == ColorSource.System) "跟随系统" else "品牌色", mono = false)
             }
         }
         item {
@@ -150,6 +172,31 @@ internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChec
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * 带说明的三选一控件。
+ *
+ * [ValueChoiceRow] 只有标题，说不清两个选项差在哪；这里多一行说明，和开关行的排版对齐。
+ */
+@Composable
+internal fun <T> ChoiceRow(
+    title: String,
+    subtitle: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, label) ->
+                FilterChip(selected = value == selected, onClick = { onSelect(value) }, label = { Text(label) })
+            }
+        }
     }
 }
 

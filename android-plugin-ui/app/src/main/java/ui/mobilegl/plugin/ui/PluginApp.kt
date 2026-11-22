@@ -91,11 +91,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -116,7 +120,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -199,7 +202,20 @@ fun MobileGlPluginApp() {
     val rootContext = LocalContext.current
     val themePrefs = remember { rootContext.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
     var themeMode by remember { mutableStateOf(themePrefs.getString("theme", "system") ?: "system") }
-    MobileGlTheme(themeMode) {
+    var colorSource by remember {
+        mutableStateOf(ColorSource.fromStorage(themePrefs.getString("colorSource", null)))
+    }
+    val dark = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    MobileGlTheme(dark = dark, colorSource = colorSource) {
+        // 窗口宽度分级只算一次协调给下面所有页面：横竖屏切换时重组一次，不会每页各量一遍。
+        val density = LocalDensity.current
+        val configuration = LocalConfiguration.current
+        val widthDp = with(density) { configuration.screenWidthDp }
+        CompositionLocalProvider(LocalWindowWidth provides windowWidthOf(widthDp)) {
         Box(Modifier.fillMaxSize()) {
         val context = LocalContext.current
         val store = remember { ConfigStore(context) }
@@ -485,6 +501,11 @@ fun MobileGlPluginApp() {
                             config = config,
                             runtime = runtimeStatus,
                             pendingRestart = pendingRestart,
+                            colorSource = colorSource,
+                            onColorSource = {
+                                colorSource = it
+                                themePrefs.edit().putString("colorSource", it.storageName).apply()
+                            },
                             onSave = { persist(it) },
                             onResetAll = {
                                 // 重置的是配置，不是磁盘上的驱动包与外部库：清空列表只会让用户
@@ -606,7 +627,14 @@ fun MobileGlPluginApp() {
             // 底座（当前标签页 + 底栏）和二级页层分开画：底座一直在组合里，
             // 二级页只是盖上和滑走，切换时不会再牵动底座的内边距。
             Box(Modifier.fillMaxSize()) {
+                // 宽屏（平板、折叠屏展开、横屏）把底栏换成左侧导航轨：底栏放在平板上会被手挡住，
+                // 而且四个标签挤在底部显得很空。
+                val wide = LocalWindowWidth.current.twoColumns
                 Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                    if (wide) {
+                        MobileGlRail(selected = lastTab, onSelect = { lastTab = it })
+                    }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         AnimatedContent(
                             targetState = lastTab,
@@ -614,15 +642,24 @@ fun MobileGlPluginApp() {
                             label = "tab",
                         ) { index ->
                             val target = TABS[index].dest
-                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                                screenContent(
-                                    target,
-                                    PaddingValues(top = if (target == Dest.Home) 0.dp else statusTop),
-                                )
+                            Box(
+                                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                // 一行文字拉到 1000dp 宽会丢行：内容整体收在 [Space.ContentMax] 内并居中。
+                                Box(Modifier.widthIn(max = Space.ContentMax).fillMaxHeight()) {
+                                    screenContent(
+                                        target,
+                                        PaddingValues(top = if (target == Dest.Home) 0.dp else statusTop),
+                                    )
+                                }
                             }
                         }
                     }
-                    MobileGlBottomBar(selected = lastTab, onSelect = { index -> lastTab = index })
+                    }
+                    if (!wide) {
+                        MobileGlBottomBar(selected = lastTab, onSelect = { index -> lastTab = index })
+                    }
                 }
 
                 subDest?.let { target ->
@@ -654,13 +691,19 @@ fun MobileGlPluginApp() {
                                 },
                                 onBack = { scope.launch { dismissSub() } },
                             )
-                            Box(Modifier.weight(1f).fillMaxWidth()) {
-                                screenContent(target, PaddingValues())
+                            Box(
+                                Modifier.weight(1f).fillMaxWidth(),
+                                contentAlignment = Alignment.TopCenter,
+                            ) {
+                                Box(Modifier.widthIn(max = Space.ContentMax).fillMaxHeight()) {
+                                    screenContent(target, PaddingValues())
+                                }
                             }
                         }
                     }
                 }
             }
+        }
         }
         }
     }
@@ -678,6 +721,28 @@ private suspend fun shareReport(context: Context, repository: SelfTestRepository
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(intent, "分享自检报告"))
+}
+
+/** 宽屏用的左侧导航轨：与底栏同一份 [TABS]，只有摆放位置不同。 */
+@Composable
+private fun MobileGlRail(selected: Int, onSelect: (Int) -> Unit) {
+    NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
+        Spacer(Modifier.height(Space.Lg))
+        TABS.forEachIndexed { index, tab ->
+            NavigationRailItem(
+                selected = selected == index,
+                onClick = { onSelect(index) },
+                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                label = { Text(tab.label) },
+                alwaysShowLabel = true,
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                ),
+            )
+        }
+    }
 }
 
 /** 底部标签栏；跟手返回时父页要连着底栏一起露出来，所以单独抽出来。 */
@@ -715,33 +780,6 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
     )
-}
-
-@Composable
-private fun MobileGlTheme(themeMode: String = "system", content: @Composable () -> Unit) {
-    // Material 3 标准：Android 12+ 动态取色，低版本回退到标准 light/dark 方案
-    val systemDark = isSystemInDarkTheme()
-    val dark = when (themeMode) {
-        "light" -> false
-        "dark" -> true
-        else -> systemDark
-    }
-    val context = LocalContext.current
-    // 状态栏/导航栏图标跟着主题走：深色主题下还要保持深色图标的话，两个栏就看不见了。
-    LaunchedEffect(dark) {
-        val activity = context.findActivity() ?: return@LaunchedEffect
-        WindowInsetsControllerCompat(activity.window, activity.window.decorView).apply {
-            isAppearanceLightStatusBars = !dark
-            isAppearanceLightNavigationBars = !dark
-        }
-    }
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = scheme, content = content)
 }
 
 internal data class DeviceInfo(
