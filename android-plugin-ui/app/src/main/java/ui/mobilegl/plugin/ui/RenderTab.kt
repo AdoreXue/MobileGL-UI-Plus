@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ui.mobilegl.plugin.BuildConfig
+import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.config.PluginConfig
 import ui.mobilegl.plugin.selftest.SelfTestResult
 
@@ -110,7 +112,7 @@ fun RenderTab(
     val framesInFlight = env("MOBILEGL_FRAMES_IN_FLIGHT", "3")
     val pipePush = env("MOBILEGL_PIPE_PUSH", "0x3fff")
     val indexMirror = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64")
-    val tuneSummary = "帧在途 " + framesInFlight + " · 推送 " + pipePush + " · 镜像 " + indexMirror + " MiB"
+    val tuneSummary = stringResource(R.string.render_tune_summary, framesInFlight, pipePush, indexMirror)
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -119,7 +121,7 @@ fun RenderTab(
         },
         contentPadding = PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 24.dp),
     ) {
-        item { BigTitle("渲染") }
+        item { BigTitle(stringResource(R.string.render_title)) }
         if (!ready) {
             item { FillSkeleton(cards = 6) }
             return@LazyColumn
@@ -133,7 +135,7 @@ fun RenderTab(
                 pendingRestart = pendingRestart,
             )
         }
-        item { SectionLabel("渲染后端") }
+        item { SectionLabel(stringResource(R.string.render_section_backend)) }
         item {
             BackendCard(
                 backend = config.backend,
@@ -144,14 +146,14 @@ fun RenderTab(
                     "SFPEW_EGL" to (config.env["SFPEW_EGL"] ?: "libMobileGL.so"),
                     "MOBILEGL_ESPRYT_USE_ANGLE" to env("MOBILEGL_ESPRYT_USE_ANGLE"),
                     "MOBILEGL_FRAMES_IN_FLIGHT" to env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
-                    "activeIcdPath" to (config.activeIcdPath ?: "未生成"),
+                    "activeIcdPath" to (config.activeIcdPath ?: stringResource(R.string.render_not_generated)),
                 ),
                 onToggleDetails = { detailsOpen = it },
                 onSelectBackend = { setBackend(it) },
                 onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) },
             )
         }
-        item { SectionLabel("调优摘要", 3) }
+        item { SectionLabel(stringResource(R.string.render_section_tune), 3) }
         item {
             // 平时只占一行；点开才展开三项，每一项写清"这是什么、什么时候该动"。
             InfoCard {
@@ -164,22 +166,22 @@ fun RenderTab(
                     Column {
                         DividerLine()
                         TuneRow(
-                            label = "帧在途",
-                            explain = "预留给 GPU 的渲染帧数，调大更稳、更吃内存",
+                            label = stringResource(R.string.render_tune_frames),
+                            explain = stringResource(R.string.render_tune_frames_desc),
                             value = framesInFlight,
                             onClick = onOpenConfigFile,
                         )
                         DividerLine()
                         TuneRow(
-                            label = "命令推送",
-                            explain = "管道指令的推送掩码，除非明确要排除某位否则不用改",
+                            label = stringResource(R.string.render_tune_push),
+                            explain = stringResource(R.string.render_tune_push_desc),
                             value = pipePush,
                             onClick = onOpenConfigFile,
                         )
                         DividerLine()
                         TuneRow(
-                            label = "索引镜像",
-                            explain = "索引缓冲的镜像上限，显存紧张的机型可调小",
+                            label = stringResource(R.string.render_tune_mirror),
+                            explain = stringResource(R.string.render_tune_mirror_desc),
                             value = indexMirror + " MiB",
                             onClick = onOpenConfigFile,
                         )
@@ -187,7 +189,7 @@ fun RenderTab(
                 }
             }
         }
-        item { SectionLabel("驱动与组件") }
+        item { SectionLabel(stringResource(R.string.render_section_drivers)) }
         item {
             DriverCard(
                 activeDriverName = activeDriverName,
@@ -198,7 +200,7 @@ fun RenderTab(
                 onOpenConfigFile = onOpenConfigFile,
             )
         }
-        item { SectionLabel("驱动自检") }
+        item { SectionLabel(stringResource(R.string.render_section_selftest)) }
         item {
             SelfTestBlock(
                 report = report,
@@ -511,9 +513,10 @@ private fun SelfTestBlock(
             Spacer(Modifier.width(10.dp))
             Text(
                 when {
-                    probing -> "正在自检…"
-                    report == null -> "本次会话尚未自检"
-                    else -> relativeTime(report.finishedAt) + (lastProbeMs?.let { " · 用时 " + formatDuration(it) } ?: "")
+                    probing -> stringResource(R.string.render_probing)
+                    report == null -> stringResource(R.string.render_not_probed)
+                    else -> relativeTime(report.finishedAt) +
+                        (lastProbeMs?.let { stringResource(R.string.render_probe_spent, formatDuration(it)) } ?: "")
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
@@ -542,7 +545,7 @@ private fun SelfTestBlock(
                     }
                 }
                 Text(
-                    "检查项 " + checks.size + " · 通过 " + passed + " · 警告 " + warned + " · 失败 " + failed,
+                    stringResource(R.string.render_check_counts, checks.size, passed, warned, failed),
                     modifier = Modifier.padding(top = 6.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
@@ -552,7 +555,11 @@ private fun SelfTestBlock(
         if (backends.isEmpty()) {
             DividerLine()
             Text(
-                if (probing) "正在运行官方 Driver POST…" else "跑一次自检可以看到每个后端的检查项结论。",
+                if (probing) {
+                    stringResource(R.string.render_probe_running_detail)
+                } else {
+                    stringResource(R.string.render_probe_idle_detail)
+                },
                 modifier = Modifier.padding(vertical = 10.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
@@ -571,7 +578,13 @@ private fun SelfTestBlock(
                             fontWeight = FontWeight.Medium,
                         )
                         Text(
-                            backend.renderer.ifBlank { if (backend.available) "可用" else "不可用" },
+                            backend.renderer.ifBlank {
+                                if (backend.available) {
+                                    stringResource(R.string.render_available)
+                                } else {
+                                    stringResource(R.string.render_unavailable)
+                                }
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = scheme.onSurfaceVariant,
                             maxLines = 1,
@@ -589,9 +602,15 @@ private fun SelfTestBlock(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onOpenSelfTest) { Text("完整报告") }
+            TextButton(onClick = onOpenSelfTest) { Text(stringResource(R.string.common_full_report)) }
             TextButton(onClick = onRunSelfTest, enabled = !probing) {
-                Text(if (report == null) "运行自检" else "重新自检")
+                Text(
+                    if (report == null) {
+                        stringResource(R.string.common_run_self_test)
+                    } else {
+                        stringResource(R.string.common_rerun_self_test)
+                    },
+                )
             }
         }
     }
@@ -612,16 +631,24 @@ private fun DriverCard(
     InfoCard {
         EntryRow(
             icon = UiIcons.Layers,
-            title = "驱动包",
-            subtitle = activeDriverName + " · 共 " + driverCount + " 个 · " +
-                if (icdReady) "ICD 已生成" else "ICD 未生成",
+            title = stringResource(R.string.render_driver_pack),
+            subtitle = stringResource(
+                R.string.render_driver_line,
+                activeDriverName,
+                driverCount,
+                if (icdReady) {
+                    stringResource(R.string.render_icd_generated)
+                } else {
+                    stringResource(R.string.render_icd_missing)
+                },
+            ),
             onClick = onOpenDrivers,
         )
         DividerLine()
         EntryRow(
             icon = UiIcons.Globe,
-            title = "启动配置",
-            subtitle = "runtime.conf 全部配置项 · 外部库 " + externalCount + " 个",
+            title = stringResource(R.string.render_start_config),
+            subtitle = stringResource(R.string.render_config_line, externalCount),
             tint = scheme.onSurfaceVariant,
             onClick = onOpenConfigFile,
         )
@@ -629,18 +656,20 @@ private fun DriverCard(
 }
 
 /** 「12 分钟前」这种相对时间，避免请求格式化库。 */
+@Composable
 private fun relativeTime(ms: Long): String {
     val minutes = (System.currentTimeMillis() - ms) / 60000
     return when {
-        minutes < 1 -> "刚刚"
-        minutes < 60 -> minutes.toString() + " 分钟前"
-        minutes < 1440 -> (minutes / 60).toString() + " 小时前"
-        else -> (minutes / 1440).toString() + " 天前"
+        minutes < 1 -> stringResource(R.string.render_just_now)
+        minutes < 60 -> stringResource(R.string.render_minutes_ago, minutes.toInt())
+        minutes < 1440 -> stringResource(R.string.render_hours_ago, (minutes / 60).toInt())
+        else -> stringResource(R.string.render_days_ago, (minutes / 1440).toInt())
     }
 }
 
+@Composable
 private fun formatDuration(ms: Long): String {
-    if (ms < 1000) return ms.toString() + " 毫秒"
+    if (ms < 1000) return stringResource(R.string.render_ms, ms.toInt())
     val tenth = ms / 100
-    return (tenth / 10).toString() + "." + (tenth % 10).toString() + " 秒"
+    return stringResource(R.string.render_seconds, tenth / 10.0)
 }
