@@ -104,7 +104,8 @@ fun ConfigScreen(
     // 避免先显示模板、读完又整体替换的二次跳动。
     var text by remember { mutableStateOf(DEFAULT_CONFIG) }
     var loaded by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    // 结果提示带语气：校验失败必须一眼看出来，不能和「校验通过」长成同一行小字。
+    var notice by remember { mutableStateOf<Notice?>(null) }
     var busy by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var confirmResetAll by remember { mutableStateOf(false) }
@@ -129,7 +130,10 @@ fun ConfigScreen(
     fun save() {
         val issues = validateConfig(text)
         if (issues.isNotEmpty()) {
-            message = "发现 " + issues.size + " 个问题，已阻止保存：\n" + issues.joinToString("\n")
+            notice = Notice(
+                "发现 " + issues.size + " 个问题，已阻止保存：\n" + issues.joinToString("\n"),
+                NoteTone.Bad,
+            )
             return
         }
         // 解析成键值对交回 PluginApp：写入 config.json（唯一真源），再由它统一生成 runtime.conf，
@@ -137,7 +141,7 @@ fun ConfigScreen(
         // 所以这里不再用一个永远不会渲染的 busy 假装「保存中」。
         val kv = parseKeyValues(text)
         onMerge(kv)
-        message = "已提交 " + kv.size + " 项（校验通过），写入结果见上方状态卡"
+        notice = Notice("已提交 " + kv.size + " 项（校验通过），写入结果见上方状态卡", NoteTone.Good)
     }
     // 整页共用一份解析结果：原始文件每敲一个字只解析一次，供所有选项读取。
     val parsed = remember(text) { parseKeyValues(text) }
@@ -388,7 +392,11 @@ fun ConfigScreen(
                     SectionLabel("搜索结果（" + resultMatches.size + "）")
                     InfoCard {
                         if (resultMatches.isEmpty()) {
-                            Text("没有匹配的配置项", style = MaterialTheme.typography.bodySmall)
+                            EmptyState(
+                                icon = Icons.Filled.Search,
+                                title = "没有匹配的配置项",
+                                body = "换个说法或直接搜键名试试，比如 SFPEW、ANGLE、缓存。",
+                            )
                             val hints = suggestOptions(query)
                             if (hints.isNotEmpty()) {
                                 Text(
@@ -483,22 +491,6 @@ fun ConfigScreen(
                     }
                 }
             }
-            // 这一项也走 OptionRows：搜索能搜到、改动计数算得进、只看已改动时跟着一起筛。
-            val backendKeys = visible(listOf("MOBILEGL_BACKEND_TYPE"))
-            if (groupShown("渲染后端") && backendKeys.isNotEmpty()) item {
-                SectionLabel("渲染后端", backendKeys.size)
-                InfoCard {
-                    OptionRows(backendKeys, text, parsed, highlight = query) { key, value ->
-                        text = setKey(text, key, value)
-                    }
-                    Text(
-                        "后端只在 app 里选：启动器插件设置不再提供这一项，因为 app 写入的配置会覆盖启动器侧的环境变量。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
             optionGroup(
                 title = "通用配置",
                 note = "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
@@ -588,17 +580,23 @@ fun ConfigScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
                             val issues = validateConfig(text)
-                            message = if (issues.isEmpty()) "校验通过：所有键与取值都有效" else
-                                "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n")
+                            notice = if (issues.isEmpty()) {
+                                Notice("校验通过：所有键与取值都有效", NoteTone.Good)
+                            } else {
+                                Notice(
+                                    "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n"),
+                                    NoteTone.Bad,
+                                )
+                            }
                         }) { Text("校验配置") }
                         OutlinedButton(onClick = { confirmTemplate = true }) { Text("恢复模板") }
                         if (!hasAllFilesAccess(context)) {
                             OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text("授予所有文件访问权限") }
                         }
                     }
-                    message?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    notice?.let {
+                        Spacer(Modifier.height(Space.Sm))
+                        NoteBanner(it.text, it.tone)
                     }
                 }
             }
@@ -692,7 +690,7 @@ fun ConfigScreen(
                 TextButton(onClick = {
                     text = DEFAULT_CONFIG
                     confirmTemplate = false
-                    message = "已载入模板，记得点“保存配置”"
+                    notice = Notice("已载入模板，记得点“保存配置”", NoteTone.Info)
                 }) { Text("恢复") }
             },
             dismissButton = { TextButton(onClick = { confirmTemplate = false }) { Text("取消") } },
@@ -707,7 +705,7 @@ fun ConfigScreen(
                 TextButton(onClick = {
                     text = removeKeys(text, SUPPORTED_KEYS)
                     confirmResetAll = false
-                    message = "已移除全部配置项，保存后回到原生默认值"
+                    notice = Notice("已移除全部配置项，保存后回到原生默认值", NoteTone.Info)
                 }) { Text("恢复默认") }
             },
             dismissButton = { TextButton(onClick = { confirmResetAll = false }) { Text("取消") } },
@@ -924,14 +922,6 @@ private data class OptionMeta(
 
 /** 供搜索使用的选项索引（与页面上的选项一一对应）。 */
 private val OPTION_INDEX: List<OptionMeta> = listOf(
-    OptionMeta(
-        "渲染后端",
-        "MOBILEGL_BACKEND_TYPE",
-        false,
-        "DirectGLES 走 Espryt（直通 OpenGL ES，官方默认）；DirectVulkan 走 Magma（Vulkan 翻译层）。切换后只有对应分组的配置项会生效",
-        "DirectGLES（官方默认）",
-        choices = listOf("DirectGLES", "DirectVulkan"),
-    ),
     OptionMeta("禁用 GPU 计时查询", "MOBILEGL_DISABLE_TIMERQUERY", false, "游戏可用它测每帧 GPU 耗时（如优化 mod、HUD 显示帧耗时）。部分驱动实现有 bug 会卡顿，关掉即不再提供", "关"),
     OptionMeta("子组指令模拟", "MOBILEGL_SUBGROUP_EMULATION", false, "Vulkan 子组指令（一组线程协同操作）驱动不支持时以软件模拟。开＝总是模拟；关＝用驱动原生的，最快", "自动"),
     OptionMeta("模拟裁剪平面", "MOBILEGL_CLIP_DISTANCE_EMULATION", false, "驱动不支持 gl_ClipDistance 时用「丢弃片元」模拟。开＝总是模拟；关＝用驱动原生的", "自动"),
@@ -1000,7 +990,10 @@ private val OPTION_INDEX: List<OptionMeta> = listOf(
 )
 
 /** 原生库实际支持的键（已用 strings 与 .so 逐一比对）。 */
-private val SUPPORTED_KEYS: Set<String> = (OPTION_INDEX.map { it.key } + "SFPEW_EGL").toSet()
+// 后端在「渲染」页切换，这里不重复给控件；但键本身有效，原始编辑器与「恢复默认」要认它。
+private val SETTING_KEYS_NOT_LISTED = setOf("MOBILEGL_BACKEND_TYPE", "SFPEW_EGL")
+
+private val SUPPORTED_KEYS: Set<String> = OPTION_INDEX.map { it.key }.toSet() + SETTING_KEYS_NOT_LISTED
 
 
 /** 由插件自身写入、或启动器使用的键：存在但不由本页校验。 */
@@ -1353,12 +1346,11 @@ private val OPTION_SECTION: Map<String, String> = buildMap {
     SFPEW_TAIL_KEYS.forEach { put(it, "SFPEW") }
     put("SFPEW_ENABLED", "SFPEW")
     put("SFPEW_EGL", "SFPEW")
-    put("MOBILEGL_BACKEND_TYPE", "渲染后端")
 }
 
 /** 搜不到时推荐的常用项。 */
 private val COMMON_PICKS = listOf(
-    "MOBILEGL_FRAMES_IN_FLIGHT", "MOBILEGL_BACKEND_TYPE", "SFPEW_ENABLED", "MOBILEGL_ASYNC_SHADER_COMPILE",
+    "MOBILEGL_FRAMES_IN_FLIGHT", "SFPEW_ENABLED", "MOBILEGL_ASYNC_SHADER_COMPILE", "MOBILEGL_SHADER_CACHE",
 )
 
 /** 搜不到时的兜底建议：先找名字相近的，再退到常用项。 */
