@@ -51,15 +51,16 @@ def mobileGlAbiFilters = {
 // Launcher-facing renderer name is intentionally backend-agnostic.
 def mobileGlRendererDisplayName = { String backendType -> 'MobileGL' }
 
-// 实际加载的渲染库文件名：预编译/官方 .so 走代理，否则按是否内置 SFPEW 选。
-// 返回值已带 lib 前缀，调用方不要再拼一次。
+// The renderer library the launcher loads: a prebuilt or official .so goes through the proxy,
+// and a build from source picks its name by whether SFPEW is bundled.
+// The returned name already carries the lib prefix, so callers must not add it again.
 def mobileGlRendererLibName = {
     if (!mobileGlPrebuiltLibsDir.isEmpty()) return 'libRendererProxy.so'
     if (mobileGlUseSfpew) return 'libSimpleFPEWrapper.so'
     return 'libMobileGL.so'
 }
-// RendererPlugin-v2 用 "**|" 让启动器替换成它自己的 nativeLibraryDir；
-// 旧的 fclPlugin 元数据要的是不带目录的库名。
+// RendererPlugin-v2 takes the "**|" prefix so the launcher substitutes its own nativeLibraryDir;
+// the older fclPlugin metadata wants the bare library name.
 def mobileGlRendererLib = { String prefix -> prefix + mobileGlRendererLibName() }
 def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
@@ -95,7 +96,7 @@ def mobileGlRendererConfig = { String backendType ->
     groovy.json.JsonOutput.toJson(config).replace('"', '\\"')
 }
 
-// 后端 flavor 的公共配置：占位符、环境变量与 resValue 只写一份。
+// What the backend flavors share: placeholders, environment variables and resValue appear once.
 def mobileGlBackendFlavor = { flavor, String backend, String appId ->
     def env = mobileGlEnvString(backend)
     def lib = mobileGlRendererLibName()
@@ -131,19 +132,21 @@ def mobileGlVersionMajor = (findProperty('mobilegl.versionYear') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[0].toInteger() % 100 : 26)).toInteger()
 def mobileGlVersionMinor = (findProperty('mobilegl.versionMonth') ?:
         (mobileGlHeadDate ? mobileGlHeadDate.split('-')[1].toInteger() : 11)).toInteger()
-// 版本修订号（26.11.x 的 x）：固定常量，由维护者手动指定，不随提交数变化。
-// 需要更新时改这一个数字（或构建时 -Pmobilegl.versionRevision=N 临时覆盖）
+// Version revision (the x in 26.11.x): a fixed constant the maintainer sets by hand; it does not
+// follow the commit count. Update this one number, or override it for a single build with
+// -Pmobilegl.versionRevision=N.
 def mobileGlVersionRevision = (findProperty('mobilegl.versionRevision') ?: 1).toInteger()
-// 本 fork 的构建编号（buildN）：自动 = 当月作者提交数，每次构建随提交自然增长；
-// 需要锁定时用 -Pmobilegl.buildRevision=N 覆盖
+// This fork's build number (buildN): by default the author's commit count in the current month,
+// so it grows with each build of the month; pin it with -Pmobilegl.buildRevision=N.
 def mobileGlForkBuildRevision = {
     def over = findProperty('mobilegl.buildRevision')
     if (over != null) return over.toInteger()
     try {
         if (mobileGlHeadDate == null) return 1
         def since = String.format('20%02d-%02d-01T00:00:00', mobileGlVersionMajor, mobileGlVersionMinor)
-        // 只数本仓库作者当月提交，上游历史不计入。
-        // 作者邮箱有两个：GitHub noreply（git push 时用）和账号邮箱（网页/Contents API 提交用）
+        // Count only this author's commits in the current month; imported upstream history does
+        // not count. The author commits under two addresses: the GitHub noreply one that git push
+        // uses, and the account address that the web UI and the Contents API use.
         def n = 0
         ['xuhexue@users.noreply.github.com', 'xiaoxuelive@outlook.com'].each { email ->
             def proc = ['git', 'rev-list', '--count', '--author=' + email, "--since=" + since, 'HEAD'].execute(null, rootDir)
@@ -164,10 +167,12 @@ def mobileGlGitShortHash = {
         'nogit'
     }
 }()
-// CI 构建时附加短 commit hash，便于定位源码；本地默认不加
+// A CI build appends the short commit hash so an extracted library can be traced to its source;
+// local builds leave it out.
 def mobileGlAppendGitHash = (findProperty('mobilegl.versionGitHash') ?: 'false').toString().toBoolean()
-// 公开版本名：CI 传入的覆盖值（如 26.11.1-Dev.1 / 26.11.1-rc.1），否则基版本号
-// 内部版本名：公开版本-build号-哈希-构建类型，只在信息页展示
+// Public version name: the override CI passes (26.11.1-Dev.1, 26.11.1-rc.1), otherwise the base
+// version. Internal version name: public version-build number-hash-build type, shown on the info
+// screen only.
 def mobileGlPublicVersionName = {
     def over = findProperty('mobilegl.versionNameOverride')
     if (over != null) return over.toString()
@@ -197,7 +202,6 @@ android {
     defaultConfig {
         buildConfigField 'boolean', 'SFPEW_BUNDLED', mobileGlUseSfpew.toString()
         buildConfigField 'String', 'GIT_HASH', "\"${mobileGlGitShortHash}\""
-""
     }
 
     defaultConfig {
@@ -209,7 +213,6 @@ android {
         // Dev.1 and Dev.2 are no longer the same installable package.
         // Worst case (year 99, last month, highest numbers) is 991_299_999, still under
         // Android's 2_100_000_000 ceiling.
-        // 年*1e7 + 月*1e5 + 当月修订*1e3 + 构建号，同月内每次构建都能升级
         versionCode mobileGlVersionMajor * 10000000 + mobileGlVersionMinor * 100000 +
             mobileGlVersionRevision * 1000 + Math.min(mobileGlForkBuildRevision, 999)
         versionName mobileGlForkVersionName
@@ -234,7 +237,8 @@ android {
     flavorDimensions 'backend', 'profile'
 
     productFlavors {
-        // 两个后端 flavor 只差名字与 applicationId，公共部分在下面统一配置。
+        // The two backend flavors differ only in name and applicationId; the shared part is
+        // configured below.
         espryt { }
         magma { }
         plugin {
@@ -352,14 +356,15 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     debugImplementation 'androidx.compose.ui:ui-tooling'
 }
-// CI 用：打印 versionName，供工作流重命名 APK 文件
+// For CI: print the versionName so the workflow can rename the APK file.
 tasks.register('printVersionName') {
     doLast {
         println android.defaultConfig.versionName
     }
 }
 
-// CI 用：打印基版本（major.minor.revision，不含 build/Dev 后缀），供 DevN 计算
+// For CI: print the base version (major.minor.revision, without the build or Dev suffix) that
+// the DevN suffix is counted from.
 tasks.register('printBaseVersion') {
     doLast {
         println "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}"
