@@ -399,7 +399,11 @@ jobs:
           else
             VER_ARGS="-Pmobilegl.versionNameOverride=$DISPLAY_VERSION -Pmobilegl.versionGitHash=true"
           fi
-          gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true :app:assembleMagmaPluginRelease
+          # Both backends: the flavors share every source file and differ only in the application id,
+          # the default backend and a few resource values, so a mistake in that shared configuration
+          # shows up in exactly one of them.
+          gradle --no-daemon $VER_ARGS -Pmobilegl.prebuiltLibsDir="$GITHUB_WORKSPACE/android-plugin-ui/prebuilt" -Pmobilegl.sfpew=true \
+            :app:assembleMagmaPluginRelease :app:assembleEsprytPluginRelease
 
       # The trace profile is a release-only tool and never shipped, but its Java is only compiled
       # when some job builds that variant: a stale package name in the JNI entry points survived
@@ -418,31 +422,48 @@ jobs:
         run: |
           VERSION=$(gradle --no-daemon -q :app:printVersionName -Pmobilegl.versionNameOverride=$DISPLAY_VERSION | tail -1)
           echo "versionName=$VERSION"
-          cp app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk \
-             "../MobileGL-${VERSION}.apk"
+          for backend in magma espryt; do
+            flavor="${backend^}Plugin"
+            src="app/build/outputs/apk/${backend}Plugin/release/MobileGL-${flavor}-release.apk"
+            test -s "$src" || { echo "::error::the $backend APK was not produced"; exit 1; }
+            cp "$src" "../MobileGL-${VERSION}-${backend}.apk"
+          done
+          ls -l ../MobileGL-*.apk
 
       # The APK is what a phone installs, so the checks run on it and not on the build tree: the
       # renderer path the launcher is given, the libraries it names, and the commit they carry.
       - name: Verify the packaged libraries came from this tree
         run: |
-          apk=$(ls MobileGL-*.apk | head -n 1)
-          test -n "$apk" || { echo "::error::no APK was produced"; exit 1; }
-          contents=$(unzip -Z1 "$apk")
-          for lib in libMobileGL.so libRendererProxy.so libSfpew_real.so; do
-            grep -qx "lib/arm64-v8a/$lib" <<<"$contents" \
-              || { echo "::error::$lib is missing from the APK"; exit 1; }
+          shopt -s nullglob
+          apks=(MobileGL-*.apk)
+          [ "${#apks[@]}" -gt 0 ] || { echo "::error::no APK was produced"; exit 1; }
+
+          check_apk() {
+            local apk="$1"
+            local lib
+            contents=$(unzip -Z1 "$apk")
+            for lib in libMobileGL.so libRendererProxy.so libSfpew_real.so; do
+              grep -qx "lib/arm64-v8a/$lib" <<<"$contents" \
+                || { echo "::error::$apk is missing $lib"; exit 1; }
+            done
+
+            local aapt2 resources
+            aapt2=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -n 1)
+            resources=$(tr -d '"' <<<"$("$aapt2" dump resources "$apk")")
+            grep -Fq 'rendererGLPath:**|libRendererProxy.so' <<<"$resources" \
+              || { echo "::error::$apk: the renderer path does not point at libRendererProxy.so, so the runtime config would not be read"; exit 1; }
+
+            local short
+            short="${GITHUB_SHA:0:7}"
+            unzip -p "$apk" lib/arm64-v8a/libMobileGL.so > "$RUNNER_TEMP/packed.so"
+            grep -qa "$short" "$RUNNER_TEMP/packed.so" \
+              || { echo "::error::$apk: the packaged libMobileGL.so does not carry commit $short; it is not the library this run built"; exit 1; }
+            echo "$apk: libraries present, renderer path and commit $short verified"
+          }
+
+          for apk in "${apks[@]}"; do
+            check_apk "$apk"
           done
-
-          aapt2=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -n 1)
-          resources=$(tr -d '"' <<<"$("$aapt2" dump resources "$apk")")
-          grep -Fq 'rendererGLPath:**|libRendererProxy.so' <<<"$resources" \
-            || { echo "::error::the renderer path does not point at libRendererProxy.so, so the runtime config would not be read"; exit 1; }
-
-          unzip -p "$apk" lib/arm64-v8a/libMobileGL.so > "$RUNNER_TEMP/packed.so"
-          short="${GITHUB_SHA:0:7}"
-          grep -qa "$short" "$RUNNER_TEMP/packed.so" \
-            || { echo "::error::the packaged libMobileGL.so does not carry commit $short; it is not the library this run built"; exit 1; }
-          echo "packaged libMobileGL.so carries commit $short"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -126,10 +126,16 @@ and needs no NDK — or let CI rebuild them (see below).
 ```sh
 cd android-plugin-ui
 gradle -Pmobilegl.prebuiltLibsDir="$PWD/prebuilt" -Pmobilegl.sfpew=true \
-  :app:assembleMagmaPluginRelease
+  :app:assembleMagmaPluginRelease :app:assembleEsprytPluginRelease
 ```
 
-The APK lands at `app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk`.
+The two flavors package the same code and libraries; they differ in the application id
+(`ui.mobilegl.plugin.plus` and `ui.mobilegl.plugin.espryt`), in the backend the renderer dialog
+starts on (`DirectVulkan` and `DirectGLES`), and therefore in which of the two can be installed
+beside the other. The APKs land at
+`app/build/outputs/apk/magmaPlugin/release/MobileGL-MagmaPlugin-release.apk` and
+`app/build/outputs/apk/esprytPlugin/release/MobileGL-EsprytPlugin-release.apk`.
+
 Without `mobilegl.prebuiltLibsDir` the Gradle project instead builds `:MobileGL` from source, which
 needs the NDK and the submodules (`git submodule update --init --recursive`).
 
@@ -161,8 +167,12 @@ The CI workflow `.github/workflows/build-plugin.yml` builds the app on a push to
 the app, the core (`MobileGL/`, `include/`, `3rdparty/`, the build files) or the workflow itself, and
 on `workflow_dispatch`. Pass `versionName` to lock a release name, or leave it empty for a `-Dev.N`
 build numbered by the successful runs on `dev`. The run stops early when the four `SIGNING_*` secrets
-are missing, before the libraries build, because an unsigned release APK cannot be installed. The
-artifact is uploaded as `MobileGL-plugin-apk`.
+are missing, before the libraries build, because an unsigned release APK cannot be installed.
+
+The `build` job assembles both backend flavors and the trace profile, so a mistake that only affects
+one flavor fails the run instead of reaching a user. The artifact `MobileGL-plugin-apk` holds two
+files, `MobileGL-<version>-magma.apk` and `MobileGL-<version>-espryt.apk`; install the one whose
+backend you want the renderer dialog to start on, and switch the backend in that dialog afterwards.
 
 ### What CI builds
 
