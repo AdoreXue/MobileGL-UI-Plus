@@ -313,9 +313,11 @@ fun MobileGlPluginApp() {
         // 组合里直接算等于每 5 秒把几十次文件读挂在主线程上。
         var device by remember { mutableStateOf(DeviceInfo.empty()) }
         LaunchedEffect(report, glInfo, config, socExtra, deviceTick) {
-            device = withContext(Dispatchers.IO) {
+            val fresh = withContext(Dispatchers.IO) {
                 deviceInfo(deviceContext, report, glInfo, config, socExtra)
             }
+            // 5 秒一次的刷新多数时候什么都没变；值一样就不换实例，页面不会白重组一遍。
+            if (fresh != device) device = fresh
         }
         // 电量、可用存储、当前频率、GPU 占用这些会变的值：重读一次即触发重组。
         fun refreshDeviceState() {
