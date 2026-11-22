@@ -453,6 +453,18 @@ jobs:
             grep -Fq 'rendererGLPath:**|libRendererProxy.so' <<<"$resources" \
               || { echo "::error::$apk: the renderer path does not point at libRendererProxy.so, so the runtime config would not be read"; exit 1; }
 
+            # The two flavors share every source file, so the artifact name is only honest if the
+            # package inside it is that flavor's application id. The binary manifest stores its
+            # strings 16-bit wide, which is what strings -el reads.
+            local expected_id
+            case "$apk" in
+              *-magma.apk) expected_id=ui.mobilegl.plugin.plus ;;
+              *-espryt.apk) expected_id=ui.mobilegl.plugin.espryt ;;
+              *) echo "::error::$apk: unexpected artifact name, so its flavor cannot be checked"; exit 1 ;;
+            esac
+            unzip -p "$apk" AndroidManifest.xml | strings -el | grep -qF "$expected_id" \
+              || { echo "::error::$apk: the manifest does not carry the application id $expected_id"; exit 1; }
+
             local short
             short="${GITHUB_SHA:0:7}"
             unzip -p "$apk" lib/arm64-v8a/libMobileGL.so > "$RUNNER_TEMP/packed.so"
