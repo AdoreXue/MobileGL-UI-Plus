@@ -62,6 +62,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -129,10 +130,10 @@ fun ConfigScreen(
     }
 
     fun save() {
-        val issues = validateConfig(text)
+        val issues = validateConfig(text, context)
         if (issues.isNotEmpty()) {
             notice = Notice(
-                "发现 " + issues.size + " 个问题，已阻止保存：\n" + issues.joinToString("\n"),
+                context.getString(R.string.config_save_blocked, issues.size, issues.joinToString("\n")),
                 NoteTone.Bad,
             )
             return
@@ -142,7 +143,7 @@ fun ConfigScreen(
         // 所以这里不再用一个永远不会渲染的 busy 假装「保存中」。
         val kv = parseKeyValues(text)
         onMerge(kv)
-        notice = Notice("已提交 " + kv.size + " 项（校验通过），写入结果见上方状态卡", NoteTone.Good)
+        notice = Notice(context.getString(R.string.config_submitted, kv.size), NoteTone.Good)
     }
     // 整页共用一份解析结果：原始文件每敲一个字只解析一次，供所有选项读取。
     val parsed = remember(text) { parseKeyValues(text) }
@@ -176,8 +177,8 @@ fun ConfigScreen(
     var jumpGroup by remember { mutableStateOf<String?>(null) }
     fun groupShown(section: String): Boolean = jumpGroup == null || jumpGroup == section
     fun jumpTo(section: String) {
-        if (section == "DirectVulkan / Magma 专用") showMagma = true
-        if (section == "DirectGLES / Espryt 专用") showEspryt = true
+        if (section == SECTION_MAGMA) showMagma = true
+        if (section == SECTION_ESPRYT) showEspryt = true
         jumpGroup = section.ifBlank { null }
         query = ""
         onlyChanged = false
@@ -193,18 +194,27 @@ fun ConfigScreen(
     Box(Modifier.fillMaxSize()) {
         // 顶部固定区（标题 + 搜索）和列表放在同一个纵向容器里，列表才能用 weight 吃掉剩余高度。
         Column(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 8.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Space.Page)
+                .padding(top = Space.Md, bottom = Space.Sm),
+        ) {
             // 标题在最顶：搜索框不再压在页面标题上面。
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "启动配置",
+                    stringResource(R.string.config_title),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    if (onlyChanged) "已改 " + changedTotal + " / " + OPTION_INDEX.size else "共 " + OPTION_INDEX.size + " 项",
+                    if (onlyChanged) {
+                        stringResource(R.string.config_header_changed, changedTotal, OPTION_INDEX.size)
+                    } else {
+                        stringResource(R.string.config_header_total, OPTION_INDEX.size)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -237,7 +247,7 @@ fun ConfigScreen(
                         decorationBox = { inner ->
                             if (query.isBlank()) {
                                 Text(
-                                    "搜索配置项或键名",
+                                    stringResource(R.string.config_search_hint),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -250,7 +260,10 @@ fun ConfigScreen(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .clickable(onClickLabel = "清除搜索", role = Role.Button) { query = "" },
+                                .clickable(
+                                    onClickLabel = stringResource(R.string.config_search_clear),
+                                    role = Role.Button,
+                                ) { query = "" },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -263,7 +276,11 @@ fun ConfigScreen(
                     }
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        if (changedTotal > 0) "改动 " + changedTotal else "只看改动",
+                        if (changedTotal > 0) {
+                            stringResource(R.string.config_filter_changed_count, changedTotal)
+                        } else {
+                            stringResource(R.string.config_filter_only_changed)
+                        },
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
                             .background(
@@ -273,7 +290,7 @@ fun ConfigScreen(
                             .minimumInteractiveComponentSize()
                             .clickable(
                                 enabled = changedTotal > 0 || onlyChanged,
-                                onClickLabel = "只看改动过的项",
+                                onClickLabel = stringResource(R.string.config_filter_only_changed_label),
                                 role = Role.Button,
                             ) { onlyChanged = !onlyChanged }
                             .padding(horizontal = 10.dp, vertical = 4.dp),
@@ -312,7 +329,7 @@ fun ConfigScreen(
         // SFPEW 不是普通开关，先用一张独立配色的卡讲清楚是什么，再往下才是可改的配置。
         // 「只看已修改」时，这张说明卡也只在 SFPEW 相关项确实改过时才留下。
         val sfpewDirty = "SFPEW_ENABLED" in changedKeySet || SFPEW_TAIL_KEYS.any { it in changedKeySet }
-        if ((!onlyChanged || sfpewDirty) && groupShown("SFPEW")) item {
+        if ((!onlyChanged || sfpewDirty) && groupShown(SECTION_SFPEW)) item {
             Spacer(Modifier.height(4.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -321,32 +338,28 @@ fun ConfigScreen(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 ),
             ) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = Space.Lg, vertical = Space.Md)) {
                     Text(
-                        "SFPEW 包装器是什么",
+                        stringResource(R.string.config_sfpew_title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "给 1.16.5 及以下的老版 Minecraft 用的兼容层。老模组还在调固定管线指令" +
-                            "（glBegin、glMatrixMode 这一套），现代 GLES 驱动已经不提供。SFPEW 把这些调用" +
-                            "翻译成现代着色器调用，它本身不渲染，只负责把老接口接到下游后端。",
+                        stringResource(R.string.config_sfpew_intro),
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.padding(top = Space.Sm),
                     )
                     Text(
-                        "打开：游戏 → 代理 → SFPEW → MobileGL → GPU\n" +
-                            "关闭：游戏 → 代理 → MobileGL → GPU",
+                        stringResource(R.string.config_sfpew_chain),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.padding(top = Space.Sm),
                     )
                     Text(
-                        "玩 1.17 及以上不要打开，多包一层只会掉性能。开关与下面几项改完点「保存配置」写入，" +
-                            "切换后重启游戏生效。",
+                        stringResource(R.string.config_sfpew_advice),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.padding(top = Space.Sm),
                     )
                     // 控件等 runtime.conf 读完再画：否则先按模板渲染一遍，读完又跳一次。
                     if (BuildConfig.SFPEW_BUNDLED && ready) {
@@ -355,9 +368,9 @@ fun ConfigScreen(
                             text = setKey(text, key, value)
                         }
                         OptionSelect(
-                            label = "SFPEW 后端",
+                            label = stringResource(R.string.config_sfpew_backend),
                             key = "SFPEW_EGL",
-                            desc = "SFPEW 把这些老接口交给谁去渲染",
+                            desc = stringResource(R.string.config_sfpew_backend_desc),
                             options = listOf("libMobileGL.so", "libEGL.so"),
                             value = parsed["SFPEW_EGL"] ?: "libMobileGL.so",
                             default = "libMobileGL.so",
@@ -372,7 +385,7 @@ fun ConfigScreen(
                         SkeletonCard(3)
                     } else {
                         Text(
-                            "当前安装包是直连版，不含 libSimpleFPEWrapper.so，无法启用。",
+                            stringResource(R.string.config_sfpew_not_bundled),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 6.dp),
@@ -392,18 +405,18 @@ fun ConfigScreen(
             ) {
                 Column {
                     Spacer(Modifier.height(8.dp))
-                    SectionLabel("搜索结果（" + resultMatches.size + "）")
+                    SectionLabel(stringResource(R.string.config_search_results, resultMatches.size))
                     InfoCard {
                         if (resultMatches.isEmpty()) {
                             EmptyState(
                                 icon = Icons.Filled.Search,
-                                title = "没有匹配的配置项",
-                                body = "换个说法或直接搜键名试试，比如 SFPEW、ANGLE、缓存。",
+                                title = stringResource(R.string.config_search_empty_title),
+                                body = stringResource(R.string.config_search_empty_body),
                             )
                             val hints = suggestOptions(query, context)
                             if (hints.isNotEmpty()) {
                                 Text(
-                                    "试试这些：",
+                                    stringResource(R.string.config_search_try),
                                     modifier = Modifier.padding(top = 10.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -435,18 +448,18 @@ fun ConfigScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    section.ifBlank { "其他" },
+                                    sectionLabel(section),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 Spacer(Modifier.weight(1f))
                                 if (section.isNotBlank()) {
                                     Text(
-                                        "跳到该组 ›",
+                                        stringResource(R.string.config_jump_group),
                                         modifier = Modifier
                                             .minimumInteractiveComponentSize()
                                             .clickable(
-                                                onClickLabel = "跳到该组",
+                                                onClickLabel = stringResource(R.string.config_jump_group_label),
                                                 role = Role.Button,
                                             ) { jumpTo(section) },
                                         style = MaterialTheme.typography.labelSmall,
@@ -475,13 +488,13 @@ fun ConfigScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "← 全部配置",
+                            stringResource(R.string.config_back_to_all),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(Modifier.weight(1f))
                         Text(
-                            group ?: "",
+                            group?.let { sectionLabel(it) } ?: "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -492,7 +505,7 @@ fun ConfigScreen(
                 item {
                     InfoCard {
                         Text(
-                            "当前没有任何改动：所有配置项都还是官方默认值。",
+                            stringResource(R.string.config_no_changes),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -500,38 +513,38 @@ fun ConfigScreen(
                 }
             }
             optionGroup(
-                title = "通用配置",
-                note = "所有后端通用。标「自动 / 开 / 关」的项，自动就是官方默认：不写这个键，由 MobileGL 按设备能力自行判断。改动后点「保存配置」写入。",
-                keys = if (groupShown("通用配置")) visible(COMMON_KEYS) else emptyList(),
+                section = SECTION_COMMON,
+                noteRes = R.string.config_section_common_note,
+                keys = if (groupShown(SECTION_COMMON)) visible(COMMON_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
-                title = "管线",
-                note = "前后端命令传递相关的进阶选项。",
-                keys = if (groupShown("管线")) visible(PIPE_KEYS) else emptyList(),
+                section = SECTION_PIPE,
+                noteRes = R.string.config_section_pipe_note,
+                keys = if (groupShown(SECTION_PIPE)) visible(PIPE_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
-                title = "兼容性",
-                note = "针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。",
-                keys = if (groupShown("兼容性")) visible(COMPAT_KEYS) else emptyList(),
+                section = SECTION_COMPAT,
+                noteRes = R.string.config_section_compat_note,
+                keys = if (groupShown(SECTION_COMPAT)) visible(COMPAT_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
             optionGroup(
-                title = "诊断",
-                note = "输出日志与内部校验，用于定位问题。日常开启会产生额外开销。",
-                keys = if (groupShown("诊断")) visible(DIAG_KEYS) else emptyList(),
+                section = SECTION_DIAG,
+                noteRes = R.string.config_section_diag_note,
+                keys = if (groupShown(SECTION_DIAG)) visible(DIAG_KEYS) else emptyList(),
                 text = text,
                 parsed = parsed,
             ) { key, value -> text = setKey(text, key, value) }
-            if (groupShown("DirectVulkan / Magma 专用") && visible(MAGMA_KEYS).isNotEmpty()) item {
-                SectionLabel("DirectVulkan / Magma 专用", visible(MAGMA_KEYS).size)
+            if (groupShown(SECTION_MAGMA) && visible(MAGMA_KEYS).isNotEmpty()) item {
+                SectionLabel(sectionLabel(SECTION_MAGMA), visible(MAGMA_KEYS).size)
                 InfoCard {
                     Text(
-                        "仅在渲染后端为 DirectVulkan 时生效。已按官方默认值配置，通常无需改动。",
+                        stringResource(R.string.config_section_magma_note),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -539,18 +552,24 @@ fun ConfigScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { showMagma = !showMagma },
-                    ) { Text(if (showMagma || onlyChanged) "收起" else "展开 " + visible(MAGMA_KEYS).size + " 项") }
+                    ) { Text(
+                        if (showMagma || onlyChanged) {
+                            stringResource(R.string.config_collapse)
+                        } else {
+                            stringResource(R.string.config_expand_count, visible(MAGMA_KEYS).size)
+                        },
+                    ) }
                     if (showMagma || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
                         OptionRows(visible(MAGMA_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
                     }
                 }
             }
-            if (groupShown("DirectGLES / Espryt 专用") && visible(ESPRYT_KEYS).isNotEmpty()) item {
-                SectionLabel("DirectGLES / Espryt 专用", visible(ESPRYT_KEYS).size)
+            if (groupShown(SECTION_ESPRYT) && visible(ESPRYT_KEYS).isNotEmpty()) item {
+                SectionLabel(sectionLabel(SECTION_ESPRYT), visible(ESPRYT_KEYS).size)
                 InfoCard {
                     Text(
-                        "仅在渲染后端为 DirectGLES 时生效。已按官方默认值配置，通常无需改动。",
+                        stringResource(R.string.config_section_espryt_note),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -558,7 +577,13 @@ fun ConfigScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { showEspryt = !showEspryt },
-                    ) { Text(if (showEspryt || onlyChanged) "收起" else "展开 " + visible(ESPRYT_KEYS).size + " 项") }
+                    ) { Text(
+                        if (showEspryt || onlyChanged) {
+                            stringResource(R.string.config_collapse)
+                        } else {
+                            stringResource(R.string.config_expand_count, visible(ESPRYT_KEYS).size)
+                        },
+                    ) }
                     if (showEspryt || onlyChanged) {
                         Spacer(Modifier.height(4.dp))
                         OptionRows(visible(ESPRYT_KEYS), text, parsed) { key, value -> text = setKey(text, key, value) }
@@ -566,40 +591,44 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("保存与文件")
+                SectionLabel(stringResource(R.string.config_section_save))
                 InfoCard {
                     Text(status.sharedPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
-                        if (status.sharedWritten) "已写入共享路径（启动器进程可读）" else "尚未写入共享路径：" + (status.reason ?: ""),
+                        if (status.sharedWritten) {
+                            stringResource(R.string.config_shared_written)
+                        } else {
+                            stringResource(R.string.config_shared_missing, status.reason ?: "")
+                        },
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
-                        "官方 CI 的 libMobileGL.so 只读环境变量、不读此文件；本项目补丁库与后续 PanVK 驱动会读取。",
+                        stringResource(R.string.config_shared_note),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(enabled = !busy, onClick = { save() }) { Text("保存配置") }
-                        OutlinedButton(enabled = !busy, onClick = { reload() }) { Text("重新读取") }
+                        Button(enabled = !busy, onClick = { save() }) { Text(stringResource(R.string.config_save)) }
+                        OutlinedButton(enabled = !busy, onClick = { reload() }) { Text(stringResource(R.string.config_reload)) }
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
-                            val issues = validateConfig(text)
+                            val issues = validateConfig(text, context)
                             notice = if (issues.isEmpty()) {
-                                Notice("校验通过：所有键与取值都有效", NoteTone.Good)
+                                Notice(context.getString(R.string.config_valid_ok), NoteTone.Good)
                             } else {
                                 Notice(
-                                    "发现 " + issues.size + " 个问题：\n" + issues.joinToString("\n"),
+                                    context.getString(R.string.config_valid_issues, issues.size, issues.joinToString("\n")),
                                     NoteTone.Bad,
                                 )
                             }
-                        }) { Text("校验配置") }
-                        OutlinedButton(onClick = { confirmTemplate = true }) { Text("恢复模板") }
+                        }) { Text(stringResource(R.string.config_validate)) }
+                        OutlinedButton(onClick = { confirmTemplate = true }) { Text(stringResource(R.string.config_restore_template)) }
                         if (!hasAllFilesAccess(context)) {
-                            OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text("授予所有文件访问权限") }
+                            OutlinedButton(onClick = { openAllFilesSettings(context) }) { Text(stringResource(R.string.config_grant_storage)) }
                         }
                     }
                     notice?.let {
@@ -609,7 +638,7 @@ fun ConfigScreen(
                 }
             }
             item {
-                SectionLabel("原始文件")
+                SectionLabel(stringResource(R.string.config_section_raw))
                 InfoCard {
                     // 全文编辑器默认收起：平时用不到，展开时也不容易被误触。
                     Row(
@@ -617,7 +646,11 @@ fun ConfigScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            if (rawOpen) "收起全文" else "展开编辑全文（" + (text.count { it == '\n' } + 1) + " 行）",
+                            if (rawOpen) {
+                                stringResource(R.string.config_raw_collapse)
+                            } else {
+                                stringResource(R.string.config_raw_expand, text.count { it == '\n' } + 1)
+                            },
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -640,19 +673,19 @@ fun ConfigScreen(
                         OutlinedButton(onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("runtime.conf", text))
-                        }) { Text("复制") }
+                        }) { Text(stringResource(R.string.config_copy)) }
                         OutlinedButton(onClick = {
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, text)
                             }
-                            context.startActivity(Intent.createChooser(intent, "分享配置文件"))
-                        }) { Text("分享") }
+                            context.startActivity(Intent.createChooser(intent, context.getString(R.string.config_share_chooser)))
+                        }) { Text(stringResource(R.string.config_share)) }
                     }
                 }
             }
             item {
-                SectionLabel("恢复默认")
+                SectionLabel(stringResource(R.string.config_section_reset))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
@@ -660,11 +693,11 @@ fun ConfigScreen(
                 ) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text(
-                            "移除配置文件中全部配置项，保存后渲染器回到官方内置默认。",
+                            stringResource(R.string.config_reset_desc),
                             style = MaterialTheme.typography.labelSmall,
                         )
                         Text(
-                            "此操作不可撤销；建议先点上方「保存配置」确认当前内容已备份。",
+                            stringResource(R.string.config_reset_warn),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -672,7 +705,7 @@ fun ConfigScreen(
                         OutlinedButton(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             onClick = { confirmResetAll = true },
-                        ) { Text("全部恢复官方默认") }
+                        ) { Text(stringResource(R.string.config_reset_all)) }
                     }
                 }
             }
@@ -692,31 +725,39 @@ fun ConfigScreen(
     if (confirmTemplate) {
         AlertDialog(
             onDismissRequest = { confirmTemplate = false },
-            title = { Text("恢复模板？") },
-            text = { Text("会用内置模板替换当前全部内容，未保存前不影响文件。") },
+            title = { Text(stringResource(R.string.config_template_title)) },
+            text = { Text(stringResource(R.string.config_template_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     text = DEFAULT_CONFIG
                     confirmTemplate = false
-                    notice = Notice("已载入模板，记得点“保存配置”", NoteTone.Info)
-                }) { Text("恢复") }
+                    notice = Notice(context.getString(R.string.config_template_done), NoteTone.Info)
+                }) { Text(stringResource(R.string.config_restore)) }
             },
-            dismissButton = { TextButton(onClick = { confirmTemplate = false }) { Text("取消") } },
+            dismissButton = {
+                TextButton(onClick = { confirmTemplate = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
         )
     }
     if (confirmResetAll) {
         AlertDialog(
             onDismissRequest = { confirmResetAll = false },
-            title = { Text("恢复全部默认值？") },
-            text = { Text("会移除当前所有配置项，保存后渲染器回到内置默认设置。此操作不可撤销。") },
+            title = { Text(stringResource(R.string.config_reset_title)) },
+            text = { Text(stringResource(R.string.config_reset_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     text = removeKeys(text, SUPPORTED_KEYS)
                     confirmResetAll = false
-                    notice = Notice("已移除全部配置项，保存后回到原生默认值", NoteTone.Info)
-                }) { Text("恢复默认") }
+                    notice = Notice(context.getString(R.string.config_reset_done), NoteTone.Info)
+                }) { Text(stringResource(R.string.config_restore_default)) }
             },
-            dismissButton = { TextButton(onClick = { confirmResetAll = false }) { Text("取消") } },
+            dismissButton = {
+                TextButton(onClick = { confirmResetAll = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
         )
     }
 }
@@ -734,7 +775,7 @@ private fun OptionDesc(desc: String, default: String, highlight: String = "") {
     }
     if (default.isNotBlank()) {
         Text(
-            "官方默认：" + default,
+            stringResource(R.string.config_official_default, default),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
@@ -774,6 +815,11 @@ private fun OptionSelect(
     }
 }
 
+/** 三态选项的内部标记：只用来比较，显示名在下面按语言取。 */
+private const val AUTO = "auto"
+private const val ON = "on"
+private const val OFF = "off"
+
 /**
  * 三态选项：官方用 auto / 1 / 0 表示「自动 / 强制开 / 强制关」，不写这个键就是 auto。
  * 二十多个兼容项都是这种语义，用开关只能写 0 或 1，一旦动过就回不到自动探测。
@@ -790,10 +836,11 @@ private fun OptionQuirk(
     onChange: (String) -> Unit,
 ) {
     val current = (parsed[key] ?: "auto").lowercase()
+    // 取值仍是 auto/1/0，显示名来自资源：三枚胶囊的文字跟着语言走，比较仍走机器值。
     val value = when (current) {
-        "1", "on", "true", "yes", "forceon" -> "开"
-        "0", "off", "false", "no", "forceoff" -> "关"
-        else -> "自动"
+        "1", "on", "true", "yes", "forceon" -> ON
+        "0", "off", "false", "no", "forceoff" -> OFF
+        else -> AUTO
     }
     val changed = changedQuirk(current, default)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -805,19 +852,27 @@ private fun OptionQuirk(
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("自动", "开", "关").forEach { option ->
+            listOf(AUTO, ON, OFF).forEach { option ->
                 FilterChip(
                     selected = option == value,
                     onClick = {
                         onChange(
                             when (option) {
-                                "开" -> "1"
-                                "关" -> "0"
+                                ON -> "1"
+                                OFF -> "0"
                                 else -> "auto"
                             },
                         )
                     },
-                    label = { Text(option) },
+                    label = {
+                        Text(
+                            when (option) {
+                                ON -> stringResource(R.string.config_value_on)
+                                OFF -> stringResource(R.string.config_value_off)
+                                else -> stringResource(R.string.config_value_auto)
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -1552,40 +1607,46 @@ private val BACKEND_VALUES = setOf("DirectVulkan", "DirectGLES")
 private val SFPEW_EGL_VALUES = setOf("libMobileGL.so", "libEGL.so")
 
 /** 校验配置文本，返回问题列表（空表示通过）。 */
-private fun validateConfig(text: String): List<String> {
+private fun validateConfig(text: String, context: Context): List<String> {
     val issues = mutableListOf<String>()
     parseKeyValues(text).forEach { (key, value) ->
         when {
             !SUPPORTED_KEYS.contains(key) && !ALLOWED_EXTRA_KEYS.contains(key) ->
-                issues.add("未知键：" + key + "（原生库不支持，会被忽略）")
+                issues.add(context.getString(R.string.config_unknown_key, key))
             key == "MOBILEGL_BACKEND_TYPE" && !BACKEND_VALUES.contains(value) ->
-                issues.add("渲染后端取值非法：" + value + "（应为 DirectVulkan / DirectGLES）")
+                issues.add(context.getString(R.string.config_backend_invalid, value))
             key == "SFPEW_EGL" && !SFPEW_EGL_VALUES.contains(value) ->
-                issues.add("SFPEW 后端取值非法：" + value + "（应为 libMobileGL.so / libEGL.so）")
+                issues.add(context.getString(R.string.config_sfpew_egl_invalid, value))
             QUIRK_KEYS.contains(key) && !QUIRK_VALUES.contains(value.lowercase()) ->
-                issues.add(key + " 应为 auto / 1 / 0（也可写 on / off），当前是 " + value)
+                issues.add(context.getString(R.string.config_quirk_invalid, key, value))
             NAMED_VALUES.containsKey(key) &&
                 value.lowercase() != "auto" && !NAMED_VALUES.getValue(key).contains(value.lowercase()) ->
                 issues.add(
-                    key + " 取值非法：" + value + "（应为 auto 或 " +
-                        NAMED_VALUES.getValue(key).joinToString(" / ") + "）",
+                    context.getString(
+                        R.string.config_choice_invalid,
+                        key,
+                        value,
+                        NAMED_VALUES.getValue(key).joinToString(" / "),
+                    ),
                 )
             key == "MOBILEGL_PIPE_PUSH" && !isBitmask(value) ->
-                issues.add(key + " 应为非负整数或 0x 开头的十六进制位掩码，当前是 " + value)
+                issues.add(context.getString(R.string.config_mask_invalid, key, value))
             BOOLEAN_KEYS.contains(key) && value != "0" && value != "1" ->
-                issues.add(key + " 应为 0 或 1，当前是 " + value)
+                issues.add(context.getString(R.string.config_bool_invalid, key, value))
             INT_RANGES.containsKey(key) -> {
                 val n = value.toIntOrNull()
                 val range = INT_RANGES.getValue(key)
-                if (n == null) issues.add(key + " 应为整数，当前是 " + value)
-                else if (n !in range) issues.add(key + " 超出范围 " + range.first + "~" + range.last + "，当前是 " + n)
+                if (n == null) {
+                    issues.add(context.getString(R.string.config_int_invalid, key, value))
+                } else if (n !in range) {
+                    issues.add(context.getString(R.string.config_int_range, key, range.first, range.last, n.toString()))
+                }
             }
         }
     }
     return issues
 }
 
-/** 移除指定键（回到原生内置默认）。 */
 private fun removeKeys(text: String, keys: Set<String>): String =
     text.lines().filterNot { line ->
         val trimmed = line.trim()
@@ -1661,19 +1722,18 @@ private fun OverviewStrip(total: Int, changed: Int, backend: String, sfpewOn: Bo
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainer),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.Lg, vertical = Space.Md)) {
             Row(Modifier.fillMaxWidth()) {
-                OverviewStat(Modifier.weight(1f), total.toString(), "配置项")
-                OverviewStat(Modifier.weight(1f), changed.toString(), "已改动", highlight = changed > 0)
-                OverviewStat(Modifier.weight(1.5f), backend, "渲染后端", mono = false, compact = true)
+                OverviewStat(Modifier.weight(1f), total.toString(), stringResource(R.string.config_stat_options))
+                OverviewStat(Modifier.weight(1f), changed.toString(), stringResource(R.string.config_stat_changed), highlight = changed > 0)
+                OverviewStat(Modifier.weight(1.5f), backend, stringResource(R.string.config_stat_backend), mono = false, compact = true)
             }
             Text(
                 if (changed == 0) {
-                    "全部与官方默认一致" + (if (sfpewOn) " · SFPEW 已启用" else "")
+                    stringResource(R.string.config_all_default)
                 } else {
-                    "有 " + changed + " 项与官方默认不同，行首带圆点的就是改过的" +
-                        (if (sfpewOn) " · SFPEW 已启用" else "")
-                },
+                    stringResource(R.string.config_changed_note, changed)
+                } + if (sfpewOn) stringResource(R.string.config_sfpew_on_suffix) else "",
                 modifier = Modifier.padding(top = 10.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = scheme.onSurfaceVariant,
@@ -1720,7 +1780,7 @@ private fun OverviewStat(
 @Composable
 private fun SaveBar(modifier: Modifier, busy: Boolean, changed: Int, onSave: () -> Unit) {
     Surface(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = Space.Page, vertical = Space.Sm),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primary,
         shadowElevation = 8.dp,
@@ -1735,9 +1795,9 @@ private fun SaveBar(modifier: Modifier, busy: Boolean, changed: Int, onSave: () 
         ) {
             Text(
                 when {
-                    busy -> "保存中…"
-                    changed > 0 -> "保存配置 · " + changed + " 项已改"
-                    else -> "保存配置"
+                    busy -> stringResource(R.string.config_saving)
+                    changed > 0 -> stringResource(R.string.config_save_changed, changed)
+                    else -> stringResource(R.string.config_save)
                 },
                 color = MaterialTheme.colorScheme.onPrimary,
                 fontWeight = FontWeight.Bold,
@@ -1799,17 +1859,46 @@ private val ESPRYT_KEYS = listOf(
     "MOBILEGL_ESPRYT_MULTIDRAW_MODE", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH",
 )
 
+/**
+ * 分组标识。
+ *
+ * 这里存的是不随语言变化的短标识，显示名在 [sectionLabel] 里取；「跳到该组」的比较
+ * 用标识而不是译好的标题，换语言时分组仍然对得上。
+ */
+private const val SECTION_COMMON = "common"
+private const val SECTION_PIPE = "pipe"
+private const val SECTION_COMPAT = "compat"
+private const val SECTION_DIAG = "diag"
+private const val SECTION_MAGMA = "magma"
+private const val SECTION_ESPRYT = "espryt"
+private const val SECTION_SFPEW = "sfpew"
+
+/** 分组标识对应的标题。 */
+@Composable
+private fun sectionLabel(section: String): String = stringResource(
+    when (section) {
+        SECTION_COMMON -> R.string.config_section_common
+        SECTION_PIPE -> R.string.config_section_pipe
+        SECTION_COMPAT -> R.string.config_section_compat
+        SECTION_DIAG -> R.string.config_section_diag
+        SECTION_MAGMA -> R.string.config_group_magma
+        SECTION_ESPRYT -> R.string.config_group_espryt
+        SECTION_SFPEW -> R.string.config_group_sfpew
+        else -> R.string.config_other_section
+    },
+)
+
 /** 每个配置项属于哪个分组：搜索结果里标出来，点一下能跳回去。 */
 private val OPTION_SECTION: Map<String, String> = buildMap {
-    COMMON_KEYS.forEach { put(it, "通用配置") }
-    PIPE_KEYS.forEach { put(it, "管线") }
-    COMPAT_KEYS.forEach { put(it, "兼容性") }
-    DIAG_KEYS.forEach { put(it, "诊断") }
-    MAGMA_KEYS.forEach { put(it, "DirectVulkan / Magma 专用") }
-    ESPRYT_KEYS.forEach { put(it, "DirectGLES / Espryt 专用") }
-    SFPEW_TAIL_KEYS.forEach { put(it, "SFPEW") }
-    put("SFPEW_ENABLED", "SFPEW")
-    put("SFPEW_EGL", "SFPEW")
+    COMMON_KEYS.forEach { put(it, SECTION_COMMON) }
+    PIPE_KEYS.forEach { put(it, SECTION_PIPE) }
+    COMPAT_KEYS.forEach { put(it, SECTION_COMPAT) }
+    DIAG_KEYS.forEach { put(it, SECTION_DIAG) }
+    MAGMA_KEYS.forEach { put(it, SECTION_MAGMA) }
+    ESPRYT_KEYS.forEach { put(it, SECTION_ESPRYT) }
+    SFPEW_TAIL_KEYS.forEach { put(it, SECTION_SFPEW) }
+    put("SFPEW_ENABLED", SECTION_SFPEW)
+    put("SFPEW_EGL", SECTION_SFPEW)
 }
 
 /** 搜不到时推荐的常用项。 */
@@ -1856,8 +1945,8 @@ private fun HighlightedText(
 
 /** 一组配置项：标题上的数字跟着「只看已修改」一起变，筛完没剩项就整组不画。 */
 private fun LazyListScope.optionGroup(
-    title: String,
-    note: String,
+    section: String,
+    noteRes: Int,
     keys: List<String>,
     text: String,
     parsed: Map<String, String>,
@@ -1865,10 +1954,10 @@ private fun LazyListScope.optionGroup(
 ) {
     if (keys.isEmpty()) return
     item {
-        SectionLabel(title, keys.size)
+        SectionLabel(sectionLabel(section), keys.size)
         InfoCard {
             Text(
-                note,
+                stringResource(noteRes),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
