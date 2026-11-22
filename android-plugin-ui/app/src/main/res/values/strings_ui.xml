@@ -157,8 +157,7 @@
     <string name="render_tune_push_desc">管道指令的推送掩码，除非明确要排除某位否则不用改</string>
     <string name="render_tune_mirror">索引镜像</string>
     <string name="render_tune_mirror_desc">索引缓冲的镜像上限，显存紧张的机型可调小</string>
-    <string name="render_section_drivers">驱动与组件</string>
-    <string name="render_section_selftest">驱动自检</string>
+    <string name="render_section_drivers_selftest">驱动与自检</string>
     <string name="render_hero_label">当前渲染方案</string>
     <string name="render_pending_restart">待生效</string>
     <string name="render_effective">已生效</string>

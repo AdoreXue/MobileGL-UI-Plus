@@ -1175,16 +1175,27 @@ fun BigTitle(text: String) {
     )
 }
 
+/**
+ * 卡片上方的小标题。
+ *
+ * [tone] 默认用主色，表示这一区是要动手改的；只做汇总或入口的分区传
+ * onSurfaceVariant，读起来是「参考信息」，一页里谁是主要动作一眼分得出来。
+ */
 @Composable
-fun SectionLabel(text: String, count: Int? = null) {
+fun SectionLabel(
+    text: String,
+    count: Int? = null,
+    tone: Color = Color.Unspecified,
+) {
+    val labelColor = if (tone == Color.Unspecified) MaterialTheme.colorScheme.primary else tone
     Row(
-        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+        modifier = Modifier.padding(top = Space.Xl, bottom = Space.Sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
+            color = labelColor,
             fontWeight = FontWeight.Medium,
         )
         // 项数是附加信息：不给就不画，保持其他页面的标题原样。

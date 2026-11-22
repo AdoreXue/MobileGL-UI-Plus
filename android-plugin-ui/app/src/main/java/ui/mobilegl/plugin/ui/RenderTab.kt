@@ -38,8 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -113,6 +111,64 @@ fun RenderTab(
     val pipePush = env("MOBILEGL_PIPE_PUSH", "0x3fff")
     val indexMirror = env("MOBILEGL_PIPE_INDEX_MIRROR_MB", "64")
     val tuneSummary = stringResource(R.string.render_tune_summary, framesInFlight, pipePush, indexMirror)
+    // 页面只有两块：上面是「要动手改的」后端，下面是「看一眼、点进去的」驱动与自检。
+    // 区块抽成 lambda：窄屏按顺序铺开，宽屏分两栏，内容只写一份。
+    val wide = LocalWindowWidth.current.twoColumns
+    val backendSection: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth()) {
+            SectionLabel(stringResource(R.string.render_section_backend))
+            BackendCard(
+                backend = config.backend,
+                angleOn = angleOn,
+                detailsOpen = detailsOpen,
+                detailLines = listOf(
+                    "MOBILEGL_BACKEND_TYPE" to config.backend,
+                    "SFPEW_EGL" to (config.env["SFPEW_EGL"] ?: "libMobileGL.so"),
+                    "MOBILEGL_ESPRYT_USE_ANGLE" to env("MOBILEGL_ESPRYT_USE_ANGLE"),
+                    "MOBILEGL_FRAMES_IN_FLIGHT" to env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
+                    "activeIcdPath" to (config.activeIcdPath ?: stringResource(R.string.render_not_generated)),
+                ),
+                tuneSummary = tuneSummary,
+                tuneOpen = tuneOpen,
+                tuneRows = listOf(
+                    TuneValue(R.string.render_tune_frames, R.string.render_tune_frames_desc, framesInFlight),
+                    TuneValue(R.string.render_tune_push, R.string.render_tune_push_desc, pipePush),
+                    TuneValue(R.string.render_tune_mirror, R.string.render_tune_mirror_desc, indexMirror + " MiB"),
+                ),
+                onToggleDetails = { detailsOpen = it },
+                onToggleTune = { tuneOpen = it },
+                onOpenConfigFile = onOpenConfigFile,
+                onSelectBackend = { setBackend(it) },
+                onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) },
+            )
+        }
+    }
+    val driversSection: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth()) {
+            // 灰一点的标题：这一区是汇总与入口，不是这一页要你改的东西。
+            SectionLabel(
+                stringResource(R.string.render_section_drivers_selftest),
+                tone = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            DriverCard(
+                activeDriverName = activeDriverName,
+                icdReady = config.activeIcdPath != null,
+                driverCount = driverCount,
+                externalCount = externalCount,
+                onOpenDrivers = onOpenDrivers,
+                onOpenConfigFile = onOpenConfigFile,
+            )
+            Spacer(Modifier.height(Space.Lg))
+            SelfTestBlock(
+                report = report,
+                probing = probing,
+                lastProbeMs = lastProbeMs,
+                onRunSelfTest = onRunSelfTest,
+                onOpenSelfTest = onOpenSelfTest,
+            )
+        }
+    }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -140,80 +196,19 @@ fun RenderTab(
                 pendingRestart = pendingRestart,
             )
         }
-        item { SectionLabel(stringResource(R.string.render_section_backend)) }
-        item {
-            BackendCard(
-                backend = config.backend,
-                angleOn = angleOn,
-                detailsOpen = detailsOpen,
-                detailLines = listOf(
-                    "MOBILEGL_BACKEND_TYPE" to config.backend,
-                    "SFPEW_EGL" to (config.env["SFPEW_EGL"] ?: "libMobileGL.so"),
-                    "MOBILEGL_ESPRYT_USE_ANGLE" to env("MOBILEGL_ESPRYT_USE_ANGLE"),
-                    "MOBILEGL_FRAMES_IN_FLIGHT" to env("MOBILEGL_FRAMES_IN_FLIGHT", "3"),
-                    "activeIcdPath" to (config.activeIcdPath ?: stringResource(R.string.render_not_generated)),
-                ),
-                onToggleDetails = { detailsOpen = it },
-                onSelectBackend = { setBackend(it) },
-                onToggleAngle = { setEnv("MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) },
-            )
-        }
-        item { SectionLabel(stringResource(R.string.render_section_tune), 3) }
-        item {
-            // 平时只占一行；点开才展开三项，每一项写清"这是什么、什么时候该动"。
-            InfoCard {
-                TuneSummaryRow(summary = tuneSummary, expanded = tuneOpen) { tuneOpen = !tuneOpen }
-                AnimatedVisibility(
-                    visible = tuneOpen,
-                    enter = Motion.foldEnter(),
-                    exit = Motion.foldExit(),
+        if (wide) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.Xl),
                 ) {
-                    Column {
-                        DividerLine()
-                        TuneRow(
-                            label = stringResource(R.string.render_tune_frames),
-                            explain = stringResource(R.string.render_tune_frames_desc),
-                            value = framesInFlight,
-                            onClick = onOpenConfigFile,
-                        )
-                        DividerLine()
-                        TuneRow(
-                            label = stringResource(R.string.render_tune_push),
-                            explain = stringResource(R.string.render_tune_push_desc),
-                            value = pipePush,
-                            onClick = onOpenConfigFile,
-                        )
-                        DividerLine()
-                        TuneRow(
-                            label = stringResource(R.string.render_tune_mirror),
-                            explain = stringResource(R.string.render_tune_mirror_desc),
-                            value = indexMirror + " MiB",
-                            onClick = onOpenConfigFile,
-                        )
-                    }
+                    Column(Modifier.weight(1f)) { backendSection() }
+                    Column(Modifier.weight(1f)) { driversSection() }
                 }
             }
-        }
-        item { SectionLabel(stringResource(R.string.render_section_drivers)) }
-        item {
-            DriverCard(
-                activeDriverName = activeDriverName,
-                icdReady = config.activeIcdPath != null,
-                driverCount = driverCount,
-                externalCount = externalCount,
-                onOpenDrivers = onOpenDrivers,
-                onOpenConfigFile = onOpenConfigFile,
-            )
-        }
-        item { SectionLabel(stringResource(R.string.render_section_selftest)) }
-        item {
-            SelfTestBlock(
-                report = report,
-                probing = probing,
-                lastProbeMs = lastProbeMs,
-                onRunSelfTest = onRunSelfTest,
-                onOpenSelfTest = onOpenSelfTest,
-            )
+        } else {
+            item { backendSection() }
+            item { driversSection() }
         }
     }
 }
@@ -305,20 +300,33 @@ private fun RenderHero(
     }
 }
 
-/** 后端卡：分段切换、机理说明、ANGLE 开关、可展开的技术细节。 */
+/** 调优摘要里的一项：名称与解释取自资源，值来自配置。 */
+private data class TuneValue(val labelRes: Int, val explainRes: Int, val value: String)
+
+/**
+ * 后端卡：整页唯一的「动手改」的地方。
+ *
+ * 顺序按用的人怎么想：先选后端 → 这是什么、建议选哪个 → 附带开关 → 调优值 → 技术细节。
+ * 调优值原来单占一个区块，现在并进这张卡：它们本来就是对当前后端的微调。
+ */
 @Composable
 private fun BackendCard(
     backend: String,
     angleOn: Boolean,
     detailsOpen: Boolean,
     detailLines: List<Pair<String, String>>,
+    tuneSummary: String,
+    tuneOpen: Boolean,
+    tuneRows: List<TuneValue>,
     onToggleDetails: (Boolean) -> Unit,
+    onToggleTune: (Boolean) -> Unit,
+    onOpenConfigFile: () -> Unit,
     onSelectBackend: (String) -> Unit,
     onToggleAngle: (Boolean) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     InfoCard {
-        Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(top = Space.Md)) {
             BackendSegment(backend, onSelectBackend)
         }
         Text(
@@ -327,7 +335,14 @@ private fun BackendCard(
             } else {
                 stringResource(R.string.render_magma_detail)
             },
-            modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+            modifier = Modifier.padding(top = Space.Md),
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant,
+        )
+        // 建议紧接在「选哪个」后面，而不是压在卡片最底下。
+        Text(
+            stringResource(R.string.render_backend_advice),
+            modifier = Modifier.padding(top = Space.Sm, bottom = Space.Xs),
             style = MaterialTheme.typography.labelSmall,
             color = scheme.onSurfaceVariant,
         )
@@ -342,13 +357,32 @@ private fun BackendCard(
             )
         }
         DividerLine()
+        TuneSummaryRow(summary = tuneSummary, expanded = tuneOpen) { onToggleTune(!tuneOpen) }
+        AnimatedVisibility(
+            visible = tuneOpen,
+            enter = Motion.foldEnter(),
+            exit = Motion.foldExit(),
+        ) {
+            Column {
+                tuneRows.forEach { tune ->
+                    DividerLine()
+                    TuneRow(
+                        label = stringResource(tune.labelRes),
+                        explain = stringResource(tune.explainRes),
+                        value = tune.value,
+                        onClick = onOpenConfigFile,
+                    )
+                }
+            }
+        }
+        DividerLine()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onToggleDetails(!detailsOpen) }
                 // 整行可点，撑到 48dp 触控高度。
                 .heightIn(min = 48.dp)
-                .padding(vertical = 11.dp),
+                .padding(vertical = Space.Md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -368,7 +402,7 @@ private fun BackendCard(
             enter = Motion.foldEnter(),
             exit = Motion.foldExit(),
         ) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+            Column(Modifier.fillMaxWidth().padding(bottom = Space.Md)) {
                 detailLines.forEach { (key, value) ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                         Text(
@@ -378,7 +412,7 @@ private fun BackendCard(
                             color = scheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(Space.Md))
                         Text(
                             value,
                             style = MaterialTheme.typography.labelSmall,
@@ -391,13 +425,6 @@ private fun BackendCard(
                 }
             }
         }
-        DividerLine()
-        Text(
-            stringResource(R.string.render_backend_advice),
-            modifier = Modifier.padding(vertical = 10.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = scheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -464,41 +491,68 @@ private fun IconSwitchRow(
     }
 }
 
-/** 调优摘要的标题行：平时只占一行，点一下展开或收起三项。 */
+/** 调优摘要的标题行：与上面 ANGLE 开关同一套排版（图标 + 两行字 + 尾部箭头）。 */
 @Composable
 private fun TuneSummaryRow(summary: String, expanded: Boolean, onToggle: () -> Unit) {
-    ListItem(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        headlineContent = {
-            Text(summary, style = MaterialTheme.typography.bodyMedium)
-        },
-        trailingContent = {
-            ChevronIcon(expanded = expanded, tint = MaterialTheme.colorScheme.primary, size = 18.dp)
-        },
-    )
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .heightIn(min = 48.dp)
+            .padding(vertical = Space.Md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            UiIcons.Speed,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(Space.Md))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.render_section_tune),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(Space.Sm))
+        ChevronIcon(expanded = expanded, tint = scheme.primary, size = 18.dp)
+    }
 }
 
 /** 调优摘要的一行：名称 + 一句解释 + 当前值，整行点按进配置页。 */
 @Composable
 private fun TuneRow(label: String, explain: String, value: String, onClick: () -> Unit) {
-    ListItem(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        headlineContent = {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(vertical = Space.Md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        },
-        supportingContent = {
             Text(
                 explain,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        },
-        trailingContent = { MonoValue(value) },
-    )
+        }
+        Spacer(Modifier.width(Space.Md))
+        MonoValue(value, size = 14.sp, maxLines = 1)
+    }
 }
 
 /** 自检结论：整体结论 + 每个后端各一行 + 时间与用时。 */
