@@ -132,7 +132,11 @@ fun SelfTestScreen(
         if (report == null) {
             item {
                 SectionCard("还没有自检结果") {
-                    Text("点上面的“运行自检”。它会加载 libMobileGL.so 并枚举当前驱动。", style = MaterialTheme.typography.bodySmall)
+                    EmptyState(
+                        icon = UiIcons.Speed,
+                        title = "尚未运行自检",
+                        body = "自检会加载 libMobileGL.so 并枚举当前驱动，几秒后给出逐项结论。",
+                    )
                 }
             }
             return@LazyColumn
@@ -140,7 +144,8 @@ fun SelfTestScreen(
         if (!report.ok) {
             item {
                 SectionCard("自检失败") {
-                    Text(report.error ?: "未知错误", style = MaterialTheme.typography.bodySmall)
+                    // 失败原因整段照原样显示，不做省略：这是用户唯一能去搜索的线索。
+                    NoteBanner(report.error ?: "未知错误", NoteTone.Bad)
                 }
             }
             return@LazyColumn
