@@ -10,11 +10,13 @@ plugins {
 def mobileGlPrebuiltLibsDir = (findProperty('mobilegl.prebuiltLibsDir') ?: System.getenv('ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir') ?: '').toString().trim()
 def mobileGlUseSfpew = (findProperty('mobilegl.sfpew') ?: (mobileGlPrebuiltLibsDir ? 'true' : 'false')).toString().toBoolean()
 
-def mobileGlEnvString = { backendType ->
+// The environment the launcher plugin declares for the old FCL metadata path. The backend is
+// absent on purpose: it is a setting the app writes, and the proxy applies it from the config
+// file before the renderer starts.
+def mobileGlEnvString = {
     def env = [
-            LIBGL_ES             : '3',
-            POJAV_RENDERER       : 'opengles3',
-            MOBILEGL_BACKEND_TYPE: backendType,
+            LIBGL_ES      : '3',
+            POJAV_RENDERER: 'opengles3',
     ]
     if (mobileGlUseSfpew) {
         env['SFPEW_EGL'] = 'libMobileGL.so'
@@ -48,8 +50,8 @@ def mobileGlAbiFilters = {
 // output: a JSON document stored in @string/config and referenced from the
 // "fclPlugin_V2" manifest meta-data. The launcher substitutes the "**|" prefix with
 // the plugin's real nativeLibraryDir at launch time.
-// Launcher-facing renderer name is intentionally backend-agnostic.
-def mobileGlRendererDisplayName = { String backendType -> 'MobileGL' }
+// Launcher-facing renderer name: one entry, whatever backend the app is set to.
+def mobileGlRendererDisplayName = 'MobileGL'
 
 // The renderer library the launcher loads: a prebuilt or official .so goes through the proxy,
 // and a build from source picks its name by whether SFPEW is bundled.
@@ -62,14 +64,13 @@ def mobileGlRendererLibName = {
 // RendererPlugin-v2 takes the "**|" prefix so the launcher substitutes its own nativeLibraryDir;
 // the older fclPlugin metadata wants the bare library name.
 def mobileGlRendererLib = { String prefix -> prefix + mobileGlRendererLibName() }
-def mobileGlRendererConfig = { String backendType ->
-    def values = ['DirectGLES', 'DirectVulkan']
+def mobileGlRendererConfig = {
+    // No backend entry here on purpose: the plugin writes MOBILEGL_BACKEND_TYPE into its runtime
+    // config and the proxy applies that file over the environment, so a launcher-side selector
+    // would be a second control whose changes never reach the renderer. The app is the one place.
     def env = [
             [type: 'NormalEnv', key: 'LIBGL_ES', value: '3'],
             [type: 'NormalEnv', key: 'POJAV_RENDERER', value: 'opengles3'],
-            [type: 'SelectableEnv', key: 'MOBILEGL_BACKEND_TYPE',
-             title: [key: 'mobilegl_backend_type_title'], check: true,
-             items: [defaultValue: backendType, values: values]],
             [type: 'ToggleableEnv', key: 'MOBILEGL_DISABLE_TIMERQUERY', value: '1',
              title: [key: 'mobilegl_disable_timerquery_title'], toggle: false],
             [type: 'SelectableEnv', key: 'MOBILEGL_SUBGROUP_EMULATION',
@@ -84,7 +85,7 @@ def mobileGlRendererConfig = { String backendType ->
     ]
     def glLib = mobileGlRendererLib('**|')
     def config = [
-            displayName    : mobileGlRendererDisplayName(backendType),
+            displayName    : mobileGlRendererDisplayName,
             rendererId     : 'opengles3',
             rendererGLPath : glLib,
             rendererEGLPath: glLib,
@@ -94,25 +95,6 @@ def mobileGlRendererConfig = { String backendType ->
             maxMCVer       : '',
     ]
     groovy.json.JsonOutput.toJson(config).replace('"', '\\"')
-}
-
-// What the backend flavors share: placeholders, environment variables and resValue appear once.
-def mobileGlBackendFlavor = { flavor, String backend, String appId ->
-    def env = mobileGlEnvString(backend)
-    def lib = mobileGlRendererLibName()
-    flavor.dimension 'backend'
-    flavor.applicationId = appId
-    flavor.resValue 'string', 'mobilegl_default_backend', backend
-    flavor.resValue 'string', 'config', mobileGlRendererConfig(backend)
-    flavor.manifestPlaceholders = [
-            appLabel: 'MobileGL_UI_Plus',
-            des     : '来自 MobileGL_UI',
-            renderer: mobileGlRendererDisplayName(backend) + ':' + lib + ':/' + lib,
-            minMCVer: '',
-            maxMCVer: '',
-            boatEnv : env,
-            pojavEnv: env,
-    ]
 }
 
 // Calendar versioning: major = two-digit year, minor = month, taken from the
@@ -205,6 +187,9 @@ android {
     }
 
     defaultConfig {
+        // Unchanged from the flavor that shipped before the merge, so the installed copy upgrades
+        // in place instead of asking for an uninstall.
+        applicationId 'ui.mobilegl.plugin.plus'
         minSdk 26
         targetSdk 34
         // year*1e7 + month*1e5 + revision*1e3 + build number keeps versionCode
@@ -216,6 +201,21 @@ android {
         versionCode mobileGlVersionMajor * 10000000 + mobileGlVersionMinor * 100000 +
             mobileGlVersionRevision * 1000 + Math.min(mobileGlForkBuildRevision, 999)
         versionName mobileGlForkVersionName
+
+        // The backend the app starts on. It is the renderer's own default, so a fresh install
+        // shows the configuration unmodified; the backend switch in the app changes it from here.
+        resValue 'string', 'mobilegl_default_backend', 'DirectGLES'
+        resValue 'string', 'config', mobileGlRendererConfig()
+        manifestPlaceholders = [
+                appLabel: 'MobileGL_UI_Plus',
+                des     : '来自 MobileGL_UI',
+                renderer: mobileGlRendererDisplayName + ':' + mobileGlRendererLibName() +
+                        ':/' + mobileGlRendererLibName(),
+                minMCVer: '',
+                maxMCVer: '',
+                boatEnv : mobileGlEnvString(),
+                pojavEnv: mobileGlEnvString(),
+        ]
 
         ndk {
             def abiFiltersOverride = mobileGlAbiFilters()
@@ -234,13 +234,11 @@ android {
         }
     }
 
-    flavorDimensions 'backend', 'profile'
+    // One shipping app: the backend is a setting inside it, not a second package. The profile
+    // dimension only separates the app from the trace-replay tool, which never ships.
+    flavorDimensions 'profile'
 
     productFlavors {
-        // The two backend flavors differ only in name and applicationId; the shared part is
-        // configured below.
-        espryt { }
-        magma { }
         plugin {
             dimension 'profile'
         }
@@ -250,9 +248,6 @@ android {
             versionNameSuffix '-trace'
         }
     }
-
-    mobileGlBackendFlavor(productFlavors.espryt, 'DirectGLES', 'ui.mobilegl.plugin.espryt')
-    mobileGlBackendFlavor(productFlavors.magma, 'DirectVulkan', 'ui.mobilegl.plugin.plus')
 
     def fixedDebugKeystore = file('../debug.keystore')
     if (fixedDebugKeystore.exists()) {
