@@ -483,4 +483,11 @@
     <string name="opt_sfpew_manual_mipgen_label">手动生成 mipmap</string>
     <string name="opt_sfpew_manual_mipgen_desc">不用驱动自动生成多级纹理，自己算，规避个别驱动的缺陷</string>
     <string name="opt_sfpew_manual_mipgen_default">关</string>
+    <string name="home_soc_detail">%1$d 核</string>
+    <string name="home_soc_detail_max">%1$d 核 · 最高 %2$s GHz</string>
+    <string name="home_storage">%1$.1f GB 可用 / %2$.0f GB</string>
+    <string name="home_memory_avail">%1$.1f GB 可用</string>
+    <string name="home_unknown_gpu">未知 GPU</string>
+    <string name="home_not_detected">未检测到</string>
+    <string name="home_unavailable">不可用</string>
 </resources>

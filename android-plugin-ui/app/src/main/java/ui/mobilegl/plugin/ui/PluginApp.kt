@@ -168,13 +168,13 @@ private sealed interface Dest {
     data object SelfTest : Dest
 }
 
-private data class Tab(val label: String, val icon: ImageVector, val dest: Dest)
+private data class Tab(val labelRes: Int, val icon: ImageVector, val dest: Dest)
 
 private val TABS = listOf(
-    Tab("首页", Icons.Filled.Home, Dest.Home),
-    Tab("渲染", UiIcons.Gpu, Dest.Render),
-    Tab("信息", Icons.Filled.Info, Dest.Info),
-    Tab("设置", Icons.Filled.Settings, Dest.Settings),
+    Tab(R.string.tab_home, Icons.Filled.Home, Dest.Home),
+    Tab(R.string.tab_render, UiIcons.Gpu, Dest.Render),
+    Tab(R.string.tab_info, Icons.Filled.Info, Dest.Info),
+    Tab(R.string.tab_settings, Icons.Filled.Settings, Dest.Settings),
 )
 
 /** 页面转场与上下栏共用这套时长，避免栏位先动完、内容还在动。 */
@@ -292,7 +292,7 @@ fun MobileGlPluginApp() {
             if (boot.corrupt) {
                 Toast.makeText(
                     context,
-                    "配置文件读不出来，已恢复默认设置；原文件留作 config.json.corrupt-*",
+                    context.getString(R.string.shell_config_corrupt),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -364,25 +364,20 @@ fun MobileGlPluginApp() {
         if (showPermissionDialog) {
             AlertDialog(
                 onDismissRequest = { showPermissionDialog = false },
-                title = { Text("需要文件访问权限") },
-                text = {
-                    Text(
-                        "MobileGL 需要“所有文件访问权限”来写入 /sdcard/MobileGL/runtime.conf，" +
-                            "启动器和游戏进程才能读取配置。授权后应用会自动重启。"
-                    )
-                },
+                title = { Text(stringResource(R.string.shell_permission_title)) },
+                text = { Text(stringResource(R.string.shell_permission_body)) },
                 confirmButton = {
                     TextButton(onClick = {
                         prefs.edit().putBoolean("permission_prompted", true).putBoolean("awaiting_restart", true).apply()
                         showPermissionDialog = false
                         openAllFilesAccessSettings(context)
-                    }) { Text("去授权") }
+                    }) { Text(stringResource(R.string.shell_permission_grant)) }
                 },
                 dismissButton = {
                     TextButton(onClick = {
                         prefs.edit().putBoolean("permission_prompted", true).apply()
                         showPermissionDialog = false
-                    }) { Text("稍后") }
+                    }) { Text(stringResource(R.string.shell_permission_later)) }
                 },
             )
         }
@@ -481,7 +476,8 @@ fun MobileGlPluginApp() {
                             lastProbeMs = lastProbeMs,
                             driverCount = drivers.size,
                             externalCount = externalLibraries.size,
-                            activeDriverName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: "内置",
+                            activeDriverName = drivers.firstOrNull { it.id == config.activeDriverId }?.name
+                                ?: stringResource(R.string.shell_builtin_driver),
                             onSave = { persist(it) },
                             onOpenConfigFile = { openSub(Dest.ConfigFile) },
                             onOpenDrivers = { openSub(Dest.Drivers) },
@@ -578,7 +574,7 @@ fun MobileGlPluginApp() {
                                     if (lib != null && shared == null) {
                                         Toast.makeText(
                                             context,
-                                            "无法准备共享副本，游戏读不到这个库；请检查“所有文件访问权限”",
+                                            context.getString(R.string.home_share_note),
                                             Toast.LENGTH_LONG,
                                         ).show()
                                     }
@@ -686,9 +682,9 @@ fun MobileGlPluginApp() {
                         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
                             MobileGlTopBar(
                                 title = when (target) {
-                                    Dest.Drivers -> "驱动管理"
-                                    Dest.ConfigFile -> "启动配置"
-                                    Dest.SelfTest -> "驱动自检"
+                                    Dest.Drivers -> stringResource(R.string.shell_page_drivers)
+                                    Dest.ConfigFile -> stringResource(R.string.shell_page_config)
+                                    Dest.SelfTest -> stringResource(R.string.shell_page_selftest)
                                     else -> ""
                                 },
                                 onBack = { scope.launch { dismissSub() } },
@@ -715,14 +711,14 @@ fun MobileGlPluginApp() {
 private suspend fun shareReport(context: Context, repository: SelfTestRepository) {
     val text = withContext(Dispatchers.IO) { repository.readableReport() }
     if (text.isBlank()) {
-        Toast.makeText(context, "还没有自检结果，请先运行自检", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.shell_no_report), Toast.LENGTH_SHORT).show()
         return
     }
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(intent, "分享自检报告"))
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.shell_share_chooser)))
 }
 
 /** 宽屏用的左侧导航轨：与底栏同一份 [TABS]，只有摆放位置不同。 */
@@ -734,8 +730,8 @@ private fun MobileGlRail(selected: Int, onSelect: (Int) -> Unit) {
             NavigationRailItem(
                 selected = selected == index,
                 onClick = { onSelect(index) },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                label = { Text(tab.label) },
+                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
+                label = { Text(stringResource(tab.labelRes)) },
                 alwaysShowLabel = true,
                 colors = NavigationRailItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -755,8 +751,8 @@ private fun MobileGlBottomBar(selected: Int, onSelect: (Int) -> Unit) {
             NavigationBarItem(
                 selected = selected == index,
                 onClick = { onSelect(index) },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                label = { Text(tab.label) },
+                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
+                label = { Text(stringResource(tab.labelRes)) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,
                     selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -777,7 +773,10 @@ private fun MobileGlTopBar(title: String, onBack: () -> Unit) {
         // M3 的次级页面顶栏必须带返回入口；之前只有标题，返回全靠系统手势。
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.shell_back),
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -821,7 +820,7 @@ private fun readSocMachine(): String? = readFirstLine("/sys/devices/soc0/machine
  * CPU 规格摘要：核心数与最高主频。SoC 型号往往只有一个代号，
  * 补上这两项才能看出是哪一档芯片。
  */
-private fun socDetailText(): String {
+private fun socDetailText(context: Context): String {
     val cores = Runtime.getRuntime().availableProcessors()
     var maxKhz = 0L
     for (i in 0 until cores) {
@@ -831,12 +830,11 @@ private fun socDetailText(): String {
     if (maxKhz == 0L) {
         readFirstLine("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")?.toLongOrNull()?.let { maxKhz = it }
     }
-    return buildString {
-        append(cores).append(" 核")
-        if (maxKhz > 0) {
-            append(" · 最高 ").append(String.format(Locale.US, "%.2f", maxKhz / 1_000_000.0)).append(" GHz")
-        }
-    }
+    return context.getString(
+        if (maxKhz > 0) R.string.home_soc_detail_max else R.string.home_soc_detail,
+        cores,
+        String.format(Locale.US, "%.2f", maxKhz / 1_000_000.0),
+    )
 }
 
 /** 渲染器字符串里保留 "Adreno (TM) 740" 这类名字，只去掉末尾的后端/版本尾巴。 */
@@ -871,11 +869,10 @@ private fun screenText(context: Context): String {
 }
 
 /** 内部存储的可用与总容量。 */
-private fun storageText(): String = runCatching {
+private fun storageText(context: Context): String = runCatching {
     val stat = StatFs(Environment.getDataDirectory().absolutePath)
-    String.format(
-        Locale.US,
-        "%.1f GB 可用 / %.0f GB",
+    context.getString(
+        R.string.home_storage,
         stat.availableBytes / 1024.0 / 1024.0 / 1024.0,
         stat.totalBytes / 1024.0 / 1024.0 / 1024.0,
     )
@@ -895,13 +892,14 @@ private fun deviceInfo(
 
     val gpu = cleanRendererName(vulkanRenderer).ifEmpty {
         cleanRendererName(glesRenderer).ifEmpty {
-            cleanRendererName(glInfo?.renderer.orEmpty()).ifBlank { "未知 GPU" }
+            cleanRendererName(glInfo?.renderer.orEmpty()).ifBlank { context.getString(R.string.home_unknown_gpu) }
         }
     }
-    val gles = glesRenderer.ifBlank { glInfo?.version.orEmpty().ifBlank { "未检测到" } }
+    val notDetected = context.getString(R.string.home_not_detected)
+    val gles = glesRenderer.ifBlank { glInfo?.version.orEmpty().ifBlank { notDetected } }
     val vulkan = when {
-        vulkanReport == null -> "未检测到"
-        !vulkanReport.available -> "不可用"
+        vulkanReport == null -> notDetected
+        !vulkanReport.available -> context.getString(R.string.home_unavailable)
         vulkanRenderer.isBlank() -> "Vulkan"
         else -> vulkanRenderer
     }
@@ -917,7 +915,10 @@ private fun deviceInfo(
     val mi = ActivityManager.MemoryInfo()
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
-    val memoryAvail = String.format(Locale.US, "%.1f GB 可用", mi.availMem / 1024.0 / 1024.0 / 1024.0)
+    val memoryAvail = context.getString(
+        R.string.home_memory_avail,
+        mi.availMem / 1024.0 / 1024.0 / 1024.0,
+    )
     // SoC 型号：SOC_MODEL 最准；部分机型只填 HARDWARE（如 "qcom"），
     // 再退到 /sys/devices/soc0/machine 与 cpuinfo。
     val socModel = if (Build.VERSION.SDK_INT >= 31) {
@@ -928,17 +929,17 @@ private fun deviceInfo(
     val soc = socModel
         ?: Build.HARDWARE?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
         ?: readSocMachine()
-        ?: "未知"
+        ?: context.getString(R.string.shell_unknown)
     val socVendor = if (Build.VERSION.SDK_INT >= 31) {
         Build.SOC_MANUFACTURER?.takeIf { it.isNotBlank() && !it.equals("unknown", true) }
     } else {
         null
     } ?: readFirstLine("/sys/devices/soc0/family") ?: ""
-    val socDetail = socDetailText()
+    val socDetail = socDetailText(context)
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
     return DeviceInfo(
         gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail, android,
-        coreVersion, coreCommit, socExtra, screenText(context), storageText(),
+        coreVersion, coreCommit, socExtra, screenText(context), storageText(context),
     )
 }
 
@@ -997,7 +998,7 @@ private fun HomeTab(
                     MaterialTheme.colorScheme.primary,
                 )
                 StatusPill(
-                    if (sfpewActive) "SFPEW" else "无包装器",
+                    if (sfpewActive) "SFPEW" else stringResource(R.string.shell_no_wrapper),
                     MaterialTheme.colorScheme.tertiary,
                 )
                 StatusPill(healthShort(report), healthColor(report))
@@ -1005,7 +1006,7 @@ private fun HomeTab(
         }
 
         // 其余内容统一左右 20dp 边距（Hero 保持通栏，避免渐变出现"边边"）
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.Page)) {
         Spacer(Modifier.height(12.dp))
 
         // 首页只保留状态与渲染器两块：设备详情在「信息」页，组件的增删在「渲染」页。
@@ -1026,12 +1027,12 @@ private fun HomeTab(
             onClick = onOpenRender,
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(Space.Lg),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (probing) {
                         Text(
-                            "正在检测驱动信息…",
+                            stringResource(R.string.home_detecting),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -1048,7 +1049,11 @@ private fun HomeTab(
                 }
                 if (info.coreVersion != BuildConfig.VERSION_NAME) {
                     Text(
-                        "核心库：v" + info.coreVersion + (if (info.coreCommit != null) " (" + info.coreCommit + ")" else ""),
+                        if (info.coreCommit != null) {
+                            stringResource(R.string.home_core_lib_commit, info.coreVersion, info.coreCommit)
+                        } else {
+                            stringResource(R.string.home_core_lib, info.coreVersion)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
@@ -1057,14 +1062,14 @@ private fun HomeTab(
                 val active = config.activeDriverId
                 if (!active.isNullOrBlank()) {
                     Text(
-                        "驱动包：" + active,
+                        stringResource(R.string.home_driver_pack, active),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 Text(
-                    "点按查看渲染设置",
+                    stringResource(R.string.home_open_render),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 6.dp),
@@ -1125,7 +1130,7 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
             // 已授权（或本机没有这个开关）时它就是一条状态，不再是个点不动的按钮。
             .clickable(
                 enabled = !authorized,
-                onClickLabel = "去授权所有文件访问权限",
+                onClickLabel = stringResource(R.string.shell_grant_all_files),
                 role = Role.Button,
                 onClick = onClick,
             ),
@@ -1141,7 +1146,15 @@ private fun PermissionPill(authorized: Boolean, onClick: () -> Unit) {
                     .background(if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             )
             Spacer(Modifier.width(8.dp))
-            Text(if (authorized) "已授权" else "未授权 · 点击授权", color = if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+            Text(
+                if (authorized) {
+                    stringResource(R.string.shell_authorized)
+                } else {
+                    stringResource(R.string.shell_unauthorized)
+                },
+                color = if (authorized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Medium,
+            )
         }
     }
 }
@@ -1173,7 +1186,7 @@ fun SectionLabel(text: String, count: Int? = null) {
         if (count != null) {
             Spacer(Modifier.width(8.dp))
             Text(
-                count.toString() + " 项",
+                stringResource(R.string.shell_item_count, count),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -1245,7 +1258,11 @@ internal fun openAllFilesAccessSettings(context: Context) {
         Build.VERSION.SDK_INT <= Build.VERSION_CODES.P -> {
             val activity = context.findActivity()
             if (activity == null) {
-                Toast.makeText(context, "请在系统设置里授予存储权限", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.shell_storage_permission_toast),
+                    Toast.LENGTH_LONG,
+                ).show()
             } else {
                 ActivityCompat.requestPermissions(
                     activity,
@@ -1256,7 +1273,7 @@ internal fun openAllFilesAccessSettings(context: Context) {
         }
         else -> Toast.makeText(
             context,
-            "Android 10 不支持共享配置：需要 Android 11 及以上的“所有文件访问权限”",
+            context.getString(R.string.shell_android10_note),
             Toast.LENGTH_LONG,
         ).show()
     }
