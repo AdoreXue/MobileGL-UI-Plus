@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ui.mobilegl.plugin.R
@@ -141,7 +142,12 @@ internal fun NoteBanner(
     }
 }
 
-/** 一段可展开的说明，收起时只留第一句，避免整页被解释文字淹没。 */
+/**
+ * 一段可展开的说明：收起时只留标题和展开入口。
+ *
+ * 长解释在页面里被反复引用（这里是两段），折叠后首屏留给能操作的东西；
+ * [expandLabel] 让调用方自己命名入口（「为什么」「这是什么」），比通用「说明 ›」更清楚。
+ */
 @Composable
 internal fun FoldableNote(
     summary: String,
@@ -149,15 +155,23 @@ internal fun FoldableNote(
     expanded: Boolean,
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    expandLabel: String? = null,
+    collapsedLabel: String? = null,
+    summaryStyle: TextStyle = MaterialTheme.typography.bodySmall,
+    summaryColor: Color = Color.Unspecified,
 ) {
     Column(modifier.fillMaxWidth()) {
         Text(
             summary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = summaryStyle,
+            color = if (summaryColor == Color.Unspecified) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                summaryColor
+            },
         )
         if (expanded) {
-            Spacer(Modifier.height(Space.Xs))
+            Spacer(Modifier.height(Space.Sm))
             Text(
                 detail,
                 style = MaterialTheme.typography.labelSmall,
@@ -166,8 +180,16 @@ internal fun FoldableNote(
         }
         TextButton(
             onClick = { onToggle(!expanded) },
-            contentPadding = PaddingValues(0.dp),
-        ) { Text(if (expanded) stringResource(R.string.fold_collapse) else stringResource(R.string.fold_expand)) }
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = Space.Xs),
+        ) {
+            Text(
+                if (expanded) {
+                    collapsedLabel ?: stringResource(R.string.fold_collapse)
+                } else {
+                    expandLabel ?: stringResource(R.string.fold_expand)
+                },
+            )
+        }
     }
 }
 

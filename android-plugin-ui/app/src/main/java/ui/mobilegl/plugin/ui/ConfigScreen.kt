@@ -42,6 +42,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -78,6 +79,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ui.mobilegl.plugin.R
 import ui.mobilegl.plugin.BuildConfig
 import ui.mobilegl.plugin.config.RuntimeConfigWriter
@@ -116,6 +118,8 @@ fun ConfigScreen(
     // 后端专属项默认折叠：首屏只留通用项，需要时再展开。
     // 后端专用那两组里，当前后端用的那份总是展开；另一份默认收着，需要对照时才拉出来。
     var showOtherBackend by remember { mutableStateOf(false) }
+    // SFPEW 的说明文字默认收起：它是背景知识，不是这一页要改的东西。
+    var sfpewDocOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val shared = withContext(Dispatchers.IO) { writer.readShared() }
         if (shared != null) text = shared
@@ -170,7 +174,13 @@ fun ConfigScreen(
     val activeBackendLabel = if (activeBackend == "DirectVulkan") backendLabel else glesLabel
     val otherBackendLabel = if (activeBackend == "DirectVulkan") glesLabel else backendLabel
     // 与官方默认不同的项数：概览条和保存条都用它。
-    val changedTotal = remember(parsed) { OPTION_INDEX.count { optionChangedValue(it, parsed) } }
+    // 后端在「渲染」页切换，不在这张索引里；但它偏离打包默认值时同样是「改过」，
+    // 不算进来的话概览会一边写着 DirectVulkan 一边说「全部与官方默认一致」。
+    val packagedBackend = context.getString(R.string.mobilegl_default_backend)
+    val backendChanged = activeBackend != packagedBackend
+    val changedTotal = remember(parsed, backendChanged) {
+        OPTION_INDEX.count { optionChangedValue(it, parsed) } + if (backendChanged) 1 else 0
+    }
     // 「只看已修改」：只留下跟官方默认不一样的项，改完自查一遍用。
     var onlyChanged by remember { mutableStateOf(false) }
     val changedKeySet = remember(parsed) {
@@ -204,7 +214,7 @@ fun ConfigScreen(
     // 跳到某组后列表会重建，滚回顶部才看得到那组的标题。
     LaunchedEffect(jumpGroup) { if (jumpGroup != null) listState.scrollToItem(0) }
     Box(Modifier.fillMaxSize()) {
-        // 顶部固定区（标题 + 搜索）和列表放在同一个纵向容器里，列表才能用 weight 吃掉剩余高度。
+        // 顶部固定区（搜索＋筛选）和列表放在同一个纵向容器里，列表才能用 weight 吃掉剩余高度。
         Column(Modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -212,34 +222,20 @@ fun ConfigScreen(
                 .padding(horizontal = Space.Page)
                 .padding(top = Space.Md, bottom = Space.Sm),
         ) {
-            // 标题在最顶：搜索框不再压在页面标题上面。
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.config_title),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    if (onlyChanged) {
-                        stringResource(R.string.config_header_changed, changedTotal, OPTION_INDEX.size)
-                    } else {
-                        stringResource(R.string.config_header_total, OPTION_INDEX.size)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            // 一行搞定：搜索、清除、「只看已修改」。
+            // 子页顶栏已经写着「启动配置」，这里不再重复标题；
+            // 项数与概览卡里的「配置项」是同一个数，所以也只在那里出现一次。
+            // 搜索框自己一行，筛选胶囊另起一行：原来两者挤在同一条 46dp 里，
+            // 而清除按钮和胶囊的最小触控区是 48dp，控件比容器还高，上下必然贴边。
             Surface(
                 shape = RoundedCornerShape(50),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .padding(start = Space.Lg, end = Space.Sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -248,13 +244,15 @@ fun ConfigScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(Space.Md))
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         decorationBox = { inner ->
                             if (query.isBlank()) {
@@ -268,52 +266,37 @@ fun ConfigScreen(
                         },
                     )
                     if (query.isNotBlank()) {
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clickable(
-                                    onClickLabel = stringResource(R.string.config_search_clear),
-                                    role = Role.Button,
-                                ) { query = "" },
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        IconButton(onClick = { query = "" }) {
                             Icon(
                                 Icons.Filled.Clear,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.config_search_clear),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
+                    } else {
+                        // 没有文字时不占位，但右侧留出同样的内边距，输入区不会贴到圆角上。
+                        Spacer(Modifier.width(Space.Xs))
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        if (changedTotal > 0) {
-                            stringResource(R.string.config_filter_changed_count, changedTotal)
-                        } else {
-                            stringResource(R.string.config_filter_only_changed)
-                        },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (onlyChanged) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surface,
-                            )
-                            .minimumInteractiveComponentSize()
-                            .clickable(
-                                enabled = changedTotal > 0 || onlyChanged,
-                                onClickLabel = stringResource(R.string.config_filter_only_changed_label),
-                                role = Role.Button,
-                            ) { onlyChanged = !onlyChanged }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (onlyChanged) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
                 }
+            }
+            Spacer(Modifier.height(Space.Sm))
+            // 筛选胶囊单独一行，与「跳到该组」那类胶囊一样高，不再被搜索框压着。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilterChip(
+                    selected = onlyChanged,
+                    onClick = { onlyChanged = !onlyChanged },
+                    enabled = changedTotal > 0 || onlyChanged,
+                    label = {
+                        Text(
+                            if (changedTotal > 0) {
+                                stringResource(R.string.config_filter_changed_count, changedTotal)
+                            } else {
+                                stringResource(R.string.config_filter_only_changed)
+                            },
+                        )
+                    },
+                )
             }
         }
     LazyColumn(
@@ -334,7 +317,7 @@ fun ConfigScreen(
             OverviewStrip(
                 total = OPTION_INDEX.size,
                 changed = changedTotal,
-                backend = parsed["MOBILEGL_BACKEND_TYPE"] ?: "DirectGLES",
+                backend = activeBackend,
                 sfpewOn = parsed["SFPEW_ENABLED"] == "1",
             )
         }
@@ -346,33 +329,27 @@ fun ConfigScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
+                // 半透明上色：整块高饱和绿把首屏最亮的位置占了，读起来像另一个应用的面板。
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                 ),
             ) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = Space.Lg, vertical = Space.Md)) {
-                    Text(
-                        stringResource(R.string.config_sfpew_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
+                    // 三段解释加起来四百多 dp，是首屏最亮最大的一块，却只是背景知识。
+                    // 收起时只留标题和一句摘要，说明按需展开；要改的东西一直在。
+                    FoldableNote(
+                        summary = stringResource(R.string.config_sfpew_title),
+                        detail = stringResource(R.string.config_sfpew_intro) + "\n\n" +
+                            stringResource(R.string.config_sfpew_chain) + "\n\n" +
+                            stringResource(R.string.config_sfpew_advice),
+                        expanded = sfpewDocOpen,
+                        onToggle = { sfpewDocOpen = it },
+                        expandLabel = stringResource(R.string.config_sfpew_why),
+                        summaryStyle = MaterialTheme.typography.bodyMedium,
+                        summaryColor = MaterialTheme.colorScheme.onSurface,
+                        collapsedLabel = stringResource(R.string.config_sfpew_hide),
                     )
-                    Text(
-                        stringResource(R.string.config_sfpew_intro),
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = Space.Sm),
-                    )
-                    Text(
-                        stringResource(R.string.config_sfpew_chain),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Space.Sm),
-                    )
-                    Text(
-                        stringResource(R.string.config_sfpew_advice),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Space.Sm),
-                    )
+                    Spacer(Modifier.height(Space.Xs))
                     // 控件等 runtime.conf 读完再画：否则先按模板渲染一遍，读完又跳一次。
                     if (BuildConfig.SFPEW_BUNDLED && ready) {
                         Spacer(Modifier.height(6.dp))
@@ -786,6 +763,23 @@ fun ConfigScreen(
  * 六十几项每项都顶着一行默认值，一页要多出两屏，而没改过的项看这行没有信息量；
  * 改了之后它才是「原来是什么、现在被我改成了什么」的对照。
  */
+/**
+ * 键名单独一行，等宽、更小、更淡。
+ *
+ * 原来它和说明用同一档字号和颜色，读起来像说明的第三行；拉开字体和透明度之后，
+ * 它才明显是「给排查用的」注释，而不是正文的一部分。
+ */
+@Composable
+private fun OptionKey(key: String) {
+    if (key.isBlank()) return
+    Text(
+        key,
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+        fontFamily = MonoFamily,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+    )
+}
+
 @Composable
 private fun OptionDesc(
     desc: String,
@@ -827,13 +821,7 @@ private fun OptionSelect(
     Column(Modifier.fillMaxWidth().padding(vertical = Space.Hair)) {
         OptionLabel(label, changed, highlight)
         OptionDesc(desc, default, highlight, changed)
-        if (key.isNotBlank()) {
-            Text(
-                key,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
-        }
+        OptionKey(key)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
                 FilterChip(selected = option == value, onClick = { onSelect(option) }, label = { Text(option) })
@@ -872,11 +860,7 @@ private fun OptionQuirk(
     Column(Modifier.fillMaxWidth().padding(vertical = Space.Hair)) {
         OptionLabel(label, changed, highlight)
         OptionDesc(desc, default, highlight, changed)
-        Text(
-            key,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
+        OptionKey(key)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(AUTO, ON, OFF).forEach { option ->
                 FilterChip(
@@ -927,11 +911,7 @@ private fun OptionText(
             supportingText = {
                 Column {
                     OptionDesc(desc, default, highlight, changed)
-                    Text(
-                        key,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
+                    OptionKey(key)
                 }
             },
             singleLine = true,
@@ -958,11 +938,7 @@ private fun OptionToggle(
         Column(Modifier.weight(1f)) {
             OptionLabel(label, changed, highlight)
             OptionDesc(desc, default, highlight, changed)
-            Text(
-                key,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
+            OptionKey(key)
         }
         Switch(checked = enabled, onCheckedChange = onToggle)
     }
@@ -2079,8 +2055,11 @@ private fun OptionRows(
     fun metaLabel(meta: OptionMeta) = context.getString(meta.labelRes)
     fun metaDesc(meta: OptionMeta) = context.getString(meta.descRes)
     fun metaDefault(meta: OptionMeta) = if (meta.defaultRes == 0) "" else context.getString(meta.defaultRes)
-    keys.forEach { key ->
-        val meta = byKey[key] ?: return@forEach
+    keys.forEachIndexed { index, key ->
+        val meta = byKey[key] ?: return@forEachIndexed
+        // 组内选项之间画一条极淡的分隔线：留白压到 2dp 之后，
+        // 没有这条线相邻两项会糊成一段。
+        if (index > 0) DividerLine()
         when {
             meta.choices.isNotEmpty() -> OptionSelect(
                 label = metaLabel(meta),
