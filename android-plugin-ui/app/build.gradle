@@ -368,3 +368,11 @@ tasks.register('printBaseVersion') {
         println "${mobileGlVersionMajor}.${mobileGlVersionMinor}.${mobileGlVersionRevision}"
     }
 }
+
+// For CI: print the build number the versionCode carries. The workflow uses it if it cannot count
+// its own earlier runs, so a naming fallback still moves forward instead of restarting at Dev.1.
+tasks.register('printBuildRevision') {
+    doLast {
+        println mobileGlForkBuildRevision
+    }
+}

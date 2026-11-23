@@ -369,16 +369,33 @@ jobs:
           else
             BASE=$(gradle --no-daemon -q -p android-plugin-ui :app:printBaseVersion | tail -1)
             echo "base version: $BASE"
+            # Fallback for when the run count cannot be read below: the number the versionCode
+            # already carries. Both move forward, so a fallback never names a build lower than the
+            # one already installed.
+            BUILD_N=$(gradle --no-daemon -q -p android-plugin-ui :app:printBuildRevision | tail -1)
+            echo "build number: $BUILD_N"
             # DevN counts this workflow's successful runs on this branch, this one included, so it
             # moves with every build instead of with every release.
-            WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id')
-            # One page of the runs endpoint holds 100 entries, so counting the first page alone
-            # would pin DevN at 100 for good. Pagination prints one length per page; the sum is the
-            # runs before this one, and one more is this run's number.
-            DEVN=$(gh api --paginate \
-              "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
-              --jq '.workflow_runs | length' | awk '{ total += $1 } END { print total + 1 }')
-            [ -z "$DEVN" ] && DEVN=1
+            DEVN=""
+            WF_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build-plugin.yml" --jq '.id' 2>/dev/null || true)
+            if [ -n "$WF_ID" ]; then
+              # One page of the runs endpoint holds 100 entries, so counting the first page alone
+              # would pin DevN at 100 for good. Pagination prints one length per page; the sum is
+              # the runs before this one, and one more is this run's number.
+              RAW=$(gh api --paginate \
+                "repos/${{ github.repository }}/actions/workflows/$WF_ID/runs?branch=dev&status=success&per_page=100" \
+                --jq '.workflow_runs | length' 2>/dev/null || true)
+              # Only build the number from output that actually arrived. Piping straight into awk
+              # hid this: an empty input still prints "1", so a failed call named the build Dev.1
+              # beside an installed Dev.151 and the guard below never noticed.
+              if [ -n "$RAW" ]; then
+                DEVN=$(printf '%s\n' "$RAW" | awk '{ total += $1 } END { print total + 1 }')
+              fi
+            fi
+            if [ -z "$DEVN" ]; then
+              echo "::warning::could not count this workflow's earlier runs; naming this build after build number $BUILD_N"
+              DEVN="$BUILD_N"
+            fi
             echo "DevN: $DEVN"
             echo "DISPLAY_VERSION=$BASE-Dev.$DEVN" >> "$GITHUB_ENV"
             echo "RELEASE_BUILD=0" >> "$GITHUB_ENV"
