@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -113,8 +114,8 @@ fun ConfigScreen(
     var confirmResetAll by remember { mutableStateOf(false) }
     var confirmTemplate by remember { mutableStateOf(false) }
     // 后端专属项默认折叠：首屏只留通用项，需要时再展开。
-    var showMagma by remember { mutableStateOf(false) }
-    var showEspryt by remember { mutableStateOf(false) }
+    // 后端专用那两组里，当前后端用的那份总是展开；另一份默认收着，需要对照时才拉出来。
+    var showOtherBackend by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val shared = withContext(Dispatchers.IO) { writer.readShared() }
         if (shared != null) text = shared
@@ -159,6 +160,15 @@ fun ConfigScreen(
             }
         }
     }
+    val wide = LocalWindowWidth.current.twoColumns
+    // 后端专用那两组：当前后端用的那份直接铺开，另一份收在同一个卡里。
+    val activeBackend = parsed["MOBILEGL_BACKEND_TYPE"] ?: "DirectGLES"
+    val activeBackendKeys = if (activeBackend == "DirectVulkan") MAGMA_KEYS else ESPRYT_KEYS
+    val otherBackendKeys = if (activeBackend == "DirectVulkan") ESPRYT_KEYS else MAGMA_KEYS
+    val backendLabel = stringResource(R.string.config_group_magma)
+    val glesLabel = stringResource(R.string.config_group_espryt)
+    val activeBackendLabel = if (activeBackend == "DirectVulkan") backendLabel else glesLabel
+    val otherBackendLabel = if (activeBackend == "DirectVulkan") glesLabel else backendLabel
     // 与官方默认不同的项数：概览条和保存条都用它。
     val changedTotal = remember(parsed) { OPTION_INDEX.count { optionChangedValue(it, parsed) } }
     // 「只看已修改」：只留下跟官方默认不一样的项，改完自查一遍用。
@@ -176,9 +186,11 @@ fun ConfigScreen(
     // 搜索结果里点「跳到该组」后只显示那一组，顶上一枚胶囊可以退回全部。
     var jumpGroup by remember { mutableStateOf<String?>(null) }
     fun groupShown(section: String): Boolean = jumpGroup == null || jumpGroup == section
-    fun jumpTo(section: String) {
-        if (section == SECTION_MAGMA) showMagma = true
-        if (section == SECTION_ESPRYT) showEspryt = true
+    fun jumpTo(section: String, key: String? = null) {
+        // 搜到的那一项若在「当前后端不用」的那半组里，跳过去要顺手把它展开，否则落地是空的。
+        if (section == SECTION_BACKEND && key != null && !activeBackendKeys.contains(key)) {
+            showOtherBackend = true
+        }
         jumpGroup = section.ifBlank { null }
         query = ""
         onlyChanged = false
@@ -460,7 +472,7 @@ fun ConfigScreen(
                                             .clickable(
                                                 onClickLabel = stringResource(R.string.config_jump_group_label),
                                                 role = Role.Button,
-                                            ) { jumpTo(section) },
+                                            ) { jumpTo(section, meta.key) },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -511,78 +523,89 @@ fun ConfigScreen(
                     }
                 }
             }
-            optionGroup(
-                section = SECTION_COMMON,
-                noteRes = R.string.config_section_common_note,
-                keys = if (groupShown(SECTION_COMMON)) visible(COMMON_KEYS) else emptyList(),
-                parsed = parsed,
-            ) { key, value -> text = setKey(text, key, value) }
-            optionGroup(
-                section = SECTION_PIPE,
-                noteRes = R.string.config_section_pipe_note,
-                keys = if (groupShown(SECTION_PIPE)) visible(PIPE_KEYS) else emptyList(),
-                parsed = parsed,
-            ) { key, value -> text = setKey(text, key, value) }
-            optionGroup(
-                section = SECTION_COMPAT,
-                noteRes = R.string.config_section_compat_note,
-                keys = if (groupShown(SECTION_COMPAT)) visible(COMPAT_KEYS) else emptyList(),
-                parsed = parsed,
-            ) { key, value -> text = setKey(text, key, value) }
-            optionGroup(
-                section = SECTION_DIAG,
-                noteRes = R.string.config_section_diag_note,
-                keys = if (groupShown(SECTION_DIAG)) visible(DIAG_KEYS) else emptyList(),
-                parsed = parsed,
-            ) { key, value -> text = setKey(text, key, value) }
-            if (groupShown(SECTION_MAGMA) && visible(MAGMA_KEYS).isNotEmpty()) item(key = "magma") {
-                SectionLabel(sectionLabel(SECTION_MAGMA), visible(MAGMA_KEYS).size)
-                InfoCard {
-                    Text(
-                        stringResource(R.string.config_section_magma_note),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
+            if (wide) {
+                // 宽屏：左侧是「所有后端通用」的三组，右侧是「只对当前后端生效」那组。
+                item(key = "groups-wide") {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { showMagma = !showMagma },
-                    ) { Text(
-                        if (showMagma || onlyChanged) {
-                            stringResource(R.string.config_collapse)
-                        } else {
-                            stringResource(R.string.config_expand_count, visible(MAGMA_KEYS).size)
-                        },
-                    ) }
-                    if (showMagma || onlyChanged) {
-                        Spacer(Modifier.height(4.dp))
-                        OptionRows(visible(MAGMA_KEYS), parsed) { key, value -> text = setKey(text, key, value) }
+                        horizontalArrangement = Arrangement.spacedBy(Space.Xl),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            OptionGroupBlock(
+                                SECTION_COMMON,
+                                R.string.config_section_common_note,
+                                if (groupShown(SECTION_COMMON)) visible(COMMON_KEYS) else emptyList(),
+                                parsed,
+                            ) { key, value -> text = setKey(text, key, value) }
+                            OptionGroupBlock(
+                                SECTION_PIPE,
+                                R.string.config_section_pipe_note,
+                                if (groupShown(SECTION_PIPE)) visible(PIPE_KEYS) else emptyList(),
+                                parsed,
+                            ) { key, value -> text = setKey(text, key, value) }
+                            OptionGroupBlock(
+                                SECTION_COMPAT,
+                                R.string.config_section_compat_note,
+                                if (groupShown(SECTION_COMPAT)) visible(COMPAT_KEYS) else emptyList(),
+                                parsed,
+                            ) { key, value -> text = setKey(text, key, value) }
+                            OptionGroupBlock(
+                                SECTION_DIAG,
+                                R.string.config_section_diag_note,
+                                if (groupShown(SECTION_DIAG)) visible(DIAG_KEYS) else emptyList(),
+                                parsed,
+                            ) { key, value -> text = setKey(text, key, value) }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            if (groupShown(SECTION_BACKEND) && visible(activeBackendKeys).isNotEmpty()) {
+                                BackendSpecificCard(
+                                    activeKeys = visible(activeBackendKeys),
+                                    otherKeys = visible(otherBackendKeys),
+                                    activeLabel = activeBackendLabel,
+                                    otherLabel = otherBackendLabel,
+                                    showOther = showOtherBackend,
+                                    onToggleOther = { showOtherBackend = it },
+                                    parsed = parsed,
+                                ) { key, value -> text = setKey(text, key, value) }
+                            }
+                        }
                     }
                 }
-            }
-            if (groupShown(SECTION_ESPRYT) && visible(ESPRYT_KEYS).isNotEmpty()) item(key = "espryt") {
-                SectionLabel(sectionLabel(SECTION_ESPRYT), visible(ESPRYT_KEYS).size)
-                InfoCard {
-                    Text(
-                        stringResource(R.string.config_section_espryt_note),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { showEspryt = !showEspryt },
-                    ) { Text(
-                        if (showEspryt || onlyChanged) {
-                            stringResource(R.string.config_collapse)
-                        } else {
-                            stringResource(R.string.config_expand_count, visible(ESPRYT_KEYS).size)
-                        },
-                    ) }
-                    if (showEspryt || onlyChanged) {
-                        Spacer(Modifier.height(4.dp))
-                        OptionRows(visible(ESPRYT_KEYS), parsed) { key, value -> text = setKey(text, key, value) }
-                    }
+            } else {
+                optionGroup(
+                    section = SECTION_COMMON,
+                    noteRes = R.string.config_section_common_note,
+                    keys = if (groupShown(SECTION_COMMON)) visible(COMMON_KEYS) else emptyList(),
+                    parsed = parsed,
+                ) { key, value -> text = setKey(text, key, value) }
+                optionGroup(
+                    section = SECTION_PIPE,
+                    noteRes = R.string.config_section_pipe_note,
+                    keys = if (groupShown(SECTION_PIPE)) visible(PIPE_KEYS) else emptyList(),
+                    parsed = parsed,
+                ) { key, value -> text = setKey(text, key, value) }
+                optionGroup(
+                    section = SECTION_COMPAT,
+                    noteRes = R.string.config_section_compat_note,
+                    keys = if (groupShown(SECTION_COMPAT)) visible(COMPAT_KEYS) else emptyList(),
+                    parsed = parsed,
+                ) { key, value -> text = setKey(text, key, value) }
+                optionGroup(
+                    section = SECTION_DIAG,
+                    noteRes = R.string.config_section_diag_note,
+                    keys = if (groupShown(SECTION_DIAG)) visible(DIAG_KEYS) else emptyList(),
+                    parsed = parsed,
+                ) { key, value -> text = setKey(text, key, value) }
+                if (groupShown(SECTION_BACKEND) && visible(activeBackendKeys).isNotEmpty()) item(key = "backend") {
+                    BackendSpecificCard(
+                        activeKeys = visible(activeBackendKeys),
+                        otherKeys = visible(otherBackendKeys),
+                        activeLabel = activeBackendLabel,
+                        otherLabel = otherBackendLabel,
+                        showOther = showOtherBackend,
+                        onToggleOther = { showOtherBackend = it },
+                        parsed = parsed,
+                    ) { key, value -> text = setKey(text, key, value) }
                 }
             }
             item {
@@ -757,9 +780,19 @@ fun ConfigScreen(
     }
 }
 
-/** 说明之后单独一行、用强调色标出官方默认值。 */
+/**
+ * 说明行，外加一行「官方默认」——只在这一项被改过时才画。
+ *
+ * 六十几项每项都顶着一行默认值，一页要多出两屏，而没改过的项看这行没有信息量；
+ * 改了之后它才是「原来是什么、现在被我改成了什么」的对照。
+ */
 @Composable
-private fun OptionDesc(desc: String, default: String, highlight: String = "") {
+private fun OptionDesc(
+    desc: String,
+    default: String,
+    highlight: String = "",
+    changed: Boolean = false,
+) {
     if (desc.isNotBlank()) {
         HighlightedText(
             desc,
@@ -768,13 +801,13 @@ private fun OptionDesc(desc: String, default: String, highlight: String = "") {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    if (default.isNotBlank()) {
+    if (changed && default.isNotBlank()) {
         Text(
             stringResource(R.string.config_official_default, default),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = Space.Hair),
         )
     }
 }
@@ -791,9 +824,9 @@ private fun OptionSelect(
     onSelect: (String) -> Unit,
 ) {
     val changed = changedSelect(value, default)
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.Hair)) {
         OptionLabel(label, changed, highlight)
-        OptionDesc(desc, default, highlight)
+        OptionDesc(desc, default, highlight, changed)
         if (key.isNotBlank()) {
             Text(
                 key,
@@ -836,9 +869,9 @@ private fun OptionQuirk(
         else -> AUTO
     }
     val changed = changedQuirk(normalized, default)
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.Hair)) {
         OptionLabel(label, changed, highlight)
-        OptionDesc(desc, default, highlight)
+        OptionDesc(desc, default, highlight, changed)
         Text(
             key,
             style = MaterialTheme.typography.labelSmall,
@@ -885,7 +918,7 @@ private fun OptionText(
     // 本地草稿跟着这一项自己的值走：别的项改动时这里不会被重置，也不会跟着重组。
     var value by remember(key, current) { mutableStateOf(current) }
     val changed = changedText(value, default)
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.Hair)) {
         OutlinedTextField(
             value = value,
             onValueChange = { value = it; onChange(it) },
@@ -893,7 +926,7 @@ private fun OptionText(
             label = { OptionLabel(label, changed, highlight) },
             supportingText = {
                 Column {
-                    OptionDesc(desc, default, highlight)
+                    OptionDesc(desc, default, highlight, changed)
                     Text(
                         key,
                         style = MaterialTheme.typography.labelSmall,
@@ -919,12 +952,12 @@ private fun OptionToggle(
     val enabled = current == "1"
     val changed = changedToggle(current, default)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Space.Hair),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             OptionLabel(label, changed, highlight)
-            OptionDesc(desc, default, highlight)
+            OptionDesc(desc, default, highlight, changed)
             Text(
                 key,
                 style = MaterialTheme.typography.labelSmall,
@@ -1861,9 +1894,10 @@ private const val SECTION_COMMON = "common"
 private const val SECTION_PIPE = "pipe"
 private const val SECTION_COMPAT = "compat"
 private const val SECTION_DIAG = "diag"
-private const val SECTION_MAGMA = "magma"
-private const val SECTION_ESPRYT = "espryt"
 private const val SECTION_SFPEW = "sfpew"
+
+/** Magma 与 Espryt 共用一个分区：一页里只有当前后端那份会铺开。 */
+private const val SECTION_BACKEND = "backend"
 
 /** 分组标识对应的标题。 */
 @Composable
@@ -1873,8 +1907,7 @@ private fun sectionLabel(section: String): String = stringResource(
         SECTION_PIPE -> R.string.config_section_pipe
         SECTION_COMPAT -> R.string.config_section_compat
         SECTION_DIAG -> R.string.config_section_diag
-        SECTION_MAGMA -> R.string.config_group_magma
-        SECTION_ESPRYT -> R.string.config_group_espryt
+        SECTION_BACKEND -> R.string.config_section_backend_specific
         SECTION_SFPEW -> R.string.config_group_sfpew
         else -> R.string.config_other_section
     },
@@ -1886,8 +1919,8 @@ private val OPTION_SECTION: Map<String, String> = buildMap {
     PIPE_KEYS.forEach { put(it, SECTION_PIPE) }
     COMPAT_KEYS.forEach { put(it, SECTION_COMPAT) }
     DIAG_KEYS.forEach { put(it, SECTION_DIAG) }
-    MAGMA_KEYS.forEach { put(it, SECTION_MAGMA) }
-    ESPRYT_KEYS.forEach { put(it, SECTION_ESPRYT) }
+    MAGMA_KEYS.forEach { put(it, SECTION_BACKEND) }
+    ESPRYT_KEYS.forEach { put(it, SECTION_BACKEND) }
     SFPEW_TAIL_KEYS.forEach { put(it, SECTION_SFPEW) }
     put("SFPEW_ENABLED", SECTION_SFPEW)
     put("SFPEW_EGL", SECTION_SFPEW)
@@ -1946,15 +1979,89 @@ private fun LazyListScope.optionGroup(
     if (keys.isEmpty()) return
     // 用分组 id 当 key：筛掉某一组时，剩下的组不会因为位置前移而整体重建。
     item(key = "group:" + section) {
-        SectionLabel(sectionLabel(section), keys.size)
-        InfoCard {
-            Text(
-                stringResource(noteRes),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            OptionRows(keys, parsed, onChange = onEdit)
+        OptionGroupBlock(section, noteRes, keys, parsed, onEdit)
+    }
+}
+
+/**
+ * 一组配置项，可直接放进任意 Column。
+ *
+ * 窄屏时每组占一个 LazyColumn item，宽屏时几组拼进同一栏——两种摆法共用这一段，
+ * 不会出现「宽屏那份忘了同步」的问题。
+ */
+@Composable
+private fun OptionGroupBlock(
+    section: String,
+    noteRes: Int,
+    keys: List<String>,
+    parsed: Map<String, String>,
+    onEdit: (String, String) -> Unit,
+) {
+    if (keys.isEmpty()) return
+    SectionLabel(sectionLabel(section), keys.size)
+    InfoCard {
+        Text(
+            stringResource(noteRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Space.Sm))
+        OptionRows(keys, parsed, onChange = onEdit)
+    }
+}
+
+/**
+ * 后端专用：当前后端那一组直接铺开，另一组收在同一张卡里。
+ *
+ * 两组各 17–18 项，但同一时刻只有一组会生效；并成一张卡后，页面上少一个几乎用不到
+ * 的区块，需要对照时展开另一组即可。
+ */
+@Composable
+private fun BackendSpecificCard(
+    activeKeys: List<String>,
+    otherKeys: List<String>,
+    activeLabel: String,
+    otherLabel: String,
+    showOther: Boolean,
+    onToggleOther: (Boolean) -> Unit,
+    parsed: Map<String, String>,
+    onEdit: (String, String) -> Unit,
+) {
+    SectionLabel(sectionLabel(SECTION_BACKEND), activeKeys.size)
+    InfoCard {
+        Text(
+            stringResource(R.string.config_backend_note, activeLabel),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Space.Sm))
+        OptionRows(activeKeys, parsed, onChange = onEdit)
+        // 另一组被「只看改动」筛空时，这条入口没有意义，整行不画。
+        if (otherKeys.isNotEmpty()) {
+            DividerLine()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleOther(!showOther) }
+                    .heightIn(min = 48.dp)
+                    .padding(vertical = Space.Md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (showOther) {
+                        stringResource(R.string.config_other_backend_hide)
+                    } else {
+                        stringResource(R.string.config_other_backend_show, otherLabel, otherKeys.size)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                ChevronIcon(expanded = showOther, tint = MaterialTheme.colorScheme.primary, size = 16.dp)
+            }
+            if (showOther) {
+                OptionRows(otherKeys, parsed, onChange = onEdit)
+            }
         }
     }
 }

@@ -493,8 +493,8 @@
     <!-- Config page -->
     <string name="config_save_blocked">发现 %1$d 个问题，已阻止保存：\n%2$s</string>
     <string name="config_submitted">已提交 %1$d 项（校验通过），写入结果见上方状态卡</string>
-    <string name="config_group_magma">DirectVulkan / Magma 专用</string>
-    <string name="config_group_espryt">DirectGLES / Espryt 专用</string>
+    <string name="config_group_magma">DirectVulkan / Magma</string>
+    <string name="config_group_espryt">DirectGLES / Espryt</string>
     <string name="config_title">启动配置</string>
     <string name="config_header_changed">已改 %1$d / %2$d</string>
     <string name="config_header_total">共 %1$d 项</string>
@@ -527,10 +527,6 @@
     <string name="config_section_compat_note">针对特定光影包或驱动的兼容处理。默认值通常可用；仅在出现具体问题时按需开启。</string>
     <string name="config_section_diag">诊断</string>
     <string name="config_section_diag_note">输出日志与内部校验，用于定位问题。日常开启会产生额外开销。</string>
-    <string name="config_section_magma_note">仅在渲染后端为 DirectVulkan 时生效。已按官方默认值配置，通常无需改动。</string>
-    <string name="config_section_espryt_note">仅在渲染后端为 DirectGLES 时生效。已按官方默认值配置，通常无需改动。</string>
-    <string name="config_collapse">收起</string>
-    <string name="config_expand_count">展开 %1$d 项</string>
     <string name="config_section_save">保存与文件</string>
     <string name="config_shared_written">已写入共享路径（启动器进程可读）</string>
     <string name="config_shared_missing">尚未写入共享路径：%1$s</string>
@@ -598,4 +594,8 @@
     <string name="fold_expand">说明 ›</string>
     <string name="notice_dismiss">关闭提示</string>
     <string name="common_copy">复制</string>
+    <string name="config_section_backend_specific">后端专用</string>
+    <string name="config_backend_note">只对当前后端 %1$s 生效；换后端后这里会换成另一组。</string>
+    <string name="config_other_backend_show">对照另一组：%1$s（%2$d 项）</string>
+    <string name="config_other_backend_hide">收起另一组</string>
 </resources>
