@@ -106,6 +106,16 @@ internal fun InfoTab(
     val activeName = drivers.firstOrNull { it.id == config.activeDriverId }?.name
         ?: stringResource(R.string.shell_builtin_driver)
     val unknownText = stringResource(R.string.info_unknown)
+    // 复制标签要在 onLongPress/onClick 里用，而那些 lambda 不是 @Composable，
+    // 里面的 stringResource 取不到组合上下文，所以在这里先取好。
+    val labelVersionNumber = stringResource(R.string.info_version_number)
+    val labelProcessor = stringResource(R.string.info_label_processor)
+    val labelMemory = stringResource(R.string.info_label_memory)
+    val labelScreen = stringResource(R.string.info_label_screen)
+    val labelCore = stringResource(R.string.info_label_core)
+    val labelSystem = stringResource(R.string.info_label_system)
+    val labelCoreVersion = stringResource(R.string.about_core_version)
+    val labelAll = stringResource(R.string.info_section_all)
     val kernelText = if (device.coreVersion.isBlank()) {
         unknownText
     } else {
@@ -201,7 +211,7 @@ internal fun InfoTab(
                     } else {
                         stringResource(R.string.info_hero_private)
                     },
-                    onLongPress = { copy(stringResource(R.string.info_version_number), BuildConfig.FULL_VERSION_NAME) },
+                    onLongPress = { copy(labelVersionNumber, BuildConfig.FULL_VERSION_NAME) },
                 )
             }
             if (!authorized) {
@@ -260,7 +270,7 @@ internal fun InfoTab(
                         expandable = device.socExtra.governor.isNotBlank(),
                         expanded = chipMore,
                         onToggle = { chipMore = !chipMore },
-                        onLongPress = { copy(stringResource(R.string.info_label_processor), device.soc) },
+                        onLongPress = { copy(labelProcessor, device.soc) },
                     ) {
                         Column(Modifier.fillMaxWidth().padding(top = Space.Xs)) {
                             DetailLine(
@@ -303,7 +313,7 @@ internal fun InfoTab(
                         value = device.memory,
                         caption = device.memoryAvail,
                         onLongPress = {
-                            copy(stringResource(R.string.info_label_memory), device.memory + " · " + device.memoryAvail)
+                            copy(labelMemory, device.memory + " · " + device.memoryAvail)
                         },
                     )
                     DividerLine()
@@ -311,27 +321,27 @@ internal fun InfoTab(
                         label = stringResource(R.string.info_label_screen),
                         value = screenValue(device.screen),
                         caption = screenCaption(device.screen),
-                        onLongPress = { copy(stringResource(R.string.info_label_screen), device.screen) },
+                        onLongPress = { copy(labelScreen, device.screen) },
                     )
                     DividerLine()
                     SpecBlock(
                         label = stringResource(R.string.info_label_core),
                         value = coreCountText(device.cores),
                         caption = clusterSummary(clusterText),
-                        onLongPress = { copy(stringResource(R.string.info_label_core), clusterText) },
+                        onLongPress = { copy(labelCore, clusterText) },
                     )
                     DividerLine()
                     SpecBlock(
                         label = stringResource(R.string.info_label_system),
                         value = device.android,
-                        onLongPress = { copy(stringResource(R.string.info_label_system), device.android) },
+                        onLongPress = { copy(labelSystem, device.android) },
                     )
                     DividerLine()
                     SpecBlock(
                         label = stringResource(R.string.about_core_version),
                         value = kernelText,
                         mono = true,
-                        onLongPress = { copy(stringResource(R.string.about_core_version), kernelText) },
+                        onLongPress = { copy(labelCoreVersion, kernelText) },
                     )
                 }
             }
@@ -376,7 +386,7 @@ internal fun InfoTab(
                 // 反馈问题时一次贴全：版本、渲染链、设备信息都在里面。
                 TextButton(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { copy(stringResource(R.string.info_section_all), dumpAllText) },
+                    onClick = { copy(labelAll, dumpAllText) },
                 ) {
                     Text(stringResource(R.string.info_copy_all))
                 }
