@@ -2,5 +2,5 @@
 <resources>
     <!-- Light: the brand background, so the cold-start window does not flash grey
          before Compose draws its first frame. Dark variant lives in values-night. -->
-    <color name="window_background">#FFFFFBF7</color>
+    <color name="window_background">#FFF6F1ED</color>
 </resources>
