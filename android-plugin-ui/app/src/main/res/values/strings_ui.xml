@@ -201,8 +201,6 @@
     <string name="shell_page_drivers">驱动管理</string>
     <string name="shell_page_config">启动配置</string>
     <string name="shell_page_selftest">驱动自检</string>
-    <string name="shell_no_report">还没有自检结果，请先运行自检</string>
-    <string name="shell_share_chooser">分享自检报告</string>
     <string name="shell_item_count">%1$d 项</string>
     <string name="shell_unknown">未知</string>
     <string name="shell_builtin_driver">内置</string>
@@ -250,7 +248,6 @@
     <string name="info_thanks_launcher">PojavLauncher 系启动器</string>
     <string name="info_thanks_launcher_desc">FCL、Zalith 等，经 RendererPlugin 加载</string>
     <string name="info_thanks_kotlin">Kotlin 标准库与协程</string>
-    <string name="info_share_report">分享自检报告</string>
     <string name="info_section_all">全部信息</string>
     <string name="info_copy_all">复制全部信息</string>
     <string name="info_long_press_copy">长按复制</string>

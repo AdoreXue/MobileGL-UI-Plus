@@ -530,7 +530,6 @@ fun MobileGlPluginApp() {
                             drivers = drivers,
                             externalCount = externalLibraries.size,
                             runtime = runtimeStatus,
-                            onShareReport = { scope.launch { shareReport(context, selfTestRepository) } },
                             onRefresh = { refreshDeviceState() },
                             onOpenRender = { lastTab = 1 },
                             onOpenSelfTest = { openSub(Dest.SelfTest) },
@@ -717,20 +716,6 @@ fun MobileGlPluginApp() {
         }
         }
     }
-}
-
-/** 读最近一次原报告（读文件 + 解析 JSON）放在 IO 上，再把分享交给主线程。 */
-private suspend fun shareReport(context: Context, repository: SelfTestRepository) {
-    val text = withContext(Dispatchers.IO) { repository.readableReport() }
-    if (text.isBlank()) {
-        Toast.makeText(context, context.getString(R.string.shell_no_report), Toast.LENGTH_SHORT).show()
-        return
-    }
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(intent, context.getString(R.string.shell_share_chooser)))
 }
 
 /** 宽屏用的左侧导航轨：与底栏同一份 [TABS]，只有摆放位置不同。 */

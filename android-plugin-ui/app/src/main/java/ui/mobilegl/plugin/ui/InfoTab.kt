@@ -27,8 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -81,7 +79,6 @@ internal fun InfoTab(
     drivers: List<DriverPack>,
     externalCount: Int,
     runtime: RuntimeConfigWriter.Status,
-    onShareReport: () -> Unit,
     onRefresh: () -> Unit,
     onOpenRender: () -> Unit,
     onOpenSelfTest: () -> Unit,
@@ -363,23 +360,6 @@ internal fun InfoTab(
                     }
                     DividerLine()
                     LinkRow(stringResource(R.string.about_title), onOpenAbout)
-                }
-            }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                    onClick = onShareReport,
-                ) {
-                    Text(
-                        stringResource(R.string.info_share_report),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = Space.Lg),
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
                 }
             }
             item {
