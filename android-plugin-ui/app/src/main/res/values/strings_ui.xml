@@ -14,7 +14,6 @@
     <string name="common_run_self_test">运行自检</string>
     <string name="common_rerun_self_test">重新自检</string>
     <string name="common_full_report">完整报告</string>
-    <string name="common_close">关闭</string>
 
     <!-- Settings -->
     <string name="settings_title">设置</string>
@@ -158,15 +157,7 @@
     <string name="render_tune_mirror">索引镜像</string>
     <string name="render_tune_mirror_desc">索引缓冲的镜像上限，显存紧张的机型可调小</string>
     <string name="render_section_drivers_selftest">驱动与自检</string>
-    <string name="render_hero_label">当前渲染方案</string>
-    <string name="render_pending_restart">待生效</string>
-    <string name="render_effective">已生效</string>
-    <string name="render_native_gles">原生 GLES</string>
     <string name="render_no_wrapper">无包装器</string>
-    <string name="render_espryt_desc">Espryt 把 GL 调用直接转成系统 GLES，路径短、兼容性好；打开 ANGLE 后改为经 ANGLE 落地。</string>
-    <string name="render_magma_desc">Magma 把 GL 调用翻译成 Vulkan 提交，能吃到驱动的现代特性，需要可用的驱动包。</string>
-    <string name="render_use_angle">使用 ANGLE</string>
-    <string name="render_use_angle_desc">Espryt 后端改用 ANGLE 作为 GLES 实现</string>
     <string name="render_details_collapse">收起技术细节</string>
     <string name="render_details_expand">技术细节</string>
     <string name="render_backend_advice">建议：兼容优先留 DirectGLES；需要 Vulkan 特性、且已导入可用驱动包时再切 DirectVulkan。</string>
@@ -179,7 +170,6 @@
     <string name="render_available">可用</string>
     <string name="render_unavailable">不可用</string>
     <string name="render_driver_line">驱动包 %1$s · 共 %2$d 个 · ICD %3$s</string>
-    <string name="render_driver_none">驱动包 %1$s</string>
     <string name="render_icd_generated">已生成</string>
     <string name="render_icd_missing">未生成</string>
     <string name="render_config_line">runtime.conf 全部配置项 · 外部库 %1$d 个</string>
@@ -211,7 +201,6 @@
     <string name="shell_page_drivers">驱动管理</string>
     <string name="shell_page_config">启动配置</string>
     <string name="shell_page_selftest">驱动自检</string>
-    <string name="shell_share_report">分享自检报告</string>
     <string name="shell_no_report">还没有自检结果，请先运行自检</string>
     <string name="shell_share_chooser">分享自检报告</string>
     <string name="shell_item_count">%1$d 项</string>
@@ -246,45 +235,27 @@
     <string name="info_label_screen">屏幕</string>
     <string name="info_label_storage">存储</string>
     <string name="info_label_features">CPU 特性</string>
-    <string name="info_label_kernel">内核</string>
     <string name="info_dump_title">MobileGL_UI_Plus 信息</string>
     <string name="info_title">信息</string>
     <string name="info_version_number">版本号</string>
-    <string name="info_specs">规格</string>
     <string name="info_usage">占用 %1$s</string>
-    <string name="info_label_vendor">厂商</string>
-    <string name="info_more_chip">更多芯片信息</string>
     <string name="info_label_clusters">分簇</string>
     <string name="info_label_governor">调度</string>
-    <string name="info_section_system">系统与设备</string>
-    <string name="info_section_links">链接</string>
     <string name="info_github">GitHub 仓库</string>
     <string name="info_upstream">上游项目</string>
-    <string name="info_section_about">关于</string>
-    <string name="info_developer">开发者</string>
-    <string name="info_kernel_version">内核版本</string>
-    <string name="info_license">开源许可证</string>
     <string name="info_copyright">© AdoreXue · 以 GNU LGPL-3.0 发布</string>
-    <string name="info_check_update">检查更新</string>
-    <string name="info_section_thanks">致谢</string>
     <string name="info_thanks_core">渲染核心，DirectGLES 与 DirectVulkan 后端</string>
     <string name="info_thanks_sfpew">MC 1.16.5 及以下的 FPE 包装层</string>
     <string name="info_thanks_mesa">部分驱动包使用的开源 Vulkan 实现</string>
     <string name="info_thanks_launcher">PojavLauncher 系启动器</string>
     <string name="info_thanks_launcher_desc">FCL、Zalith 等，经 RendererPlugin 加载</string>
-    <string name="info_section_third_party">第三方组件</string>
     <string name="info_thanks_kotlin">Kotlin 标准库与协程</string>
     <string name="info_share_report">分享自检报告</string>
     <string name="info_section_all">全部信息</string>
     <string name="info_copy_all">复制全部信息</string>
     <string name="info_long_press_copy">长按复制</string>
-    <string name="info_collapse">收起</string>
-    <string name="info_expand">展开</string>
     <string name="info_unknown">未知</string>
     <string name="info_core_count">%1$d 核</string>
-    <string name="info_core_count_text">%1$s 核</string>
-    <string name="info_storage_total">共 %1$s</string>
-    <string name="shell_unauthorized_short">未授权</string>
 
     <!-- Renderer options: one label, one description and one default per key -->
     <string name="opt_mobilegl_disable_timerquery_label">禁用 GPU 计时查询</string>
@@ -576,7 +547,6 @@
     <string name="config_restore_default">恢复默认</string>
 
 
-    <string name="render_tune_hint">这是什么、什么时候该动</string>
     <string name="render_hero_title">当前渲染方案</string>
     <string name="render_pending">待生效</string>
     <string name="render_effective_short">已生效</string>
@@ -585,7 +555,6 @@
     <string name="render_magma_detail">Magma 把 GL 调用翻译成 Vulkan 提交，能吃到驱动的现代特性，需要可用的驱动包。</string>
     <string name="render_use_angle_hint">使用 ANGLE</string>
     <string name="render_use_angle_detail">Espryt 后端改用 ANGLE 作为 GLES 实现</string>
-    <string name="refresh">刷新</string>
     <string name="fold_collapse">收起</string>
     <string name="fold_expand">说明 ›</string>
     <string name="notice_dismiss">关闭提示</string>
@@ -596,4 +565,18 @@
     <string name="config_other_backend_hide">收起另一组</string>
     <string name="config_sfpew_why">为什么需要它 ›</string>
     <string name="config_sfpew_hide">收起说明</string>
+    <string name="info_hero_synced">配置已同步</string>
+    <string name="info_hero_private">仅私有副本</string>
+    <string name="info_permission_body">还没拿到“所有文件访问权限”：配置只能写进应用私有目录，启动器和游戏进程读不到。</string>
+    <string name="info_label_processor">处理器</string>
+    <string name="info_label_graphics">图形驱动</string>
+    <string name="about_title">关于与感谢</string>
+    <string name="about_core_version">渲染核心</string>
+    <string name="about_developer">开发者</string>
+    <string name="about_license">开源许可证</string>
+    <string name="about_section_app">应用信息</string>
+    <string name="about_section_thanks">致谢</string>
+    <string name="about_section_third_party">第三方组件</string>
+    <string name="about_check_releases">查看发布页</string>
+    <string name="info_hero_version">UI Plus · v%1$s</string>
 </resources>

@@ -166,6 +166,7 @@ private sealed interface Dest {
     data object Drivers : Dest
     data object ConfigFile : Dest
     data object SelfTest : Dest
+    data object About : Dest
 }
 
 private data class Tab(val labelRes: Int, val icon: ImageVector, val dest: Dest)
@@ -259,6 +260,7 @@ fun MobileGlPluginApp() {
         val homeScroll = rememberScrollState()
         val driversScroll = rememberScrollState()
         val selfTestListState = rememberLazyListState()
+        val aboutListState = rememberLazyListState()
         val renderListState = rememberLazyListState()
         val settingsListState = rememberLazyListState()
         val infoListState = rememberLazyListState()
@@ -530,6 +532,9 @@ fun MobileGlPluginApp() {
                             runtime = runtimeStatus,
                             onShareReport = { scope.launch { shareReport(context, selfTestRepository) } },
                             onRefresh = { refreshDeviceState() },
+                            onOpenRender = { lastTab = 1 },
+                            onOpenSelfTest = { openSub(Dest.SelfTest) },
+                            onOpenAbout = { openSub(Dest.About) },
                         )
                         Dest.Drivers -> DriverScreen(
                             scrollState = driversScroll,
@@ -621,6 +626,10 @@ fun MobileGlPluginApp() {
                             latest = report,
                             onResult = { report = it },
                         )
+                        Dest.About -> AboutScreen(
+                            listState = aboutListState,
+                            device = device,
+                        )
                     }
                 }
             }
@@ -687,6 +696,7 @@ fun MobileGlPluginApp() {
                                     Dest.Drivers -> stringResource(R.string.shell_page_drivers)
                                     Dest.ConfigFile -> stringResource(R.string.shell_page_config)
                                     Dest.SelfTest -> stringResource(R.string.shell_page_selftest)
+                                    Dest.About -> stringResource(R.string.about_title)
                                     else -> ""
                                 },
                                 onBack = { scope.launch { dismissSub() } },
@@ -802,13 +812,17 @@ internal data class DeviceInfo(
     val socExtra: SocExtra,
     val screen: String,
     val storage: String,
+    /** 存储已用比例 0..1，用来画信息页那条进度条。 */
+    val storageUsed: Float,
+    /** 机型与系统内部版本号，例如 "PKG110 · UQ1A.240205.002"。 */
+    val model: String,
 ) {
     companion object {
         /** 首帧占位：真实内容由后台 effect 填进来。 */
         fun empty(): DeviceInfo = DeviceInfo(
             gpu = "", gles = "", vulkan = "", memory = "", memoryAvail = "", soc = "",
             socVendor = "", socDetail = "", cores = 0, android = "", coreVersion = "", coreCommit = null,
-            socExtra = SocExtra(), screen = "", storage = "",
+            socExtra = SocExtra(), screen = "", storage = "", storageUsed = 0f, model = "",
         )
     }
 }
@@ -871,6 +885,13 @@ private fun screenText(context: Context): String {
         }
     }
 }
+
+/** 存储已用比例：进度条只需要一个 0..1 的数，除数取不到时返回 0。 */
+private fun storageUsed(context: Context): Float = runCatching {
+    val stat = StatFs(Environment.getDataDirectory().absolutePath)
+    val total = stat.totalBytes
+    if (total <= 0L) 0f else ((total - stat.availableBytes).toFloat() / total).coerceIn(0f, 1f)
+}.getOrDefault(0f)
 
 /** 内部存储的可用与总容量。 */
 private fun storageText(context: Context): String = runCatching {
@@ -941,10 +962,17 @@ private fun deviceInfo(
     } ?: readFirstLine("/sys/devices/soc0/family") ?: ""
     val socDetail = socDetailText(context)
     val android = "Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
+    // 机型和内部版本号直接取自系统属性，括号里的厂商串（如 OnePlus 的 PKG110_17.0.0.105）
+    // 就在 DISPLAY 里，不用自己拼。
+    val modelParts = listOfNotNull(
+        Build.MODEL?.takeIf { it.isNotBlank() && !it.equals("unknown", true) },
+        Build.DISPLAY?.takeIf { it.isNotBlank() && !it.equals("unknown", true) },
+    )
     return DeviceInfo(
         gpu, gles, vulkan, memory, memoryAvail, soc, socVendor, socDetail,
         Runtime.getRuntime().availableProcessors(), android,
         coreVersion, coreCommit, socExtra, screenText(context), storageText(context),
+        storageUsed(context), modelParts.joinToString(" · "),
     )
 }
 

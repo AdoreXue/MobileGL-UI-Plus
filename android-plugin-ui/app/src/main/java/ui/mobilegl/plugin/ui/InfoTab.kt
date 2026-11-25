@@ -8,16 +8,11 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,23 +22,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,13 +43,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,10 +64,13 @@ import ui.mobilegl.plugin.driver.DriverPack
 import ui.mobilegl.plugin.selftest.SelfTestResult
 
 /**
- * 信息页：版本 Hero + 状态胶囊 + 规格网格 + 可长按复制的明细卡。
+ * 信息页：一台机器现在跑着什么，一屏看全。
  *
- * 排版分三层：最上面是版本（一眼能读到、长按能复制），接着是四个常用规格与
- * 芯片型号，然后是「系统与设备 / 运行环境」，冷门项折进「更多」。
+ * 版式照系统「关于本机」那一套：顶部一块品牌横幅，接着是状态行与存储进度，
+ * 再往下是竖排的规格清单，最后是入口行。标签在上、值在下的竖排比左右对齐更能装长值
+ * （"DirectVulkan / Magma"、"1080×2400 · 120 Hz" 这类），也不会把标签挤成两行。
+ *
+ * 致谢、第三方组件与许可证不在这页：它们翻一次就够，挪到了「关于」子页。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +83,9 @@ internal fun InfoTab(
     runtime: RuntimeConfigWriter.Status,
     onShareReport: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenRender: () -> Unit,
+    onOpenSelfTest: () -> Unit,
+    onOpenAbout: () -> Unit,
     listState: LazyListState = rememberLazyListState(),
 ) {
     val context = LocalContext.current
@@ -103,36 +98,25 @@ internal fun InfoTab(
     val authorized = hasAllFilesAccess(context)
     val ready = rememberContentReady("info")
     val reveal = rememberContentReveal(ready)
+    // 两处折叠：芯片分簇与图形接口。默认收起，展开时表格化显示。
     var chipMore by remember { mutableStateOf(false) }
     var glMore by remember { mutableStateOf(false) }
+
     val clusterText = device.socExtra.clusters.ifBlank { device.socDetail }
-    val labelVersion = stringResource(R.string.info_version_number)
-    val labelMemory = stringResource(R.string.info_label_memory)
-    val labelSystem = stringResource(R.string.info_label_system)
-    val labelCore = stringResource(R.string.info_label_core)
-    val labelScreen = stringResource(R.string.info_label_screen)
-    val labelStorage = stringResource(R.string.info_label_storage)
-    val labelVendor = stringResource(R.string.info_label_vendor)
-    val labelClusters = stringResource(R.string.info_label_clusters)
-    val labelGovernor = stringResource(R.string.info_label_governor)
-    val labelBackend = stringResource(R.string.info_label_backend)
-    val labelDriver = stringResource(R.string.info_label_driver)
-    val labelDeveloper = stringResource(R.string.info_developer)
-    val labelKernel = stringResource(R.string.info_kernel_version)
-    val labelAll = stringResource(R.string.info_section_all)
-    val builtinName = stringResource(R.string.shell_builtin_driver)
+    val activeName = drivers.firstOrNull { it.id == config.activeDriverId }?.name
+        ?: stringResource(R.string.shell_builtin_driver)
     val unknownText = stringResource(R.string.info_unknown)
-    val activeName = drivers.firstOrNull { it.id == config.activeDriverId }?.name ?: builtinName
     val kernelText = if (device.coreVersion.isBlank()) {
         unknownText
     } else {
         "v" + device.coreVersion + (device.coreCommit?.take(7)?.let { " · " + it } ?: "")
     }
-    val busy = device.socExtra.gpuBusy
+    val displayVersion = BuildConfig.FULL_VERSION_NAME.substringBefore("-build")
+
     // 一次性复制用：顺序跟页面一致，反馈问题时整段贴出来就够。
     val infoPairs = buildList {
         add(stringResource(R.string.info_label_version) to BuildConfig.FULL_VERSION_NAME)
-        add(labelBackend to config.backend)
+        add(stringResource(R.string.info_label_backend) to config.backend)
         add(
             stringResource(R.string.info_label_sfpew) to
                 if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) {
@@ -143,8 +127,11 @@ internal fun InfoTab(
                     stringResource(R.string.info_sfpew_missing)
                 },
         )
-        add(labelDriver to activeName)
-        add(stringResource(R.string.info_label_libraries) to stringResource(R.string.info_libraries_value, externalCount))
+        add(stringResource(R.string.info_label_driver) to activeName)
+        add(
+            stringResource(R.string.info_label_libraries) to
+                stringResource(R.string.info_libraries_value, externalCount),
+        )
         add(
             stringResource(R.string.info_label_shared_config) to
                 if (runtime.sharedWritten) {
@@ -154,23 +141,24 @@ internal fun InfoTab(
                 },
         )
         add("GPU" to device.gpu)
-        add(labelMemory to stringResource(R.string.info_memory_value, device.memory, device.memoryAvail))
+        add(
+            stringResource(R.string.info_label_memory) to
+                stringResource(R.string.info_memory_value, device.memory, device.memoryAvail),
+        )
         add("SoC" to device.soc)
-        add(labelSystem to device.android)
-        add(labelCore to coreCountText(device.cores))
-        add(labelScreen to device.screen)
-        add(labelStorage to device.storage)
+        add(stringResource(R.string.info_label_system) to device.android)
+        add(stringResource(R.string.info_label_core) to coreCountText(device.cores))
+        add(stringResource(R.string.info_label_screen) to device.screen)
+        add(stringResource(R.string.info_label_storage) to device.storage)
         add("OpenGL ES" to device.gles)
         add("Vulkan" to device.vulkan)
         if (device.socExtra.features.isNotBlank()) {
             add(stringResource(R.string.info_label_features) to device.socExtra.features)
         }
-        add(stringResource(R.string.info_label_kernel) to kernelText)
+        add(stringResource(R.string.about_core_version) to kernelText)
     }
     val dumpAllText = stringResource(R.string.info_dump_title) + "\n" +
         infoPairs.joinToString("\n") { (k, v) -> k + ": " + v }
-    // 系统与设备只剩静态信息：固定 7 行，加可选的 CPU 特性。
-    val runCount = 7 + (if (device.socExtra.features.isNotBlank()) 1 else 0)
 
     // 下拉立即刷新；自动刷新的 5 秒定时器在 PluginApp 里跑，离开信息页就停。
     var refreshing by remember { mutableStateOf(false) }
@@ -186,226 +174,170 @@ internal fun InfoTab(
         onRefresh = { refreshing = true },
         modifier = Modifier.fillMaxSize(),
     ) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().graphicsLayer {
-            alpha = reveal.alpha
-            translationY = reveal.rise.toPx()
-        },
-        contentPadding = PaddingValues(
-            start = Space.Page,
-            top = 0.dp,
-            end = Space.Page,
-            bottom = Space.Xl,
-        ),
-    ) {
-        item { BigTitle(stringResource(R.string.info_title)) }
-        if (!ready) {
-            item { FillSkeleton(cards = 6) }
-        } else {
-            item {
-                VersionHero(
-                    version = BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
-                    internal = BuildConfig.FULL_VERSION_NAME,
-                    backend = config.backend,
-                    soc = device.soc,
-                    onLongPress = { copy(labelVersion, BuildConfig.FULL_VERSION_NAME) },
-                )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                alpha = reveal.alpha
+                translationY = reveal.rise.toPx()
+            },
+            contentPadding = PaddingValues(
+                start = Space.Page,
+                top = 0.dp,
+                end = Space.Page,
+                bottom = Space.Xl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(Space.Lg),
+        ) {
+            item { BigTitle(stringResource(R.string.info_title)) }
+            if (!ready) {
+                item { FillSkeleton(cards = 5) }
+                return@LazyColumn
             }
             item {
-                Spacer(Modifier.height(10.dp))
-                StatusStrip(
-                    authorized = authorized,
-                    backend = config.backend,
-                    lastReport = lastReport,
-                    onAuthorize = { openAllFilesAccessSettings(context) },
+                InfoHero(
+                    version = displayVersion,
+                    pill = if (runtime.sharedWritten) {
+                        stringResource(R.string.info_hero_synced)
+                    } else {
+                        stringResource(R.string.info_hero_private)
+                    },
+                    onLongPress = { copy(stringResource(R.string.info_version_number), BuildConfig.FULL_VERSION_NAME) },
                 )
             }
-            item { SectionLabel(stringResource(R.string.info_specs)) }
+            if (!authorized) {
+                item { PermissionNotice { openAllFilesAccessSettings(context) } }
+            }
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Gpu,
-                            label = "GPU",
-                            value = device.gpu,
-                            caption = if (busy.isBlank()) {
-                                ""
-                            } else {
-                                stringResource(R.string.info_usage, busy)
-                            },
-                            onLongPress = { copy("GPU", device.gpu) },
+                // 状态三行：后端与自检能点进去，存储只有值。
+                InfoCard {
+                    KeyValueRow(
+                        label = stringResource(R.string.info_label_backend),
+                        value = config.backend,
+                        onClick = onOpenRender,
+                    )
+                    DividerLine()
+                    KeyValueRow(
+                        label = stringResource(R.string.selftest_section),
+                        value = healthShort(lastReport),
+                        valueColor = healthColor(lastReport),
+                        onClick = onOpenSelfTest,
+                    )
+                    DividerLine()
+                    Column(Modifier.fillMaxWidth().padding(top = Space.Md, bottom = Space.Md)) {
+                        KeyValueRow(
+                            label = stringResource(R.string.info_label_storage),
+                            value = storageValue(device.storage) + " / " + storageCaption(device.storage),
                         )
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Memory,
-                            label = labelMemory,
-                            value = device.memory,
-                            caption = device.memoryAvail,
-                            onLongPress = {
-                                copy(labelMemory, device.memory + " · " + device.memoryAvail)
-                            },
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Layers,
-                            label = labelSystem,
-                            value = device.android,
-                            caption = "",
-                            onLongPress = { copy(labelSystem, device.android) },
-                        )
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Chip,
-                            label = labelCore,
-                            value = coreCountText(device.cores),
-                            // 分簇直接写进这一格：小屏上比单独一行更省位置。
-                            caption = clusterSummary(clusterText),
-                            mono = false,
-                            onLongPress = { copy(labelCore, clusterText) },
-                        )
-                    }
-                    // 第三行：屏幕与存储原来挤在下面的卡里，挪上来每格都有值和小字。
-                    Row(
-                        modifier = Modifier.height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Layers,
-                            label = labelScreen,
-                            value = screenValue(device.screen),
-                            caption = screenCaption(device.screen),
-                            mono = false,
-                            onLongPress = { copy(labelScreen, device.screen) },
-                        )
-                        SpecCell(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            icon = UiIcons.Memory,
-                            label = labelStorage,
-                            value = storageValue(device.storage),
-                            caption = storageCaption(device.storage),
-                            mono = false,
-                            onLongPress = { copy(labelStorage, device.storage) },
-                        )
+                        Spacer(Modifier.height(Space.Sm))
+                        StorageBar(device.storageUsed)
                     }
                 }
             }
-            // 规格网格与下面这张卡之间留一点空气，没有小标题也要看得出是两块。
-            item { Spacer(Modifier.height(10.dp)) }
             item {
+                // 规格：机型标题 + 竖排的 label/value，长值不受标签宽度限制。
                 InfoCard {
-                    InfoLine(UiIcons.Chip, "SoC", device.soc, mono = false) { copy("SoC", device.soc) }
-                    DividerLine()
-                    if (device.socVendor.isNotBlank()) {
-                        InfoLine(UiIcons.Code, labelVendor, device.socVendor, mono = false) {
-                            copy(labelVendor, device.socVendor)
-                        }
-                        DividerLine()
-                    }
-                    // SoC 编号对普通用户没意义，已经去掉；只有调度器可读时才留折叠入口。
-                    if (device.socExtra.governor.isNotBlank()) {
-                        MoreToggle(chipMore, stringResource(R.string.info_more_chip)) { chipMore = it }
-                        AnimatedVisibility(
-                            visible = chipMore,
-                            enter = Motion.foldEnter(),
-                            exit = Motion.foldExit(),
-                        ) {
-                            Column {
-                                DividerLine()
-                                InfoLine(UiIcons.Chip, labelClusters, clusterText, mono = false) {
-                                    copy(labelClusters, clusterText)
-                                }
-                                DividerLine()
-                                InfoLine(UiIcons.Speed, labelGovernor, device.socExtra.governor, mono = true) {
-                                    copy(labelGovernor, device.socExtra.governor)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            item { SectionLabel(stringResource(R.string.info_section_system), runCount) }
-            item {
-                // 渲染链、图形能力合成一张卡：都是静态信息，不再和实时数值混在一起。
-                InfoCard {
-                    InfoLine(UiIcons.Speed, labelBackend, config.backend, mono = true) {
-                        copy(labelBackend, config.backend)
-                    }
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Layers,
-                        stringResource(R.string.info_label_sfpew),
-                        if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) {
-                            stringResource(R.string.info_sfpew_on)
-                        } else if (BuildConfig.SFPEW_BUNDLED) {
-                            stringResource(R.string.info_sfpew_off)
-                        } else {
-                            stringResource(R.string.info_sfpew_missing)
-                        },
-                        mono = false,
-                    )
-                    DividerLine()
-                    InfoLine(UiIcons.Chip, labelDriver, activeName, mono = false) {
-                        copy(labelDriver, activeName)
-                    }
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Code,
-                        stringResource(R.string.info_label_libraries),
-                        stringResource(R.string.info_libraries_value, externalCount),
-                        mono = false,
-                    )
-                    DividerLine()
-                    InfoLine(
-                        UiIcons.Layers,
-                        stringResource(R.string.info_label_shared_config),
-                        if (runtime.sharedWritten) {
-                            stringResource(R.string.info_shared_written)
-                        } else {
-                            stringResource(R.string.info_shared_private)
-                        },
-                        mono = false,
-                    )
-                    DividerLine()
-                    ExpandableInfoLine(UiIcons.Gpu, "OpenGL ES", device.gles) { copy("OpenGL ES", device.gles) }
-                    DividerLine()
-                    ExpandableInfoLine(UiIcons.Layers, "Vulkan", device.vulkan) { copy("Vulkan", device.vulkan) }
-                    if (device.socExtra.features.isNotBlank()) {
-                        MoreToggle(glMore, stringResource(R.string.info_label_features)) { glMore = it }
-                        AnimatedVisibility(
-                            visible = glMore,
-                            enter = Motion.foldEnter(),
-                            exit = Motion.foldExit(),
-                        ) {
+                    Column(Modifier.fillMaxWidth().padding(top = Space.Md, bottom = Space.Xs)) {
+                        Text(
+                            device.soc,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (device.model.isNotBlank()) {
                             Text(
-                                device.socExtra.features,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace,
+                                device.model,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp),
                             )
                         }
                     }
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_processor),
+                        value = device.soc,
+                        caption = device.socVendor.takeIf { it.isNotBlank() },
+                        expandable = device.socExtra.governor.isNotBlank(),
+                        expanded = chipMore,
+                        onToggle = { chipMore = !chipMore },
+                        onLongPress = { copy(stringResource(R.string.info_label_processor), device.soc) },
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(top = Space.Xs)) {
+                            DetailLine(
+                                stringResource(R.string.info_label_clusters),
+                                clusterText.ifBlank { unknownText },
+                            )
+                            if (device.socExtra.governor.isNotBlank()) {
+                                DetailLine(
+                                    stringResource(R.string.info_label_governor),
+                                    device.socExtra.governor,
+                                )
+                            }
+                        }
+                    }
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_graphics),
+                        value = device.gpu,
+                        caption = if (device.socExtra.gpuBusy.isBlank()) {
+                            null
+                        } else {
+                            stringResource(R.string.info_usage, device.socExtra.gpuBusy)
+                        },
+                        expandable = true,
+                        expanded = glMore,
+                        onToggle = { glMore = !glMore },
+                        onLongPress = { copy("GPU", device.gpu) },
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(top = Space.Xs)) {
+                            DetailLine("OpenGL ES", device.gles)
+                            DetailLine("Vulkan", device.vulkan)
+                            if (device.socExtra.features.isNotBlank()) {
+                                DetailLine(stringResource(R.string.info_label_features), device.socExtra.features)
+                            }
+                        }
+                    }
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_memory),
+                        value = device.memory,
+                        caption = device.memoryAvail,
+                        onLongPress = {
+                            copy(stringResource(R.string.info_label_memory), device.memory + " · " + device.memoryAvail)
+                        },
+                    )
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_screen),
+                        value = screenValue(device.screen),
+                        caption = screenCaption(device.screen),
+                        onLongPress = { copy(stringResource(R.string.info_label_screen), device.screen) },
+                    )
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_core),
+                        value = coreCountText(device.cores),
+                        caption = clusterSummary(clusterText),
+                        onLongPress = { copy(stringResource(R.string.info_label_core), clusterText) },
+                    )
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.info_label_system),
+                        value = device.android,
+                        onLongPress = { copy(stringResource(R.string.info_label_system), device.android) },
+                    )
+                    DividerLine()
+                    SpecBlock(
+                        label = stringResource(R.string.about_core_version),
+                        value = kernelText,
+                        mono = true,
+                        onLongPress = { copy(stringResource(R.string.about_core_version), kernelText) },
+                    )
                 }
             }
-            item { SectionLabel(stringResource(R.string.info_section_links)) }
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    EntryCardRow(
-                        UiIcons.Code,
-                        stringResource(R.string.info_github),
-                        "github.com/AdoreXue/MobileGL-UI-Plus",
-                    ) {
+                InfoCard {
+                    LinkRow(stringResource(R.string.info_github)) {
                         context.startActivity(
                             Intent(
                                 Intent.ACTION_VIEW,
@@ -413,141 +345,17 @@ internal fun InfoTab(
                             ),
                         )
                     }
-                    EntryCardRow(
-                        UiIcons.Globe,
-                        stringResource(R.string.info_upstream),
-                        "MobileGL / SimpleFPEWrapper",
-                    ) {
+                    DividerLine()
+                    LinkRow(stringResource(R.string.info_upstream)) {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev/MobileGL")),
                         )
                     }
-                }
-            }
-            item { SectionLabel(stringResource(R.string.info_section_about)) }
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Row {
-                            Text(
-                                "MobileGL_UI_",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                "Plus",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        Text(
-                            "v" + BuildConfig.FULL_VERSION_NAME.substringBefore("-build"),
-                            modifier = Modifier.padding(top = 4.dp),
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     DividerLine()
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-                        InfoLine(UiIcons.Code, labelDeveloper, "AdoreXue", mono = false) {
-                            copy(labelDeveloper, "AdoreXue")
-                        }
-                        DividerLine()
-                        InfoLine(UiIcons.Chip, labelKernel, kernelText, mono = false) {
-                            copy(labelKernel, kernelText)
-                        }
-                        DividerLine()
-                        InfoLine(UiIcons.Layers, stringResource(R.string.info_license), "GNU LGPL-3.0", mono = false) {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.gnu.org/licenses/lgpl-3.0.txt")),
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        stringResource(R.string.info_copyright),
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 14.dp),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    LinkRow(stringResource(R.string.about_title), onOpenAbout)
                 }
             }
             item {
-                Card(
-                    modifier = Modifier.padding(top = 10.dp).fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("https://github.com/AdoreXue/MobileGL-UI-Plus/releases"),
-                                ),
-                            )
-                        }
-                    },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            stringResource(R.string.info_check_update),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "›",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                }
-            }
-            item { SectionLabel(stringResource(R.string.info_section_thanks)) }
-            item {
-                InfoCard {
-                    CreditLine("MobileGL", stringResource(R.string.info_thanks_core))
-                    DividerLine()
-                    CreditLine("SimpleFPEWrapper", stringResource(R.string.info_thanks_sfpew))
-                    DividerLine()
-                    CreditLine("Mesa PanVK", stringResource(R.string.info_thanks_mesa))
-                    DividerLine()
-                    CreditLine(
-                        stringResource(R.string.info_thanks_launcher),
-                        stringResource(R.string.info_thanks_launcher_desc),
-                    )
-                }
-            }
-            item { SectionLabel(stringResource(R.string.info_section_third_party)) }
-            item {
-                InfoCard {
-                    CreditLine("Jetpack Compose", "Apache-2.0")
-                    DividerLine()
-                    CreditLine(stringResource(R.string.info_thanks_kotlin), "Apache-2.0")
-                    DividerLine()
-                    CreditLine("AndroidX Core", "Apache-2.0")
-                }
-            }
-            item {
-                Spacer(Modifier.height(18.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
@@ -556,9 +364,9 @@ internal fun InfoTab(
                 ) {
                     Text(
                         stringResource(R.string.info_share_report),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Space.Lg),
                         textAlign = TextAlign.Center,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyLarge,
                     )
@@ -566,314 +374,264 @@ internal fun InfoTab(
             }
             item {
                 // 反馈问题时一次贴全：版本、渲染链、设备信息都在里面。
-                Card(
-                    modifier = Modifier.padding(top = 10.dp).fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                    onClick = { copy(labelAll, dumpAllText) },
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { copy(stringResource(R.string.info_section_all), dumpAllText) },
                 ) {
-                    Text(
-                        stringResource(R.string.info_copy_all),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    Text(stringResource(R.string.info_copy_all))
                 }
             }
         }
     }
-    }
 }
 
-/** 版本 Hero：渐变底 + 等宽版本号 + 后端/构建号/提交，长按复制。 */
+/** 顶部横幅：品牌主色打底 + 一层淡高光，字用 onPrimary 保证对比度。长按复制版本号。 */
 @Composable
-private fun VersionHero(
-    version: String,
-    internal: String,
-    backend: String,
-    soc: String,
-    onLongPress: () -> Unit,
-) {
-    // 26.11.1-Dev.118-build119-88c088d-release → 构建号 119、提交 88c088d
-    val buildRev = internal.substringAfter("-build", "").substringBefore("-").ifBlank { "—" }
-    val segments = internal.split("-")
-    val gitHash = if (segments.size >= 2) segments[segments.size - 2] else ""
+private fun InfoHero(version: String, pill: String, onLongPress: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val gradient = Brush.linearGradient(
-        listOf(scheme.primary.copy(alpha = 0.36f), scheme.primary.copy(alpha = 0.10f), scheme.surfaceContainer),
-    )
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(gradient)
-            .copyOnLongPress(onLongPress)
-            .padding(horizontal = Space.Page, vertical = Space.Lg),
+            .height(176.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(scheme.primary)
+            .copyOnLongPress(onLongPress),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // 纯色块太死；叠一条对角高光就有一点截图里那种质感。
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            scheme.onPrimary.copy(alpha = 0.16f),
+                            Color.Transparent,
+                            scheme.onPrimary.copy(alpha = 0.08f),
+                        ),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(Space.Xl),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // 两行而不是一行并排：36sp 的 "MobileGL" 加后缀在 360dp 屏上会超出可用宽度。
             Text(
-                "MOBILEGL UI PLUS",
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.6.sp,
-                modifier = Modifier.weight(1f),
+                "MobileGL",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onPrimary,
+                maxLines = 1,
+            )
+            Text(
+                stringResource(R.string.info_hero_version, version),
+                modifier = Modifier.padding(top = Space.Xs),
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onPrimary.copy(alpha = 0.85f),
             )
             Text(
                 stringResource(R.string.info_long_press_copy),
+                modifier = Modifier.padding(top = Space.Xs),
                 style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
+                color = scheme.onPrimary.copy(alpha = 0.6f),
             )
         }
-        Text(
-            "v" + version,
-            modifier = Modifier.padding(top = 10.dp),
-            fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = scheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        // 三枚小胶囊：后端 / 构建号 / 提交，一眼能看出装的是哪个包。
-        Row(
-            modifier = Modifier.padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            HeroChip(backend, scheme.primary)
-            HeroChip("build " + buildRev, scheme.onSurfaceVariant)
-            if (gitHash.isNotBlank()) HeroChip(gitHash, scheme.onSurfaceVariant)
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Space.Md)) {
+            StatusPill(pill, scheme.onPrimary, dot = true)
         }
-        if (soc.isNotBlank()) {
-            Text(
-                soc,
-                modifier = Modifier.padding(top = 12.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text(
-            internal,
-            modifier = Modifier.padding(top = 6.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            color = scheme.onSurfaceVariant,
-            maxLines = 2,
-        )
     }
 }
 
-/** 状态胶囊条：授权 / 渲染后端 / 自检结论，横向可滚动以避免窄屏挤压。 */
+/** 共享存储没授权时的提示：写不了 runtime.conf，启动器就读不到配置。 */
 @Composable
-private fun StatusStrip(
-    authorized: Boolean,
-    backend: String,
-    lastReport: SelfTestResult?,
-    onAuthorize: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StatusPill(
-            text = if (authorized) {
-                stringResource(R.string.shell_authorized)
-            } else {
-                stringResource(R.string.shell_unauthorized_short)
-            },
-            color = if (authorized) scheme.primary else scheme.error,
-            onClick = if (authorized) null else onAuthorize,
-            icon = if (authorized) Icons.Filled.Lock else Icons.Filled.Warning,
-        )
-        StatusPill(text = backend, color = scheme.tertiary, icon = UiIcons.Gpu)
-        StatusPill(
-            text = healthShort(lastReport),
-            color = healthColor(lastReport),
-            icon = when (reportHealth(lastReport)) {
-                ReportHealth.Ok -> Icons.Filled.Check
-                ReportHealth.None -> null
-                else -> Icons.Filled.Warning
-            },
-        )
-    }
-}
-
-/** 版本卡里的小胶囊：后端名、构建号、提交号。 */
-@Composable
-private fun HeroChip(text: String, color: Color) {
-    if (text.isBlank()) return
-    Text(
-        text,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
-            .padding(horizontal = 9.dp, vertical = 3.dp),
-        style = MaterialTheme.typography.labelSmall,
-        fontFamily = FontFamily.Monospace,
-        color = color,
-        maxLines = 1,
-    )
-}
-
-/**
- * 长值行：默认只露两行，点一下展开全部。
- * GLES / Vulkan 的扩展串经常一屏都放不下，摊开会把整张卡拉长，折叠后页面短一半。
- */
-@Composable
-private fun ExpandableInfoLine(icon: ImageVector, label: String, value: String, onCopy: () -> Unit) {
-    val long = value.length > 42
-    var expanded by remember(value) { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .copyOnLongPress(onCopy)
-            .clickable(enabled = long) { expanded = !expanded }
-            .padding(vertical = 11.dp)
-            .animateContentSize(tween(durationMillis = Motion.Base, easing = Motion.Standard)),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                label,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            if (long) {
-                Text(
-                    if (expanded) stringResource(R.string.info_collapse) else stringResource(R.string.info_expand),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(4.dp))
-                ChevronIcon(expanded = expanded, tint = MaterialTheme.colorScheme.primary, size = 14.dp)
+private fun PermissionNotice(onAuthorize: () -> Unit) {
+    InfoCard {
+        Column(Modifier.fillMaxWidth().padding(vertical = Space.Sm)) {
+            NoteBanner(stringResource(R.string.info_permission_body), NoteTone.Warn)
+            TextButton(onClick = onAuthorize, contentPadding = PaddingValues(0.dp)) {
+                Text(stringResource(R.string.shell_permission_grant))
             }
         }
-        Text(
-            value,
-            modifier = Modifier.padding(top = 4.dp),
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = if (expanded || !long) 12 else 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
+/** 状态行：左边标签，右边值，可点时右侧带箭头。 */
 @Composable
-private fun SpecCell(
-    modifier: Modifier,
-    icon: ImageVector,
+private fun KeyValueRow(
     label: String,
     value: String,
-    caption: String,
-    mono: Boolean = true,
-    onLongPress: () -> Unit,
+    valueColor: Color = Color.Unspecified,
+    onClick: (() -> Unit)? = null,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surfaceContainer)
-            .cardStroke()
-            .copyOnLongPress(onLongPress)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // 图标放进小色块里，六格里一眼能扫到要找的那一项。
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(scheme.primary.copy(alpha = 0.13f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(15.dp))
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .heightIn(min = 56.dp)
+        .padding(vertical = Space.Md)
+    Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (valueColor == Color.Unspecified) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                valueColor
+            },
+            textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (onClick != null) {
+            Spacer(Modifier.width(Space.Xs))
+            Icon(
+                UiIcons.Chevron,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.width(16.dp).height(16.dp),
             )
         }
+    }
+}
+
+/** 规格块：灰色小标签在上、值在下；可折叠的标签后面带一个箭头。 */
+@Composable
+private fun SpecBlock(
+    label: String,
+    value: String,
+    caption: String? = null,
+    mono: Boolean = false,
+    expandable: Boolean = false,
+    expanded: Boolean = false,
+    onToggle: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
+    detail: (@Composable () -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.Md).copyOnLongPress(onLongPress)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (expandable && onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier)
+                .heightIn(min = if (expandable) 32.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (expandable) {
+                Spacer(Modifier.width(Space.Xs))
+                ChevronIcon(
+                    expanded = expanded,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    size = 12.dp,
+                )
+            }
+        }
         if (mono) {
-            MonoValue(value, modifier = Modifier.padding(top = 8.dp), size = 16.sp, maxLines = 2)
+            MonoValue(
+                value,
+                modifier = Modifier.padding(top = 2.dp),
+                size = 15.sp,
+                maxLines = 3,
+            )
         } else {
             Text(
                 value,
-                modifier = Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = scheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
+        if (caption != null && caption.isNotBlank()) {
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (detail != null) {
+            AnimatedVisibility(visible = expanded, enter = Motion.foldEnter(), exit = Motion.foldExit()) {
+                detail()
+            }
+        }
+    }
+}
+
+/** 折叠区里的一行明细：标签固定宽度，值等宽，长值换行。 */
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = Space.Xs)) {
         Text(
-            if (caption.isBlank()) " " else caption,
-            modifier = Modifier.padding(top = 2.dp),
+            label,
             style = MaterialTheme.typography.labelSmall,
-            color = scheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(88.dp),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = MonoFamily,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
         )
     }
 }
 
-/** 明细行：图标 + 标签在左，值右对齐；可点按复制。 */
+/** 存储占用条：已用主色、剩余轨道色，圆头。 */
 @Composable
-private fun MoreToggle(expanded: Boolean, label: String, onToggle: (Boolean) -> Unit) {
+private fun StorageBar(used: Float) {
+    val fraction = used.coerceIn(0f, 1f)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        if (fraction > 0f) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+        }
+    }
+}
+
+/** 入口行：一行字 + 尾部箭头，行高对齐 M3 的 56dp 列表行。 */
+@Composable
+private fun LinkRow(title: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle(!expanded) }
-            // 折叠行整行当按钮用，撑到 M3 要求的 48dp 最小触控高度。
-            .heightIn(min = 48.dp)
-            .padding(vertical = 11.dp),
+            .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(vertical = Space.Md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            if (expanded) stringResource(R.string.info_collapse) else label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f),
-        )
-        ChevronIcon(expanded = expanded, tint = MaterialTheme.colorScheme.primary, size = 16.dp)
-    }
-}
-
-@Composable
-private fun CreditLine(title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-        Text(
-            subtitle,
-            modifier = Modifier.padding(top = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Icon(
+            UiIcons.Chevron,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.width(18.dp).height(18.dp),
         )
     }
 }
 
+/** 自检健康的颜色：主页、渲染页与信息页共用一套判断。 */
 @Composable
 internal fun healthColor(report: SelfTestResult?): Color = when (reportHealth(report)) {
     ReportHealth.None -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -913,11 +671,7 @@ private fun screenCaption(screen: String): String {
 private fun storageValue(storage: String): String =
     storage.substringBefore('/').trim().ifBlank { stringResource(R.string.info_unknown) }
 
-@Composable
-private fun storageCaption(storage: String): String {
-    val total = storage.substringAfter('/', "").trim()
-    return if (total.isBlank()) "" else stringResource(R.string.info_storage_total, total)
-}
+private fun storageCaption(storage: String): String = storage.substringAfter('/', "").trim()
 
 /** 分簇缩写：把「A520×2 0.36–2.27」压成「A520×2」。 */
 private fun clusterSummary(clusters: String): String {
@@ -927,4 +681,3 @@ private fun clusterSummary(clusters: String): String {
         .filter { it.isNotEmpty() }
         .joinToString(" · ")
 }
-
