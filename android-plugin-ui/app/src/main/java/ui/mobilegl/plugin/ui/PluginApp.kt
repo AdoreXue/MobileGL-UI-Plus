@@ -45,6 +45,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -57,6 +58,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
@@ -671,24 +673,36 @@ fun MobileGlPluginApp() {
                 }
 
                 subDest?.let { target ->
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                            // 整层连顶栏一起滑：跟手返回时下面那页本来就是热的，不用临时去铺。
-                            .graphicsLayer {
-                                val open = subProgress.value
-                                translationX = backSign * (1f - open) * size.width
-                                // 跟随手势退后一层：系统的预测性返回会让被返回的页面略微缩小，
-                                // 这里用同一个比例，滑到底只剩很小的幅度，不抢位移的注意力。
-                                val shrink = 1f - 0.04f * (1f - open)
-                                scaleX = shrink
-                                scaleY = shrink
-                            }
-                            // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。用 pointerInput
-                            // 而不是 clickable：一个没有动作的 clickable 在无障碍里是个空按钮。
-                            .pointerInput(Unit) { detectTapGestures { } },
+                    // 位移用布局偏移（offset），不用绘制偏移（translationX）。
+                    // 绘制偏移只改图层位置，父级仍认为这一层占满全屏，于是子页滑开后
+                    // 底下的标签页不会被重绘，漏出来的是窗口底色 —— 实测就是这样一片纯白。
+                    // 布局偏移会让父级知道这一层真的让开了，底座才会在它身后画出来。
+                    BoxWithConstraints(
+                        Modifier.fillMaxSize(),
                     ) {
+                        val pageWidthPx = constraints.maxWidth.toFloat()
+                        val open = subProgress.value
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .offset {
+                                    IntOffset(
+                                        (backSign * (1f - open) * pageWidthPx).roundToInt(),
+                                        0,
+                                    )
+                                }
+                                .background(MaterialTheme.colorScheme.background)
+                                .graphicsLayer {
+                                    // 跟随手势退后一层：系统的预测性返回会让被返回的页面略微缩小，
+                                    // 这里用同一个比例，滑到底只剩很小的幅度，不抢位移的注意力。
+                                    val shrink = 1f - 0.04f * (1f - open)
+                                    scaleX = shrink
+                                    scaleY = shrink
+                                }
+                                // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。用 pointerInput
+                                // 而不是 clickable：一个没有动作的 clickable 在无障碍里是个空按钮。
+                                .pointerInput(Unit) { detectTapGestures { } },
+                        ) {
                         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
                             MobileGlTopBar(
                                 title = when (target) {
@@ -708,6 +722,7 @@ fun MobileGlPluginApp() {
                                     screenContent(target, PaddingValues())
                                 }
                             }
+                        }
                         }
                     }
                 }
