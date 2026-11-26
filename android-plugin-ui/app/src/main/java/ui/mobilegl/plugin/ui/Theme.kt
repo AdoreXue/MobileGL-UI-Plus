@@ -68,22 +68,23 @@ private val BrandLight = lightColorScheme(
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
-    // 白卡浮在暖灰底上：卡片是纯白，页面底色压深一档，浅色界面才有层次。
-    // 原先卡片比底色还深，读起来是凹进去的。
-    background = Color(0xFFF6F1ED),
+    // 全白：页面、卡片、浮层都是纯白，层次交给 1dp 描边和留白，不再靠底色深浅。
+    // 注意 surfaceContainerHighest 留在浅灰 —— 开关轨道、进度条底槽用它，
+    // 也刷成白色的话，控件在白卡上就没有轮廓了。
+    background = Color(0xFFFFFFFF),
     onBackground = Color(0xFF201A17),
-    surface = Color(0xFFF6F1ED),
+    surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF201A17),
     surfaceVariant = Color(0xFFF3DFD3),
     onSurfaceVariant = Color(0xFF51443B),
     // 这张表缺一档，Material 就会退回它自带的紫灰，#F3EDF7 那种冷色出现在暖色界面里非常显眼。
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFFCFA),
+    surfaceContainerLow = Color(0xFFFFFFFF),
     surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFFAF5F1),
-    surfaceContainerHighest = Color(0xFFF4EDE7),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    surfaceContainerHighest = Color(0xFFF2ECE6),
     surfaceBright = Color(0xFFFFFFFF),
-    surfaceDim = Color(0xFFEDE6E0),
+    surfaceDim = Color(0xFFE9E2DC),
     outline = Color(0xFF837469),
     outlineVariant = Color(0xFFD6C3B7),
     scrim = Color(0xFF000000),
