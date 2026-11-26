@@ -104,6 +104,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
@@ -247,6 +248,9 @@ fun MobileGlPluginApp() {
         val dest: Dest = subDest ?: TABS[lastTab].dest
         // 二级页露出多少：0 = 完全移出，1 = 完全盖住。跟手返回直接改这个值。
         val subProgress = remember { Animatable(0f) }
+        // 手势里要把「手指划了多远」换算成比例，需要这一层的实际像素宽度；
+        // 布局完成前是 0，此时退化成按 1 处理，不会除零。
+        var pageWidthPx by remember { mutableFloatStateOf(0f) }
         var report by remember { mutableStateOf<SelfTestResult?>(null) }
         var probing by remember { mutableStateOf(true) }
         // 上次自检耗时：渲染页显示「用时 x 秒」，null 表示还没在本次会话跑过。
@@ -413,8 +417,18 @@ fun MobileGlPluginApp() {
             try {
                 events.collect { event ->
                     sawGesture = true
-                    backSign = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
-                    subProgress.snapTo((1f - event.progress).coerceIn(0f, 1f))
+                    val fromRight = event.swipeEdge == BackEventCompat.EDGE_RIGHT
+                    backSign = if (fromRight) -1f else 1f
+                    // 用 touchX 算手指真正走了多少，而不是 event.progress。
+                    // progress 是归一化到 0..1 的「手势完成度」，手指划一小段它就到 0.5；
+                    // 拿它乘整屏宽度，页面会自己飞出去，观感和手指对不上。
+                    val width = pageWidthPx.takeIf { it > 0f }
+                    if (width != null) {
+                        val travel = if (fromRight) width - event.touchX else event.touchX
+                        subProgress.snapTo((1f - travel / width).coerceIn(0f, 1f))
+                    } else {
+                        subProgress.snapTo((1f - event.progress).coerceIn(0f, 1f))
+                    }
                 }
                 // 松手后走完剩下的路：划过大半就快速收尾，只划了一点就完整收回，
                 // 时长按剩余距离算，不再每次都固定滑 220ms。旧系统只发一次「按下」、
@@ -640,7 +654,17 @@ fun MobileGlPluginApp() {
                 // 宽屏（平板、折叠屏展开、横屏）把底栏换成左侧导航轨：底栏放在平板上会被手挡住，
                 // 而且四个标签挤在底部显得很空。
                 val wide = LocalWindowWidth.current.twoColumns
-                Column(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        // 底座随子页打开略微退后：系统预测性返回就是这个观感，
+                        // 两页平行滑动会缺少「谁在上面」的层次。closed 时 progress 为 0，缩放为 1。
+                        .graphicsLayer {
+                            val recede = 1f - 0.06f * subProgress.value
+                            scaleX = recede
+                            scaleY = recede
+                        },
+                ) {
                     Row(Modifier.weight(1f).fillMaxWidth()) {
                     if (wide) {
                         MobileGlRail(selected = lastTab, onSelect = { lastTab = it })
@@ -672,6 +696,15 @@ fun MobileGlPluginApp() {
                     }
                 }
 
+                // 子页压上来时底座压暗一档：两块都是白卡，不压暗就看不出边界在哪。
+                if (subDest != null) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.08f * subProgress.value)),
+                    )
+                }
+
                 subDest?.let { target ->
                     // 位移用布局偏移（offset），不用绘制偏移（translationX）。
                     // 绘制偏移只改图层位置，父级仍认为这一层占满全屏，于是子页滑开后
@@ -680,14 +713,16 @@ fun MobileGlPluginApp() {
                     BoxWithConstraints(
                         Modifier.fillMaxSize(),
                     ) {
-                        val pageWidthPx = constraints.maxWidth.toFloat()
+                        val layerWidth = constraints.maxWidth.toFloat()
+                        // 把这一层的实际宽度回填给手势处理：手指行程要按它换算。
+                        SideEffect { pageWidthPx = layerWidth }
                         val open = subProgress.value
                         Box(
                             Modifier
                                 .fillMaxSize()
                                 .offset {
                                     IntOffset(
-                                        (backSign * (1f - open) * pageWidthPx).roundToInt(),
+                                        (backSign * (1f - open) * layerWidth).roundToInt(),
                                         0,
                                     )
                                 }
@@ -698,6 +733,8 @@ fun MobileGlPluginApp() {
                                     val shrink = 1f - 0.04f * (1f - open)
                                     scaleX = shrink
                                     scaleY = shrink
+                                    // 前缘投影：没有它，白页滑过白页时边界完全看不出来。
+                                    shadowElevation = 12.dp.toPx()
                                 }
                                 // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。用 pointerInput
                                 // 而不是 clickable：一个没有动作的 clickable 在无障碍里是个空按钮。
