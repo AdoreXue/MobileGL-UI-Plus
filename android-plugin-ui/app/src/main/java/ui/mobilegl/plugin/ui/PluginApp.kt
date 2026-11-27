@@ -733,8 +733,6 @@ fun MobileGlPluginApp() {
                                     val shrink = 1f - 0.04f * (1f - open)
                                     scaleX = shrink
                                     scaleY = shrink
-                                    // 前缘投影：没有它，白页滑过白页时边界完全看不出来。
-                                    shadowElevation = 12.dp.toPx()
                                 }
                                 // 空白处也要吃掉点击，否则会点到被盖住的标签页上的控件。用 pointerInput
                                 // 而不是 clickable：一个没有动作的 clickable 在无障碍里是个空按钮。
@@ -759,6 +757,27 @@ fun MobileGlPluginApp() {
                                     screenContent(target, PaddingValues())
                                 }
                             }
+                        }
+                        // 前缘投影自己画：graphicsLayer 的 shadowElevation 会把整屏高的投影
+                        // 画进内容框里，静止的页面左右各留一条 20dp 的灰边（实测叠了 0.12–0.18
+                        // 的黑）。改成一条只在这一页还在移动时出现的渐变，静止时完全收掉。
+                        val lift = 1f - open
+                        if (lift > 0.004f) {
+                            Box(
+                                Modifier
+                                    .align(if (backSign > 0f) Alignment.CenterStart else Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(12.dp)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            if (backSign > 0f) {
+                                                listOf(Color.Black.copy(alpha = 0.16f * lift), Color.Transparent)
+                                            } else {
+                                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.16f * lift))
+                                            },
+                                        )
+                                    ),
+                            )
                         }
                         }
                     }
