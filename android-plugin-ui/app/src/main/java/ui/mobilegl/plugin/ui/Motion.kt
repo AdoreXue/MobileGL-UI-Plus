@@ -48,15 +48,31 @@ internal object Motion {
     /** Material 3 的 emphasized accelerate：离开类动作，尾巴收得干脆。 */
     val EmphasizedAccelerate: Easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
-    /** 折叠区展开：高度与透明度一起走，用 [Base] 一档，点开和页面转场同一节奏。 */
-    fun foldEnter(): EnterTransition =
-        fadeIn(tween(durationMillis = Base, easing = Decelerate)) +
-            expandVertically(tween(durationMillis = Base, easing = Decelerate))
+    // Material 3 Expressive 的六个弹簧。数值取自 material3 的 ExpressiveMotionTokens（1.4 起才有，
+    // 且是 internal），照抄下来比等工具链升级快，手感与官方那套一致：
+    // 空间类（位移、尺寸）阻尼 0.8 / 0.6，刚度 200 / 380 / 800；
+    // 明暗类（透明度、着色）阻尼 1.0，刚度 800 / 1600 / 3800。
 
-    /** 收起比展开快一档，避免「关不掉」的错觉；高度仍走 [Base]，不然收得太急。 */
-    fun foldExit(): ExitTransition =
-        fadeOut(tween(durationMillis = Fast, easing = Accelerate)) +
-            shrinkVertically(tween(durationMillis = Base, easing = Accelerate))
+    /** 默认空间弹簧：卡片、折叠区、元素的位移与尺寸。 */
+    fun <T> spatial(): SpringSpec<T> = spring(dampingRatio = 0.8f, stiffness = 380f)
+
+    /** 快空间弹簧：松手回弹、跟手收尾这类要「跟得上」的动作。 */
+    fun <T> spatialFast(): SpringSpec<T> = spring(dampingRatio = 0.6f, stiffness = 800f)
+
+    /** 慢空间弹簧：整页位移这类大块头。 */
+    fun <T> spatialSlow(): SpringSpec<T> = spring(dampingRatio = 0.8f, stiffness = 200f)
+
+    /** 默认明暗弹簧：淡入、着色。 */
+    fun <T> effects(): SpringSpec<T> = spring(dampingRatio = 1f, stiffness = 1600f)
+
+    /** 快明暗弹簧：收起时的淡出，比淡入短一档。 */
+    fun <T> effectsFast(): SpringSpec<T> = spring(dampingRatio = 1f, stiffness = 3800f)
+
+    /** 折叠区展开：高度走空间弹簧，透明度走明暗弹簧。 */
+    fun foldEnter(): EnterTransition = fadeIn(effects()) + expandVertically(spatial())
+
+    /** 收起比展开快一档，避免「关不掉」的错觉。 */
+    fun foldExit(): ExitTransition = fadeOut(effectsFast()) + shrinkVertically(spatialFast())
 
     /** 会「滑过去」的东西（分段指示块、底栏）用弹簧，比分段线性更接近真实手感。 */
     fun <T> glide(): SpringSpec<T> = spring(

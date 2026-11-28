@@ -156,13 +156,17 @@ private val AppTypography = Typography().let { base ->
     )
 }
 
-/** 卡片 20dp、输入与分段 12dp、胶囊满圆角；比 Material 默认圆一档，与图标的圆润感一致。 */
+/**
+ * 圆角刻度：卡片 20dp、输入与分段 16dp、大面板 24–32dp，胶囊满圆角。
+ * Expressive 的观感一半在动效、一半在这档更大的圆角上；比 Material 默认圆一档，
+ * 与图标的圆润感一致。
+ */
 private val AppShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
 )
 
 /** 等宽文本（版本号、键名、十六进制）统一走这个字体族，避免每处各写 monospace。 */

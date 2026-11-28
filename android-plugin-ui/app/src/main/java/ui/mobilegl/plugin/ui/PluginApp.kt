@@ -192,12 +192,12 @@ private val ShuffleAxisMs = Motion.Slow
  */
 @OptIn(ExperimentalAnimationApi::class)
 private fun AnimatedContentTransitionScope<Int>.tabSwitch(): ContentTransform {
-    val move = tween<IntOffset>(durationMillis = Motion.Base, easing = Motion.Standard)
+    // Expressive 的弹簧：进页面走空间弹簧 + 明暗弹簧，出页面各快一档。
     return ContentTransform(
-        targetContentEnter = slideInVertically(move) { it / 24 } +
-            fadeIn(tween(durationMillis = Motion.Base, easing = Motion.Decelerate)),
-        initialContentExit = slideOutVertically(move) { -it / 48 } +
-            fadeOut(tween(durationMillis = Motion.Fast, easing = Motion.Accelerate)),
+        targetContentEnter = slideInVertically(Motion.spatialSlow()) { it / 24 } +
+            fadeIn(Motion.effects()),
+        initialContentExit = slideOutVertically(Motion.spatialFast()) { -it / 48 } +
+            fadeOut(Motion.effectsFast()),
         sizeTransform = SizeTransform(clip = true),
     ).apply { targetContentZIndex = 1f }
 }

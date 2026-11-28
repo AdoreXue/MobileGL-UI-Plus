@@ -108,7 +108,8 @@ fun rememberStaggerReveal(index: Int, stepMs: Int = 30, maxSteps: Int = 4): Cont
     LaunchedEffect(Unit) {
         val delayMs = index.coerceIn(0, maxSteps) * stepMs
         if (delayMs > 0) delay(delayMs.toLong())
-        progress.animateTo(1f, tween(durationMillis = Motion.Base, easing = Motion.Decelerate))
+        // Expressive 的入场：短距离上浮用空间弹簧收尾，比定时 tween 更像「弹到位」。
+        progress.animateTo(1f, Motion.spatial())
     }
     // 起点留 0.7 不透明度：完全透明会让页面底下给人"空的"错觉，等它淡进来又像突然补齐。
     return ContentReveal(progress, fromAlpha = 0.7f, riseAtZero = 6f)

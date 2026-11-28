@@ -66,7 +66,8 @@ import ui.mobilegl.plugin.config.PluginConfig
  * 之前每张卡各自写形状和颜色，页与页之间圆角不一致；集中在这里后，
  * 想调整卡片质感只改这一个文件。
  */
-internal val CardCorner = RoundedCornerShape(16.dp)
+// 20dp 是主题里写的卡片圆角；点名成常量是为了避免每张卡各写一个 16 还是 20 的问题。
+internal val CardCorner = RoundedCornerShape(20.dp)
 
 @Composable
 internal fun subtleBorder(): BorderStroke =

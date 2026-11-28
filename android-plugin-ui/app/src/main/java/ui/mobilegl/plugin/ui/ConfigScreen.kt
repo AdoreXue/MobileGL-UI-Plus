@@ -1782,7 +1782,8 @@ private fun OverviewStat(
 private fun SaveBar(modifier: Modifier, busy: Boolean, changed: Int, onSave: () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = Space.Page, vertical = Space.Sm),
-        shape = RoundedCornerShape(16.dp),
+        // 与卡片同一档圆角；它浮在内容上，比卡片圆会让浮起的观感串味。
+        shape = CardCorner,
         color = MaterialTheme.colorScheme.primary,
         shadowElevation = 8.dp,
     ) {
